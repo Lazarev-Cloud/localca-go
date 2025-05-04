@@ -1,30 +1,268 @@
-# LocalCA
+# LocalCA - Self-Hosted Certificate Authority
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+LocalCA is a complete solution for running your own Certificate Authority (CA) within a local network environment. It allows you to generate, manage, and deploy SSL/TLS certificates for internal services and clients without relying on external certificate providers.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/lazarevtills-projects/v0-local-ca)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/eviLdhCpJa4)
+## Features
 
-## Overview
+- **Complete Certificate Lifecycle Management**: Create, renew, revoke, and delete certificates
+- **Web-Based Interface**: User-friendly dashboard for certificate operations
+- **Self-Contained CA**: Generate and manage your own root Certificate Authority
+- **Server and Client Certificates**: Support for both server (websites, services) and client (user authentication) certificates
+- **SAN Support**: Create certificates with multiple domain names (Subject Alternative Names)
+- **PKCS#12 Export**: Export client certificates in P12 format for easy browser/device import
+- **Certificate Revocation**: Maintain a Certificate Revocation List (CRL)
+- **Email Notifications**: Get alerts before certificates expire
+- **HTTPS Support**: Secure access to the management interface itself
+- **Docker Deployment**: Easy deployment with Docker and Docker Compose
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## Security Considerations
 
-## Deployment
+⚠️ **Important Warning**:
+- This tool is for **internal use only**. Do not expose it to the public internet.
+- Keep your CA private key secure. Anyone with access to it can issue trusted certificates for your domain.
+- This project is intended for testing, development environments, and private networks, not for production public-facing services.
 
-Your project is live at:
+## Installation
 
-**[https://vercel.com/lazarevtills-projects/v0-local-ca](https://vercel.com/lazarevtills-projects/v0-local-ca)**
+### Prerequisites
 
-## Build your app
+- Go 1.22+ (for building from source)
+- Docker and Docker Compose (for container deployment)
+- OpenSSL
 
-Continue building your app on:
+### Option 1: Docker Deployment (Recommended)
 
-**[https://v0.dev/chat/projects/eviLdhCpJa4](https://v0.dev/chat/projects/eviLdhCpJa4)**
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/localca.git
+   cd localca
+   ```
 
-## How It Works
+2. Create a password file for the CA:
+   ```bash
+   echo "your-secure-password" > cakey.txt
+   ```
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+3. Start the service:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access the web interface at https://localhost:8443
+
+### Option 2: Building from Source
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/localca.git
+   cd localca
+   ```
+
+2. Update the module name in go.mod:
+   ```
+   module localca-go
+
+   go 1.22
+
+   require (
+       github.com/gin-contrib/cors v1.5.0
+       github.com/gin-gonic/gin v1.9.1
+   )
+   ```
+
+3. Update import paths in all Go files (replace `github.com/yourusername/localca-go` with `localca-go`)
+
+4. Download dependencies and build:
+   ```bash
+   go mod tidy
+   go build -o localca-go
+   ```
+
+5. Create a password file:
+   ```bash
+   echo "your-secure-password" > cakey.txt
+   ```
+
+6. Run the application:
+   ```bash
+   export CA_NAME=ca.homelab.local
+   export CA_KEY_FILE=./cakey.txt
+   export ORGANIZATION=LocalCA
+   export COUNTRY=US
+   export TLS_ENABLED=true
+   ./localca-go
+   ```
+
+7. Access the web interface at https://localhost:8443
+
+## Configuration
+
+LocalCA is configured through environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CA_NAME` | Name of the Certificate Authority (FQDN) | *required* |
+| `CA_KEY_FILE` | Path to the file containing the CA key password | *required* |
+| `CA_KEY` | Direct CA key password (alternative to CA_KEY_FILE) | "" |
+| `ORGANIZATION` | Organization name for the CA | "LocalCA" |
+| `COUNTRY` | Country code for the CA | "US" |
+| `STORAGE_PATH` | Path where certificates are stored | "/app/certs" |
+| `EMAIL_NOTIFY` | Enable email notifications for expiring certificates | "false" |
+| `SMTP_SERVER` | SMTP server for notifications | "" |
+| `SMTP_PORT` | SMTP port | "25" |
+| `SMTP_USER` | SMTP username | "" |
+| `SMTP_PASSWORD` | SMTP password | "" |
+| `SMTP_USE_TLS` | Use TLS for SMTP | "false" |
+| `EMAIL_FROM` | From address for notification emails | "" |
+| `EMAIL_TO` | Default recipient for notification emails | "" |
+| `TLS_ENABLED` | Enable HTTPS for the web interface | "false" |
+
+## Usage Guide
+
+### Initial Setup
+
+1. **First Access**: Navigate to the web interface at https://localhost:8443
+2. **Trust the CA**: Download the CA certificate and install it in your browser/OS trust store
+
+### Creating Certificates
+
+#### Server Certificates
+
+1. Enter the hostname in the "Common Name" field (e.g., `server.local`)
+2. Add any additional domain names separated by commas (e.g., `www.server.local, admin.server.local`)
+3. Ensure the "Create client certificate" checkbox is **not** checked
+4. Click "Create Certificate"
+
+#### Client Certificates
+
+1. Enter a name for the client in the "Common Name" field (e.g., `john.doe`)
+2. Check the "Create client certificate" checkbox
+3. Enter a password for the P12 file
+4. Click "Create Certificate"
+5. Download the P12 file and import it into your browser/client device
+
+### Certificate Management
+
+- **View Certificate Details**: Click on a certificate name in the list
+- **Renew Certificate**: Click the "Renew" button next to a certificate
+- **Revoke Certificate**: Click the "Revoke" button to add the certificate to the CRL
+- **Delete Certificate**: Click the "Delete" button to remove a certificate
+
+### Distribution and Installation
+
+#### Installing the CA Certificate
+
+- **Windows**:
+  - Double-click the `ca.pem` file
+  - Select "Install Certificate"
+  - Choose "Local Machine" and place in "Trusted Root Certification Authorities"
+
+- **macOS**:
+  - Double-click the `ca.pem` file
+  - Add to your keychain and set to "Always Trust"
+
+- **Linux**:
+  - Copy to `/usr/local/share/ca-certificates/`
+  - Run `sudo update-ca-certificates`
+
+- **Firefox** (uses its own certificate store):
+  - Go to Preferences > Privacy & Security > Certificates > View Certificates
+  - Import the CA certificate under "Authorities"
+
+#### Using Certificates with Common Web Servers
+
+**Nginx**:
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.local;
+    
+    ssl_certificate /path/to/your-domain.local.bundle.crt;
+    ssl_certificate_key /path/to/your-domain.local.key;
+    
+    # Other SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+}
+```
+
+**Apache**:
+```apache
+<VirtualHost *:443>
+    ServerName your-domain.local
+    
+    SSLEngine on
+    SSLCertificateFile /path/to/your-domain.local.crt
+    SSLCertificateKeyFile /path/to/your-domain.local.key
+    SSLCACertificateFile /path/to/ca.pem
+    
+    # Other settings...
+</VirtualHost>
+```
+
+## Development
+
+### Project Structure
+
+```
+localca/
+├── main.go                    # Application entry point
+├── Dockerfile                 # Docker build instructions
+├── docker-compose.yml         # Docker Compose configuration
+├── pkg/
+│   ├── certificates/          # Certificate operations
+│   ├── config/                # Configuration handling
+│   ├── email/                 # Email notification system
+│   ├── handlers/              # HTTP request handlers
+│   └── storage/               # Certificate storage
+├── static/                    # Static assets
+│   ├── css/                   # Stylesheets
+│   └── img/                   # Images
+└── templates/                 # HTML templates
+```
+
+### Local Development
+
+1. Make your changes
+2. Run with hot-reload using `air` (optional):
+   ```bash
+   go install github.com/cosmtrek/air@latest
+   air
+   ```
+3. Or run directly:
+   ```bash
+   go run main.go
+   ```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- [Go](https://golang.org/) - The Go Programming Language
+- [Gin](https://gin-gonic.com/) - Web framework for Go
+- [OpenSSL](https://www.openssl.org/) - Cryptography and SSL/TLS toolkit
+- [Bootstrap](https://getbootstrap.com/) - Frontend framework
+
+## Roadmap
+
+- [ ] Automated certificate renewal
+- [ ] ACME protocol support
+- [ ] API for programmatic certificate management
+- [ ] Improved audit logging
+- [ ] OCSP responder
+
+---
+
+Created by @lazarevtill - feel free to contact me!
