@@ -6,16 +6,27 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"regexp"
-	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
-	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"strings"
+
 	"github.com/Lazarev-Cloud/localca-go/pkg/email"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
+	"github.com/gin-gonic/gin"
 )
 
+// sanitizeEmail sanitizes the email input to ensure it is safe and valid
+func sanitizeEmail(email string) string {
+	// Basic sanitization: trim spaces and validate format
+	email = strings.TrimSpace(email)
+	emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	if matched := regexp.MustCompile(emailRegex).MatchString(email); !matched {
+		return ""
+	}
+	return email
+}
+
 // settingsHandler handles the settings page
-func settingsHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func settingsHandler(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get email settings
 		smtpServer, smtpPort, smtpUser, smtpPass, emailFrom, emailTo, useTLS, useStartTLS, err := store.GetEmailSettings()
@@ -39,7 +50,7 @@ func settingsHandler(certSvc *certificates.CertificateService, store *storage.St
 }
 
 // saveSettingsHandler handles saving email settings
-func saveSettingsHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func saveSettingsHandler(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		smtpServer := c.PostForm("smtp_server")
@@ -97,7 +108,7 @@ func saveSettingsHandler(certSvc *certificates.CertificateService, store *storag
 }
 
 // testEmailHandler tests email settings
-func testEmailHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func testEmailHandler(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get test email address
 		testEmail := c.PostForm("test_email")
@@ -141,13 +152,6 @@ func testEmailHandler(certSvc *certificates.CertificateService, store *storage.S
 			return
 		}
 
-		// Create email service
-		emailSvc := email.NewEmailService(smtpServer, smtpPort, smtpUser, smtpPass, useTLS, useStartTLS)
-
-		// Send test email
-		subject := "LocalCA Test Email"
-		body := "This is a test email from LocalCA."
-		
 		// Sanitize the testEmail input
 		sanitizedEmail := sanitizeEmail(testEmail)
 		if sanitizedEmail == "" {
@@ -157,7 +161,24 @@ func testEmailHandler(certSvc *certificates.CertificateService, store *storage.S
 			})
 			return
 		}
-		
+
+		// Create email service
+		emailSvc := email.NewEmailService(smtpServer, smtpPort, smtpUser, smtpPass, useTLS, useStartTLS)
+
+		// Send test email
+		subject := "LocalCA Test Email"
+		body := "This is a test email from LocalCA."
+
+		// Sanitize the testEmail input
+		sanitizedEmail = sanitizeEmail(testEmail)
+		if sanitizedEmail == "" {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid or unsafe email address",
+			})
+			return
+		}
+
 		if err := emailSvc.SendEmail(emailFrom, sanitizedEmail, subject, body); err != nil {
 			log.Printf("Failed to send test email: %v", err)
 			c.JSON(http.StatusInternalServerError, APIResponse{
