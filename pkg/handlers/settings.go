@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"regexp"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/email"
@@ -104,6 +105,16 @@ func testEmailHandler(certSvc *certificates.CertificateService, store *storage.S
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
 				Message: "Test email address is required",
+			})
+			return
+		}
+
+		// Validate email format
+		emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+		if matched := regexp.MustCompile(emailRegex).MatchString(testEmail); !matched {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid email address format",
 			})
 			return
 		}
