@@ -54,7 +54,10 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h2>CA Certificate</h2>
-                        <a href="/download/ca" class="btn btn-sm btn-primary">Download CA</a>
+                        <div>
+                            <a href="/download/ca" class="btn btn-sm btn-primary">Download CA</a>
+                            <a href="/download/crl" class="btn btn-sm btn-info ml-2">Download CRL</a>
+                        </div>
                     </div>
                     <div class="card-body">
                         <p><strong>CA Name:</strong> {{.CAName}}</p>
@@ -92,13 +95,16 @@
                                 <tbody>
                                     {{if .Certificates}}
                                         {{range .Certificates}}
-                                        <tr class="{{if .IsExpired}}table-danger{{else if .IsExpiringSoon}}table-warning{{end}}">
+                                        <tr class="{{if .IsRevoked}}table-danger{{else if .IsExpired}}table-danger{{else if .IsExpiringSoon}}table-warning{{end}}">
                                             <td><a href="/files?name={{.CommonName}}">{{.CommonName}}</a></td>
-                                            <td>{{.ExpiryDate}}</td>
+                                            <td>{{.ExpiryDate}} {{if .IsRevoked}}<span class="badge badge-danger">Revoked</span>{{end}}</td>
                                             <td>{{if .IsClient}}Client{{else}}Server{{end}}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
+                                                    {{if not .IsRevoked}}
                                                     <button type="button" class="btn btn-primary renew-btn" data-name="{{.CommonName}}">Renew</button>
+                                                    <button type="button" class="btn btn-warning revoke-btn" data-name="{{.CommonName}}">Revoke</button>
+                                                    {{end}}
                                                     <button type="button" class="btn btn-danger delete-btn" data-name="{{.CommonName}}">Delete</button>
                                                 </div>
                                             </td>
@@ -151,6 +157,32 @@
         </div>
     </div>
 
+    <!-- Revoke Modal -->
+    <div class="modal fade" id="revokeModal" tabindex="-1" role="dialog" aria-labelledby="revokeModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="revokeModalLabel">Confirm Revocation</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to revoke the certificate <span id="revoke-cert-name"></span>?</p>
+                    <p class="alert alert-warning">
+                        <i class="fa fa-exclamation-triangle"></i> 
+                        Revoking a certificate will add it to the Certificate Revocation List (CRL).
+                        Make sure to distribute the updated CRL to all systems that use certificates from this CA.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="confirm-revoke">Revoke</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         $(document).ready(function() {
             // Toggle password field based on client certificate checkbox
@@ -189,6 +221,13 @@
                 $('#deleteModal').modal('show');
             });
 
+            // Handle revoke button
+            $('.revoke-btn').click(function() {
+                const certName = $(this).data('name');
+                $('#revoke-cert-name').text(certName);
+                $('#revokeModal').modal('show');
+            });
+
             // Handle confirm delete
             $('#confirm-delete').click(function() {
                 const certName = $('#delete-cert-name').text();
@@ -204,6 +243,24 @@
                 .fail(function(xhr) {
                     $('#deleteModal').modal('hide');
                     alert('Failed to delete certificate: ' + xhr.responseJSON.message);
+                });
+            });
+
+            // Handle confirm revoke
+            $('#confirm-revoke').click(function() {
+                const certName = $('#revoke-cert-name').text();
+                $.post('/revoke', {
+                    name: certName,
+                    csrf_token: '{{.CSRFToken}}'
+                })
+                .done(function(data) {
+                    $('#revokeModal').modal('hide');
+                    alert('Certificate revoked successfully');
+                    location.reload();
+                })
+                .fail(function(xhr) {
+                    $('#revokeModal').modal('hide');
+                    alert('Failed to revoke certificate: ' + xhr.responseJSON.message);
                 });
             });
         });

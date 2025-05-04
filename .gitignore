@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+# LocalCA specific
+certs/
+data/
+cakey.txt
+*.p12

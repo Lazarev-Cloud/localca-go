@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -10,20 +9,20 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	CAName       string
+	CAName        string
 	CAKeyPassword string
-	Organization string
-	Country      string
-	StoragePath  string
-	EmailEnabled bool
-	SMTPServer   string
-	SMTPPort     int
-	SMTPUser     string
-	SMTPPassword string
-	SMTPUseTLS   bool
-	EmailFrom    string
-	EmailTo      string
-	TLSEnabled   bool
+	Organization  string
+	Country       string
+	StoragePath   string
+	EmailEnabled  bool
+	SMTPServer    string
+	SMTPPort      int
+	SMTPUser      string
+	SMTPPassword  string
+	SMTPUseTLS    bool
+	EmailFrom     string
+	EmailTo       string
+	TLSEnabled    bool
 }
 
 // LoadConfig loads configuration from environment variables
@@ -43,7 +42,7 @@ func LoadConfig() (*Config, error) {
 	keyEnv := getEnv("CA_KEY", "")
 
 	if keyFile != "" {
-		content, err := ioutil.ReadFile(keyFile)
+		content, err := os.ReadFile(keyFile)
 		if err != nil {
 			return nil, err
 		}

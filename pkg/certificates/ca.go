@@ -8,12 +8,14 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
-	"github.com/yourusername/localca-go/pkg/config"
-	"github.com/yourusername/localca-go/pkg/storage"
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
 
 // CertificateService handles certificate operations
@@ -185,20 +187,214 @@ func (c *CertificateService) RenewCA() error {
 
 // CreateServiceCertificate creates a certificate for the LocalCA service itself
 func (c *CertificateService) CreateServiceCertificate() error {
-	// Implementation to create a certificate for the service
-	// This would use the CA to sign a certificate for the web service
-	// Similar to CreateServerCertificate but for the service itself
+	// Get hostname for the service
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	// Create directory for the service certificate
+	certDir := filepath.Join(c.storage.GetBasePath(), "service")
+	if err := os.MkdirAll(certDir, 0755); err != nil {
+		return fmt.Errorf("failed to create service certificate directory: %w", err)
+	}
+
+	// Create additional domains for the service certificate
+	// Include common local names and the CA name itself
+	additionalDomains := []string{
+		"localhost",
+		"localca",
+		"localca.local",
+		c.config.CAName,
+	}
+
+	// If hostname is not already in the list, add it
+	hostnameExists := false
+	for _, domain := range additionalDomains {
+		if domain == hostname {
+			hostnameExists = true
+			break
+		}
+	}
+	if !hostnameExists {
+		additionalDomains = append(additionalDomains, hostname)
+	}
+
+	// Add IP addresses as well
+	// Get all IP addresses of the host
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, addr := range addrs {
+			// Check if it's an IP address and not a network prefix
+			ipnet, ok := addr.(*net.IPNet)
+			if ok && !ipnet.IP.IsLoopback() {
+				// Only add IPv4 addresses for now
+				if ipnet.IP.To4() != nil {
+					additionalDomains = append(additionalDomains, ipnet.IP.String())
+				}
+			}
+		}
+		// Always add localhost IP
+		additionalDomains = append(additionalDomains, "127.0.0.1")
+	}
+
+	// Generate server key pair
+	serverPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("failed to generate service private key: %w", err)
+	}
+
+	// Save server private key to file
+	serverKeyPath := filepath.Join(c.storage.GetBasePath(), "service.key")
+	serverKeyFile, err := os.Create(serverKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to create service key file: %w", err)
+	}
+	defer serverKeyFile.Close()
+
+	if err := pem.Encode(serverKeyFile, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(serverPrivKey),
+	}); err != nil {
+		return fmt.Errorf("failed to encode service private key: %w", err)
+	}
+
+	// Create server certificate template
+	serverTemplate := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().Unix()),
+		Subject: pkix.Name{
+			CommonName: "localca-service",
+		},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().AddDate(3, 0, 0), // 3 years validity
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:    additionalDomains,
+	}
+
+	// Load CA certificate
+	caCertBytes, err := os.ReadFile(c.storage.GetCAPublicKeyPath())
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+
+	caCertBlock, _ := pem.Decode(caCertBytes)
+	if caCertBlock == nil {
+		return fmt.Errorf("failed to decode CA certificate PEM")
+	}
+
+	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse CA certificate: %w", err)
+	}
+
+	// Load CA private key
+	caKeyBytes, err := os.ReadFile(c.storage.GetCAPrivateKeyPath())
+	if err != nil {
+		return fmt.Errorf("failed to read CA private key: %w", err)
+	}
+
+	caKeyBlock, _ := pem.Decode(caKeyBytes)
+	if caKeyBlock == nil {
+		return fmt.Errorf("failed to decode CA private key PEM")
+	}
+
+	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse CA private key: %w", err)
+	}
+
+	// Create server certificate
+	serverCertBytes, err := x509.CreateCertificate(
+		rand.Reader, 
+		&serverTemplate, 
+		caCert, 
+		&serverPrivKey.PublicKey, 
+		caKey,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create service certificate: %w", err)
+	}
+
+	// Save server certificate to file
+	serverCertPath := filepath.Join(c.storage.GetBasePath(), "service.crt")
+	serverCertFile, err := os.Create(serverCertPath)
+	if err != nil {
+		return fmt.Errorf("failed to create service certificate file: %w", err)
+	}
+	defer serverCertFile.Close()
+
+	if err := pem.Encode(serverCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: serverCertBytes}); err != nil {
+		return fmt.Errorf("failed to encode service certificate: %w", err)
+	}
+
+	// Set proper permissions
+	os.Chmod(serverKeyPath, 0600)
+	os.Chmod(serverCertPath, 0644)
+
 	return nil
 }
 
 // GetAllCertificates returns a list of all issued certificates
 func (c *CertificateService) GetAllCertificates() ([]Certificate, error) {
-	// Implementation to list all certificates
-	return nil, nil
+	// Get the list of certificate names
+	certNames, err := c.storage.ListCertificates()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list certificates: %w", err)
+	}
+
+	// Get certificate details for each
+	certificates := make([]Certificate, 0, len(certNames))
+	for _, name := range certNames {
+		cert, err := c.GetCertificateInfo(name)
+		if err != nil {
+			continue
+		}
+		certificates = append(certificates, *cert)
+	}
+
+	return certificates, nil
 }
 
 // GetCertificateInfo returns information about a specific certificate
 func (c *CertificateService) GetCertificateInfo(name string) (*Certificate, error) {
-	// Implementation to get certificate details
-	return nil, nil
+	certPath := c.storage.GetCertificatePath(name)
+	
+	// Check if certificate exists
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("certificate does not exist: %s", name)
+	}
+
+	// Use OpenSSL to get certificate details
+	cmd := exec.Command(
+		"openssl", "x509",
+		"-in", certPath,
+		"-noout",
+		"-text",
+		"-serial",
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get certificate info: %w", err)
+	}
+
+	// Parse the output to create a Certificate struct
+	// This is a simplified implementation and may need to be expanded
+	cert := &Certificate{
+		CommonName: name,
+		Path:       certPath,
+	}
+
+	// Check if it's a client certificate
+	p12Path := c.storage.GetCertificateP12Path(name)
+	cert.IsClient = false
+	if _, err := os.Stat(p12Path); err == nil {
+		cert.IsClient = true
+	}
+
+	// Extract details from output
+	// This would require parsing the OpenSSL output
+	// Full implementation would need to extract SerialNumber, NotBefore, NotAfter, etc.
+
+	return cert, nil
 }

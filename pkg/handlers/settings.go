@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/localca-go/pkg/certificates"
-	"github.com/yourusername/localca-go/pkg/config"
-	"github.com/yourusername/localca-go/pkg/email"
-	"github.com/yourusername/localca-go/pkg/storage"
+	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/email"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
 
 // settingsHandler handles the settings page
@@ -32,6 +32,7 @@ func settingsHandler(certSvc *certificates.CertificateService, store *storage.St
 			"EmailTo":     emailTo,
 			"UseTLS":      useTLS,
 			"UseStartTLS": useStartTLS,
+			"CSRFToken":   c.GetString("csrf_token"),
 		})
 	}
 }
@@ -61,6 +62,7 @@ func saveSettingsHandler(certSvc *certificates.CertificateService, store *storag
 				"EmailTo":     emailTo,
 				"UseTLS":      useTLS,
 				"UseStartTLS": useStartTLS,
+				"CSRFToken":   c.GetString("csrf_token"),
 			})
 			return
 		}
@@ -83,6 +85,7 @@ func saveSettingsHandler(certSvc *certificates.CertificateService, store *storag
 				"EmailTo":     emailTo,
 				"UseTLS":      useTLS,
 				"UseStartTLS": useStartTLS,
+				"CSRFToken":   c.GetString("csrf_token"),
 			})
 			return
 		}

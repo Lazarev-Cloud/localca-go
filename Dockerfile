@@ -42,6 +42,7 @@ ENV GIN_MODE=release
 
 # Expose port
 EXPOSE 8080
+EXPOSE 8443
 
 # Command to run
 CMD ["/app/localca-go"]

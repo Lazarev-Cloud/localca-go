@@ -1,4 +1,4 @@
-module github.com/yourusername/localca-go
+module github.com/Lazarev-Cloud/localca-go
 
 go 1.22
 

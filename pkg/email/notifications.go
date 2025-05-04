@@ -18,6 +18,14 @@ type EmailService struct {
 	UseStartTLS  bool
 }
 
+// CertificateInfo holds information about a certificate for email notifications
+type CertificateInfo struct {
+	CommonName   string
+	ExpiryDate   string
+	IsClient     bool
+	SerialNumber string
+}
+
 // NewEmailService creates a new email service
 func NewEmailService(smtpServer string, smtpPort int, smtpUser, smtpPassword string, useTLS, useStartTLS bool) *EmailService {
 	return &EmailService{

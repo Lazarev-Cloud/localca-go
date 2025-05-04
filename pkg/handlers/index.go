@@ -4,7 +4,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -14,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/localca-go/pkg/certificates"
-	"github.com/yourusername/localca-go/pkg/config"
-	"github.com/yourusername/localca-go/pkg/storage"
+	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
 
 // indexHandler handles the home page
@@ -70,6 +69,7 @@ func indexHandler(certSvc *certificates.CertificateService, store *storage.Stora
 			"Country":      country,
 			"CAInfo":       caInfo,
 			"Certificates": certificates,
+			"CSRFToken":    c.GetString("csrf_token"),
 		})
 	}
 }
@@ -263,6 +263,21 @@ func downloadCAHandler(certSvc *certificates.CertificateService, store *storage.
 	}
 }
 
+// downloadCRLHandler handles CRL download
+func downloadCRLHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		crlPath := filepath.Join(store.GetBasePath(), "ca.crl")
+		if _, err := os.Stat(crlPath); os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Success: false,
+				Message: "CRL not found",
+			})
+			return
+		}
+		c.FileAttachment(crlPath, "ca.crl")
+	}
+}
+
 // downloadCertificateHandler handles certificate download
 func downloadCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -311,13 +326,13 @@ func getCAInfo(store *storage.Storage) (CAInfo, error) {
 
 	// Read CA certificate
 	certPath := store.GetCAPublicKeyPath()
-	certData, err := ioutil.ReadFile(certPath)
+	certData, err := os.ReadFile(certPath)
 	if err != nil {
 		return caInfo, fmt.Errorf("failed to read CA certificate: %w", err)
 	}
 
 	// Parse certificate
-	block, _ := pem.Decode(certPath)
+	block, _ := pem.Decode(certData)
 	if block == nil {
 		return caInfo, fmt.Errorf("failed to decode PEM block")
 	}
@@ -352,6 +367,12 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 	certInfo.IsClient = false
 	if _, err := os.Stat(p12Path); err == nil {
 		certInfo.IsClient = true
+	}
+
+	// Check if certificate is revoked
+	revokedPath := filepath.Join(store.GetCertificateDirectory(name), "revoked")
+	if _, err := os.Stat(revokedPath); err == nil {
+		certInfo.IsRevoked = true
 	}
 
 	// Read certificate

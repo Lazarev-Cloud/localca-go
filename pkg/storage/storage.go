@@ -23,6 +23,11 @@ func NewStorage(basePath string) (*Storage, error) {
 	}, nil
 }
 
+// GetBasePath returns the base path for storage
+func (s *Storage) GetBasePath() string {
+	return s.basePath
+}
+
 // GetCADirectory returns the path to the CA directory
 func (s *Storage) GetCADirectory() string {
 	return filepath.Join(s.basePath, "ca")
@@ -153,7 +158,7 @@ func (s *Storage) ListCertificates() ([]string, error) {
 
 	var certificates []string
 	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != "ca" {
+		if entry.IsDir() && entry.Name() != "ca" && entry.Name() != "service" && entry.Name() != "settings" {
 			// Check if this directory contains a certificate
 			certPath := filepath.Join(s.basePath, entry.Name(), entry.Name()+".crt")
 			if _, err := os.Stat(certPath); err == nil {

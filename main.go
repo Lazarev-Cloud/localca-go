@@ -2,20 +2,41 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/yourusername/localca-go/pkg/certificates"
-	"github.com/yourusername/localca-go/pkg/config"
-	"github.com/yourusername/localca-go/pkg/handlers"
-	"github.com/yourusername/localca-go/pkg/storage"
+	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/handlers"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
+
+func getSecureTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
+		PreferServerCipherSuites: true,
+		CurvePreferences: []tls.CurveID{
+			tls.CurveP256,
+			tls.X25519,
+		},
+	}
+}
 
 func main() {
 	// Initialize configuration
@@ -89,10 +110,11 @@ func main() {
 		caCertPath := store.GetCAPublicKeyPath()
 		caKeyPath := store.GetCAPrivateKeyPath()
 		
-		// Create a self-signed certificate for the service itself
-		serviceCert := "service.crt"
-		serviceKey := "service.key"
+		// Certificate paths for the service
+		serviceCert := filepath.Join(store.GetBasePath(), "service.crt")
+		serviceKey := filepath.Join(store.GetBasePath(), "service.key")
 		
+		// Check if service certificate exists
 		if _, err := os.Stat(serviceCert); os.IsNotExist(err) {
 			log.Println("Creating service certificate for HTTPS...")
 			if err := certSvc.CreateServiceCertificate(); err != nil {
@@ -101,8 +123,9 @@ func main() {
 				// Start HTTPS server
 				go func() {
 					httpsServer := &http.Server{
-						Addr:    ":8443",
-						Handler: router,
+						Addr:      ":8443",
+						Handler:   router,
+						TLSConfig: getSecureTLSConfig(),
 					}
 					
 					log.Println("HTTPS server starting on port 8443...")
@@ -111,6 +134,20 @@ func main() {
 					}
 				}()
 			}
+		} else {
+			// Certificate exists, start HTTPS server
+			go func() {
+				httpsServer := &http.Server{
+					Addr:      ":8443",
+					Handler:   router,
+					TLSConfig: getSecureTLSConfig(),
+				}
+				
+				log.Println("HTTPS server starting on port 8443...")
+				if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
+					log.Printf("HTTPS server error: %v", err)
+				}
+			}()
 		}
 	}
 

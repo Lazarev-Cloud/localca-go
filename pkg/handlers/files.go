@@ -2,17 +2,17 @@ package handlers
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/localca-go/pkg/certificates"
-	"github.com/yourusername/localca-go/pkg/storage"
+	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
 
 // FileInfo represents information about a certificate file
@@ -26,15 +26,15 @@ type FileInfo struct {
 
 // CertificateDetails represents details of a certificate
 type CertificateDetails struct {
-	CommonName    string
-	Issuer        string
-	Serial        string
-	NotBefore     string
-	NotAfter      string
-	Subject       string
+	CommonName      string
+	Issuer          string
+	Serial          string
+	NotBefore       string
+	NotAfter        string
+	Subject         string
 	SubjectAltNames []string
-	KeyUsage      string
-	ExtKeyUsage   string
+	KeyUsage        string
+	ExtKeyUsage     string
 }
 
 // filesHandler handles the certificate files page
@@ -63,7 +63,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 		}
 
 		// Get certificate files
-		files, err := ioutil.ReadDir(certDir)
+		files, err := os.ReadDir(certDir)
 		if err != nil {
 			log.Printf("Failed to read certificate directory: %v", err)
 			c.HTML(http.StatusInternalServerError, "files.html", gin.H{
@@ -75,15 +75,20 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 		// Process files
 		fileInfos := make([]FileInfo, 0, len(files))
 		for _, file := range files {
-			// Skip password file
-			if strings.HasSuffix(file.Name(), ".pw") {
+			// Skip password file and revoked flag
+			if strings.HasSuffix(file.Name(), ".pw") || file.Name() == "revoked" {
 				continue
 			}
 
-			filePath := fmt.Sprintf("%s/%s", certDir, file.Name())
+			filePath := filepath.Join(certDir, file.Name())
+			info, err := file.Info()
+			if err != nil {
+				log.Printf("Failed to get file info: %v", err)
+				continue
+			}
 			
 			// Check file size
-			fileSize := fmt.Sprintf("%.1f KB", float64(file.Size())/1024.0)
+			fileSize := fmt.Sprintf("%.1f KB", float64(info.Size())/1024.0)
 			
 			// Check if p12 file
 			isP12 := strings.HasSuffix(file.Name(), ".p12")
@@ -91,7 +96,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 			// Read file content for non-p12 files
 			content := ""
 			if !isP12 {
-				contentBytes, err := ioutil.ReadFile(filePath)
+				contentBytes, err := os.ReadFile(filePath)
 				if err != nil {
 					log.Printf("Failed to read file: %v", err)
 					content = fmt.Sprintf("Error reading file: %v", err)
@@ -111,9 +116,10 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 
 		// Render template
 		c.HTML(http.StatusOK, "files.html", gin.H{
-			"Name":             name,
-			"Files":            fileInfos,
+			"Name":               name,
+			"Files":              fileInfos,
 			"CertificateDetails": certDetails,
+			"CSRFToken":          c.GetString("csrf_token"),
 		})
 	}
 }
