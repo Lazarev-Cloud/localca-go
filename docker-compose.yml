@@ -25,7 +25,7 @@ services:
     networks:
       - localca-network
     healthcheck:
-      test: ["CMD", "curl", "-k", "https://localhost:8443"]
+      test: ["CMD", "curl", "-k", "http://localhost:8080"]
       interval: 30s
       timeout: 10s
       retries: 3

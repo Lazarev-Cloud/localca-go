@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -18,7 +20,7 @@ import (
 // CreateClientCertificate creates a new client certificate and p12 file
 func (c *CertificateService) CreateClientCertificate(commonName string, p12Password string) error {
 	// Validate commonName
-	if strings.Contains(commonName, "/") || strings.Contains(commonName, "\\") || strings.Contains(commonName, "..") {
+	if !isValidName(commonName) {
 		return fmt.Errorf("invalid common name: %s", commonName)
 	}
 
@@ -117,19 +119,22 @@ func (c *CertificateService) CreateClientCertificate(commonName string, p12Passw
 		return fmt.Errorf("failed to encode client certificate: %w", err)
 	}
 
-	// Create PKCS#12 file
+	// Create PKCS#12 file using secure command execution
 	p12Path := c.storage.GetCertificateP12Path(commonName)
-	cmd := exec.Command(
-		"openssl", "pkcs12",
-		"-export",
+
+	// Use a safer method to execute the command with no shell expansion
+	cmd := exec.Command("openssl", "pkcs12", "-export",
 		"-out", p12Path,
 		"-inkey", clientKeyPath,
 		"-in", clientCertPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", p12Password),
-	)
+		"-passout", fmt.Sprintf("pass:%s", p12Password))
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create PKCS#12 file: %w", err)
+		return fmt.Errorf("failed to create PKCS#12 file: %w - %s", err, stderr.String())
 	}
 
 	// Set permissions
@@ -142,6 +147,11 @@ func (c *CertificateService) CreateClientCertificate(commonName string, p12Passw
 
 // RenewClientCertificate renews an existing client certificate
 func (c *CertificateService) RenewClientCertificate(commonName string) error {
+	// Validate commonName
+	if !isValidName(commonName) {
+		return fmt.Errorf("invalid common name: %s", commonName)
+	}
+
 	// Check if certificate exists
 	certPath := c.storage.GetCertificatePath(commonName)
 	keyPath := c.storage.GetCertificateKeyPath(commonName)
@@ -169,16 +179,19 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 	p12Password := string(passwordBytes)
 
 	// Generate CSR
-	csrPath := c.storage.GetCertificateDirectory(commonName) + "/" + commonName + ".csr"
+	csrPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), commonName+".csr")
 	cmd := exec.Command(
 		"openssl", "req",
 		"-new",
 		"-key", keyPath,
 		"-out", csrPath,
-		"-subj", "/CN="+commonName,
-	)
+		"-subj", "/CN="+commonName)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create CSR: %w", err)
+		return fmt.Errorf("failed to create CSR: %w - %s", err, stderr.String())
 	}
 
 	// Create SAN extension config
@@ -193,7 +206,7 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 	sanConfig += "[alt_names]\n"
 	sanConfig += fmt.Sprintf("DNS.1 = %s\n", commonName)
 
-	sanConfigPath := c.storage.GetCertificateDirectory(commonName) + "/" + commonName + ".ext"
+	sanConfigPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), commonName+".ext")
 	if err := os.WriteFile(sanConfigPath, []byte(sanConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write SAN config: %w", err)
 	}
@@ -209,10 +222,13 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 		"-out", certPath,
 		"-days", "365",
 		"-sha256",
-		"-extfile", sanConfigPath,
-	)
+		"-extfile", sanConfigPath)
+
+	stderr.Reset()
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to sign certificate: %w", err)
+		return fmt.Errorf("failed to sign certificate: %w - %s", err, stderr.String())
 	}
 
 	// Create PKCS#12 file
@@ -223,10 +239,13 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 		"-inkey", keyPath,
 		"-in", certPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", p12Password),
-	)
+		"-passout", fmt.Sprintf("pass:%s", p12Password))
+
+	stderr.Reset()
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create PKCS#12 file: %w", err)
+		return fmt.Errorf("failed to create PKCS#12 file: %w - %s", err, stderr.String())
 	}
 
 	// Cleanup
@@ -238,52 +257,57 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 
 // RevokeCertificate revokes a certificate and updates the CRL
 func (c *CertificateService) RevokeCertificate(commonName string) error {
-    // Check if certificate exists
-    certPath := c.storage.GetCertificatePath(commonName)
-    if _, err := os.Stat(certPath); os.IsNotExist(err) {
-        return fmt.Errorf("certificate not found: %s", commonName)
-    }
+	// Validate commonName
+	if !isValidName(commonName) {
+		return fmt.Errorf("invalid common name: %s", commonName)
+	}
 
-    // Get serial number of the certificate
-    cmd := exec.Command(
-        "openssl", "x509",
-        "-in", certPath,
-        "-noout",
-        "-serial",
-    )
-    output, err := cmd.Output()
-    if err != nil {
-        return fmt.Errorf("failed to get certificate serial number: %w", err)
-    }
+	// Check if certificate exists
+	certPath := c.storage.GetCertificatePath(commonName)
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return fmt.Errorf("certificate not found: %s", commonName)
+	}
 
-    serialLine := string(output)
-    serialParts := strings.SplitN(serialLine, "=", 2)
-    if len(serialParts) != 2 {
-        return fmt.Errorf("invalid serial number format: %s", serialLine)
-    }
+	// Get serial number of the certificate
+	cmd := exec.Command(
+		"openssl", "x509",
+		"-in", certPath,
+		"-noout",
+		"-serial")
 
-    serial := strings.TrimSpace(serialParts[1])
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get certificate serial number: %w", err)
+	}
 
-    // Initialize CRL directory if it doesn't exist
-    crlDir := filepath.Join(c.storage.GetCADirectory(), "crl")
-    if err := os.MkdirAll(crlDir, 0755); err != nil {
-        return fmt.Errorf("failed to create CRL directory: %w", err)
-    }
+	serialLine := string(output)
+	serialParts := strings.SplitN(serialLine, "=", 2)
+	if len(serialParts) != 2 {
+		return fmt.Errorf("invalid serial number format: %s", serialLine)
+	}
 
-    // Create or update CRL index file
-    indexPath := filepath.Join(crlDir, "index.txt")
-    if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-        // Create empty index file if it doesn't exist
-        if err := os.WriteFile(indexPath, []byte(""), 0644); err != nil {
-            return fmt.Errorf("failed to create CRL index file: %w", err)
-        }
-    }
+	serial := strings.TrimSpace(serialParts[1])
 
-    // Create openssl.cnf for CRL generation if it doesn't exist
-    opensslCnfPath := filepath.Join(crlDir, "openssl.cnf")
-    if _, err := os.Stat(opensslCnfPath); os.IsNotExist(err) {
-        // Create openssl.cnf with basic CRL configuration
-        opensslCnf := `
+	// Initialize CRL directory if it doesn't exist
+	crlDir := filepath.Join(c.storage.GetCADirectory(), "crl")
+	if err := os.MkdirAll(crlDir, 0755); err != nil {
+		return fmt.Errorf("failed to create CRL directory: %w", err)
+	}
+
+	// Create or update CRL index file
+	indexPath := filepath.Join(crlDir, "index.txt")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		// Create empty index file if it doesn't exist
+		if err := os.WriteFile(indexPath, []byte(""), 0644); err != nil {
+			return fmt.Errorf("failed to create CRL index file: %w", err)
+		}
+	}
+
+	// Create openssl.cnf for CRL generation if it doesn't exist
+	opensslCnfPath := filepath.Join(crlDir, "openssl.cnf")
+	if _, err := os.Stat(opensslCnfPath); os.IsNotExist(err) {
+		// Create openssl.cnf with basic CRL configuration
+		opensslCnf := `
 [ ca ]
 default_ca = CA_default
 
@@ -293,61 +317,83 @@ serial = ` + filepath.Join(crlDir, "serial.txt") + `
 default_md = sha256
 default_crl_days = 30
 `
-        if err := os.WriteFile(opensslCnfPath, []byte(opensslCnf), 0644); err != nil {
-            return fmt.Errorf("failed to create openssl.cnf: %w", err)
-        }
-    }
+		if err := os.WriteFile(opensslCnfPath, []byte(opensslCnf), 0644); err != nil {
+			return fmt.Errorf("failed to create openssl.cnf: %w", err)
+		}
+	}
 
-    // Create or update serial file
-    serialPath := filepath.Join(crlDir, "serial.txt")
-    if _, err := os.Stat(serialPath); os.IsNotExist(err) {
-        // Create serial file with initial value if it doesn't exist
-        if err := os.WriteFile(serialPath, []byte("01"), 0644); err != nil {
-            return fmt.Errorf("failed to create serial file: %w", err)
-        }
-    }
+	// Create or update serial file
+	serialPath := filepath.Join(crlDir, "serial.txt")
+	if _, err := os.Stat(serialPath); os.IsNotExist(err) {
+		// Create serial file with initial value if it doesn't exist
+		if err := os.WriteFile(serialPath, []byte("01"), 0644); err != nil {
+			return fmt.Errorf("failed to create serial file: %w", err)
+		}
+	}
 
-    // Add certificate to index file with revocation status
-    now := time.Now().UTC().Format("060102150405Z") // YYMMDDhhmmssZ format
-    revocationLine := fmt.Sprintf("R\t%s\t%s\t%s\tunknown\t/CN=%s\n", 
-        now, serial, now, commonName)
+	// Add certificate to index file with revocation status
+	now := time.Now().UTC().Format("060102150405Z") // YYMMDDhhmmssZ format
+	revocationLine := fmt.Sprintf("R\t%s\t%s\t%s\tunknown\t/CN=%s\n",
+		now, serial, now, commonName)
 
-    indexFile, err := os.OpenFile(indexPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-    if err != nil {
-        return fmt.Errorf("failed to open index file: %w", err)
-    }
-    defer indexFile.Close()
+	indexFile, err := os.OpenFile(indexPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open index file: %w", err)
+	}
+	defer indexFile.Close()
 
-    if _, err := indexFile.WriteString(revocationLine); err != nil {
-        return fmt.Errorf("failed to write to index file: %w", err)
-    }
+	if _, err := indexFile.WriteString(revocationLine); err != nil {
+		return fmt.Errorf("failed to write to index file: %w", err)
+	}
 
-    // Generate CRL
-    crlPath := filepath.Join(c.storage.GetCADirectory(), "ca.crl")
-    cmd = exec.Command(
-        "openssl", "ca",
-        "-config", opensslCnfPath,
-        "-gencrl",
-        "-keyfile", c.storage.GetCAPrivateKeyPath(),
-        "-cert", c.storage.GetCAPublicKeyPath(),
-        "-out", crlPath,
-    )
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to generate CRL: %w", err)
-    }
+	// Generate CRL
+	crlPath := filepath.Join(c.storage.GetCADirectory(), "ca.crl")
+	cmd = exec.Command(
+		"openssl", "ca",
+		"-config", opensslCnfPath,
+		"-gencrl",
+		"-keyfile", c.storage.GetCAPrivateKeyPath(),
+		"-cert", c.storage.GetCAPublicKeyPath(),
+		"-out", crlPath)
 
-    // Make the CRL accessible
-    crlPublicPath := filepath.Join(c.storage.GetBasePath(), "ca.crl")
-    cmd = exec.Command("cp", crlPath, crlPublicPath)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to copy CRL to public location: %w", err)
-    }
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
-    // Mark the certificate as revoked in our system
-    revokedFlagPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), "revoked")
-    if err := os.WriteFile(revokedFlagPath, []byte(now), 0644); err != nil {
-        return fmt.Errorf("failed to mark certificate as revoked: %w", err)
-    }
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to generate CRL: %w - %s", err, stderr.String())
+	}
 
-    return nil
+	// Make the CRL accessible
+	crlPublicPath := filepath.Join(c.storage.GetBasePath(), "ca.crl")
+	cmd = exec.Command("cp", crlPath, crlPublicPath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to copy CRL to public location: %w", err)
+	}
+
+	// Mark the certificate as revoked in our system
+	revokedFlagPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), "revoked")
+	if err := os.WriteFile(revokedFlagPath, []byte(now), 0644); err != nil {
+		return fmt.Errorf("failed to mark certificate as revoked: %w", err)
+	}
+
+	return nil
+}
+
+// isValidName checks if a name is valid
+func isValidName(name string) bool {
+	// Only allow alphanumeric, dash, underscore, and dot
+	validName := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9\-\_\.]+[a-zA-Z0-9]$`).MatchString(name)
+	if !validName {
+		return false
+	}
+
+	// Additional security checks
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") ||
+		strings.Contains(name, "&") || strings.Contains(name, "|") || strings.Contains(name, ";") ||
+		strings.Contains(name, "$") || strings.Contains(name, "`") ||
+		strings.Contains(name, ">") || strings.Contains(name, "<") {
+		return false
+	}
+
+	return true
 }

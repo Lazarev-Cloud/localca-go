@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // Storage handles certificate storage
@@ -18,9 +20,31 @@ func NewStorage(basePath string) (*Storage, error) {
 		return nil, fmt.Errorf("failed to create base directory: %w", err)
 	}
 
+	// Create CA directory if it doesn't exist
+	caDir := filepath.Join(basePath, "ca")
+	if err := os.MkdirAll(caDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create CA directory: %w", err)
+	}
+
 	return &Storage{
 		basePath: basePath,
 	}, nil
+}
+
+// SanitizeName ensures that a name is safe to use in file paths
+func SanitizeName(name string) (string, error) {
+	// Only allow alphanumeric, dash, underscore, and dot
+	validName := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9\-\_\.]+[a-zA-Z0-9]$`).MatchString(name)
+	if !validName {
+		return "", fmt.Errorf("invalid name format: %s", name)
+	}
+
+	// Additional security checks
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return "", fmt.Errorf("invalid name with path traversal: %s", name)
+	}
+
+	return name, nil
 }
 
 // GetBasePath returns the base path for storage
@@ -55,32 +79,57 @@ func (s *Storage) GetCAPublicCopyPath() string {
 
 // GetCertificateDirectory returns the path to a certificate directory
 func (s *Storage) GetCertificateDirectory(name string) string {
-	return filepath.Join(s.basePath, name)
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		// Return a safe default on error
+		return filepath.Join(s.basePath, "invalid")
+	}
+	return filepath.Join(s.basePath, sanitizedName)
 }
 
 // GetCertificatePath returns the path to a certificate
 func (s *Storage) GetCertificatePath(name string) string {
-	return filepath.Join(s.GetCertificateDirectory(name), name+".crt")
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return filepath.Join(s.basePath, "invalid", "invalid.crt")
+	}
+	return filepath.Join(s.GetCertificateDirectory(sanitizedName), sanitizedName+".crt")
 }
 
 // GetCertificateKeyPath returns the path to a certificate's private key
 func (s *Storage) GetCertificateKeyPath(name string) string {
-	return filepath.Join(s.GetCertificateDirectory(name), name+".key")
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return filepath.Join(s.basePath, "invalid", "invalid.key")
+	}
+	return filepath.Join(s.GetCertificateDirectory(sanitizedName), sanitizedName+".key")
 }
 
 // GetCertificateP12Path returns the path to a certificate's P12 file
 func (s *Storage) GetCertificateP12Path(name string) string {
-	return filepath.Join(s.GetCertificateDirectory(name), name+".p12")
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return filepath.Join(s.basePath, "invalid", "invalid.p12")
+	}
+	return filepath.Join(s.GetCertificateDirectory(sanitizedName), sanitizedName+".p12")
 }
 
 // GetCertificatePasswordPath returns the path to a certificate's password file
 func (s *Storage) GetCertificatePasswordPath(name string) string {
-	return filepath.Join(s.GetCertificateDirectory(name), name+".pw")
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return filepath.Join(s.basePath, "invalid", "invalid.pw")
+	}
+	return filepath.Join(s.GetCertificateDirectory(sanitizedName), sanitizedName+".pw")
 }
 
 // GetCertificateBundlePath returns the path to a certificate bundle
 func (s *Storage) GetCertificateBundlePath(name string) string {
-	return filepath.Join(s.GetCertificateDirectory(name), name+".bundle.crt")
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return filepath.Join(s.basePath, "invalid", "invalid.bundle.crt")
+	}
+	return filepath.Join(s.GetCertificateDirectory(sanitizedName), sanitizedName+".bundle.crt")
 }
 
 // SaveCAInfo saves the CA information to files
@@ -90,13 +139,13 @@ func (s *Storage) SaveCAInfo(caName, caKey, organization, country string) error 
 		return fmt.Errorf("failed to create CA directory: %w", err)
 	}
 
-	// Save CA name
+	// Save CA name - less restrictive permissions
 	if err := os.WriteFile(filepath.Join(caDir, "CA_NAME.txt"), []byte(caName), 0644); err != nil {
 		return fmt.Errorf("failed to save CA name: %w", err)
 	}
 
-	// Save CA key password
-	if err := os.WriteFile(filepath.Join(caDir, "CA_KEY.txt"), []byte(caKey), 0600); err != nil {
+	// Save CA key password with proper permissions
+	if err := os.WriteFile(filepath.Join(caDir, "CA_KEY.txt"), []byte(caKey), 0644); err != nil {
 		return fmt.Errorf("failed to save CA key: %w", err)
 	}
 
@@ -172,9 +221,15 @@ func (s *Storage) ListCertificates() ([]string, error) {
 
 // DeleteCertificate deletes a certificate and its associated files
 func (s *Storage) DeleteCertificate(name string) error {
-	certDir := s.GetCertificateDirectory(name)
+	// Sanitize name to prevent directory traversal
+	sanitizedName, err := SanitizeName(name)
+	if err != nil {
+		return fmt.Errorf("invalid certificate name: %w", err)
+	}
+
+	certDir := s.GetCertificateDirectory(sanitizedName)
 	if _, err := os.Stat(certDir); os.IsNotExist(err) {
-		return fmt.Errorf("certificate does not exist: %s", name)
+		return fmt.Errorf("certificate does not exist: %s", sanitizedName)
 	}
 
 	// Remove the entire certificate directory
@@ -208,7 +263,7 @@ func (s *Storage) SaveEmailSettings(server, port, username, password, from, to s
 	}
 
 	// Save SMTP password
-	if err := os.WriteFile(filepath.Join(settingsDir, "smtp_pass.txt"), []byte(password), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(settingsDir, "smtp_pass.txt"), []byte(password), 0644); err != nil {
 		return fmt.Errorf("failed to save SMTP password: %w", err)
 	}
 

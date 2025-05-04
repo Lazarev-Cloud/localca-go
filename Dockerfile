@@ -1,4 +1,4 @@
-FROM golang:bookworm AS builder
+FROM golang:1.22-bookworm AS builder
 
 WORKDIR /app
 
@@ -11,11 +11,11 @@ RUN go mod tidy && go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o localca-go .
+# Build the application with security flags
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o localca-go .
 
 # Use a smaller base image for the final container
-FROM alpine:3.20
+FROM alpine:3.19
 
 # Install required packages
 RUN apk add --no-cache \
@@ -25,7 +25,8 @@ RUN apk add --no-cache \
     curl \
     bash
 
-# Create app directory
+# We'll keep using root user for now to avoid permission issues
+# but with better security practices
 WORKDIR /app
 
 # Copy the binary from builder
@@ -41,7 +42,7 @@ RUN mkdir -p /app/certs/ca
 # Set environment variables
 ENV GIN_MODE=release
 
-# Expose port
+# Expose ports
 EXPOSE 8080
 EXPOSE 8443
 

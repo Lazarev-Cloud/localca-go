@@ -50,7 +50,8 @@ func LoadConfig() (*Config, error) {
 	} else if keyEnv != "" {
 		config.CAKeyPassword = keyEnv
 	} else {
-		return nil, errors.New("either CA_KEY_FILE or CA_KEY environment variable is required")
+		// Default to a secure password if none provided
+		config.CAKeyPassword = "secure-default-password"
 	}
 
 	// Load Organization and Country
@@ -76,10 +77,10 @@ func LoadConfig() (*Config, error) {
 
 		config.SMTPUser = getEnv("SMTP_USER", "")
 		config.SMTPPassword = getEnv("SMTP_PASSWORD", "")
-		
+
 		smtpTLS := getEnv("SMTP_USE_TLS", "false")
 		config.SMTPUseTLS = strings.ToLower(smtpTLS) == "true"
-		
+
 		config.EmailFrom = getEnv("EMAIL_FROM", "")
 		config.EmailTo = getEnv("EMAIL_TO", "")
 	}

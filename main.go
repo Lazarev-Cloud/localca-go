@@ -21,7 +21,7 @@ import (
 
 func getSecureTLSConfig() *tls.Config {
 	return &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion: tls.VersionTLS12, // Enforce TLS 1.2+
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -35,6 +35,8 @@ func getSecureTLSConfig() *tls.Config {
 			tls.CurveP256,
 			tls.X25519,
 		},
+		// Add secure headers
+		NextProtos: []string{"h2", "http/1.1"},
 	}
 }
 
@@ -76,17 +78,27 @@ func main() {
 	// Initialize router
 	router := gin.Default()
 
-	// Configure static file serving
+	// Configure static file serving with strict caching and security headers
+	router.Use(func(c *gin.Context) {
+		if c.Request.URL.Path == "/static/" {
+			c.Header("Cache-Control", "public, max-age=31536000")
+			c.Header("X-Content-Type-Options", "nosniff")
+		}
+		c.Next()
+	})
 	router.Static("/static", "./static")
 	router.LoadHTMLGlob("templates/*")
 
 	// Setup routes
 	handlers.SetupRoutes(router, certSvc, store, cfg)
 
-	// Configure server
+	// Configure server with timeouts
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
+		Addr:           ":8080",
+		Handler:        router,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 
 	// Graceful shutdown
@@ -94,11 +106,11 @@ func main() {
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
-		
+
 		log.Println("Shutting down server...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		if err := server.Shutdown(ctx); err != nil {
 			log.Fatalf("Server shutdown error: %v", err)
 		}
@@ -109,11 +121,11 @@ func main() {
 		// Make sure we have a CA cert and key
 		caCertPath := store.GetCAPublicKeyPath()
 		caKeyPath := store.GetCAPrivateKeyPath()
-		
+
 		// Certificate paths for the service
 		serviceCert := filepath.Join(store.GetBasePath(), "service.crt")
 		serviceKey := filepath.Join(store.GetBasePath(), "service.key")
-		
+
 		// Check if service certificate exists
 		if _, err := os.Stat(serviceCert); os.IsNotExist(err) {
 			log.Println("Creating service certificate for HTTPS...")
@@ -127,14 +139,17 @@ func main() {
 			if err := certSvc.CreateServiceCertificate(); err != nil {
 				log.Printf("Warning: Failed to create service certificate: %v. HTTPS will not be available.", err)
 			} else {
-				// Start HTTPS server
+				// Start HTTPS server with security enhancements
 				go func() {
 					httpsServer := &http.Server{
-						Addr:      ":8443",
-						Handler:   router,
-						TLSConfig: getSecureTLSConfig(),
+						Addr:         ":8443",
+						Handler:      router,
+						TLSConfig:    getSecureTLSConfig(),
+						ReadTimeout:  10 * time.Second,
+						WriteTimeout: 10 * time.Second,
+						IdleTimeout:  120 * time.Second,
 					}
-					
+
 					log.Println("HTTPS server starting on port 8443...")
 					if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 						log.Printf("HTTPS server error: %v", err)

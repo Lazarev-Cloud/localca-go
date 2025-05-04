@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -10,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -27,6 +29,18 @@ type Certificate struct {
 
 // CreateServerCertificate creates a new server certificate
 func (c *CertificateService) CreateServerCertificate(commonName string, additionalDomains []string) error {
+	// Validate commonName
+	if !isValidName(commonName) {
+		return fmt.Errorf("invalid common name: %s", commonName)
+	}
+
+	// Validate all additional domains
+	for _, domain := range additionalDomains {
+		if !isValidName(domain) {
+			return fmt.Errorf("invalid additional domain: %s", domain)
+		}
+	}
+
 	// Create directory for the certificate
 	certDir := c.storage.GetCertificateDirectory(commonName)
 	if err := os.MkdirAll(certDir, 0755); err != nil {
@@ -146,6 +160,11 @@ func (c *CertificateService) CreateServerCertificate(commonName string, addition
 
 // RenewServerCertificate renews an existing server certificate
 func (c *CertificateService) RenewServerCertificate(commonName string) error {
+	// Validate commonName
+	if !isValidName(commonName) {
+		return fmt.Errorf("invalid common name: %s", commonName)
+	}
+
 	// Check if certificate exists
 	certPath := c.storage.GetCertificatePath(commonName)
 	keyPath := c.storage.GetCertificateKeyPath(commonName)
@@ -162,8 +181,8 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 		"openssl", "x509",
 		"-in", certPath,
 		"-noout",
-		"-text",
-	)
+		"-text")
+
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get certificate info: %w", err)
@@ -183,7 +202,7 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 				part = strings.TrimSpace(part)
 				if strings.HasPrefix(part, "DNS:") {
 					name := strings.TrimPrefix(part, "DNS:")
-					if name != commonName {
+					if name != commonName && isValidName(name) {
 						dnsNames = append(dnsNames, name)
 					}
 				}
@@ -192,16 +211,19 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 	}
 
 	// Generate CSR
-	csrPath := c.storage.GetCertificateDirectory(commonName) + "/" + commonName + ".csr"
+	csrPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), commonName+".csr")
 	cmd = exec.Command(
 		"openssl", "req",
 		"-new",
 		"-key", keyPath,
 		"-out", csrPath,
-		"-subj", "/CN="+commonName,
-	)
+		"-subj", "/CN="+commonName)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create CSR: %w", err)
+		return fmt.Errorf("failed to create CSR: %w - %s", err, stderr.String())
 	}
 
 	// Create SAN extension config
@@ -219,7 +241,7 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 		sanConfig += fmt.Sprintf("DNS.%d = %s\n", i+1, name)
 	}
 
-	sanConfigPath := c.storage.GetCertificateDirectory(commonName) + "/" + commonName + ".ext"
+	sanConfigPath := filepath.Join(c.storage.GetCertificateDirectory(commonName), commonName+".ext")
 	if err := os.WriteFile(sanConfigPath, []byte(sanConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write SAN config: %w", err)
 	}
@@ -235,23 +257,41 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 		"-out", certPath,
 		"-days", "365",
 		"-sha256",
-		"-extfile", sanConfigPath,
-	)
+		"-extfile", sanConfigPath)
+
+	stderr.Reset()
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to sign certificate: %w", err)
+		return fmt.Errorf("failed to sign certificate: %w - %s", err, stderr.String())
 	}
 
-	// Update bundle
-	cmd = exec.Command(
-		"bash", "-c",
-		fmt.Sprintf("cat %s %s > %s",
-			certPath,
-			c.storage.GetCAPublicKeyPath(),
-			c.storage.GetCertificateBundlePath(commonName),
-		),
-	)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create certificate bundle: %w", err)
+	// Update bundle safely
+	caCertBytes, err := os.ReadFile(c.storage.GetCAPublicKeyPath())
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+
+	certBytes, err := os.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("failed to read certificate: %w", err)
+	}
+
+	bundlePath := c.storage.GetCertificateBundlePath(commonName)
+	bundleFile, err := os.Create(bundlePath)
+	if err != nil {
+		return fmt.Errorf("failed to create certificate bundle file: %w", err)
+	}
+	defer bundleFile.Close()
+
+	// Write certificate
+	if _, err := bundleFile.Write(certBytes); err != nil {
+		return fmt.Errorf("failed to write certificate to bundle: %w", err)
+	}
+
+	// Write CA certificate
+	if _, err := bundleFile.Write(caCertBytes); err != nil {
+		return fmt.Errorf("failed to write CA certificate to bundle: %w", err)
 	}
 
 	// Cleanup
