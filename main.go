@@ -13,6 +13,7 @@ import (
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/cron"
 	"github.com/Lazarev-Cloud/localca-go/pkg/handlers"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 
@@ -74,6 +75,10 @@ func main() {
 	} else {
 		log.Println("Using existing CA certificate")
 	}
+
+	// Initialize cron service
+	cronSvc := cron.NewCronService(certSvc, store)
+	cronSvc.StartExpiryChecker()
 
 	// Initialize router
 	router := gin.Default()

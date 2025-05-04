@@ -1,3 +1,4 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
@@ -14,18 +15,18 @@ services:
       - "8443:8443"  # For HTTPS
     volumes:
       - ./data:/app/certs
-      - ./cakey.txt:/run/secrets/cakey:ro  # Mount CA key as read-only
+      - ./cakey.txt:/app/cakey.txt:ro  # Mount CA key as read-only
     environment:
       - CA_NAME=ca.in.lc  # Name of the CA including domain (FQDN)
-      - CA_KEY_FILE=/run/secrets/cakey
+      - CA_KEY_FILE=/app/cakey.txt
       - ORGANIZATION=LazarevCloud
       - COUNTRY=RS  # Country code
-      - EMAIL_NOTIFY=false
+      - EMAIL_NOTIFY=true
       - TLS_ENABLED=true  # Enable HTTPS
     networks:
       - localca-network
     healthcheck:
-      test: ["CMD", "curl", "-k", "http://localhost:8080"]
+      test: ["CMD", "curl", "-k", "https://localhost:8443"]
       interval: 30s
       timeout: 10s
       retries: 3

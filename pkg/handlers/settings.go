@@ -1,12 +1,13 @@
+// pkg/handlers/settings.go
+
 package handlers
 
 import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
-
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/email"

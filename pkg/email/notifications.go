@@ -1,11 +1,11 @@
+// pkg/email/notifications.go
+
 package email
 
 import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
-
-	// "strings"
 	"time"
 )
 
@@ -46,7 +46,7 @@ func (e *EmailService) SendEmail(from, to, subject, body string) error {
 	}
 
 	// Format the message
-	message := fmt.Appendf(nil, "From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", from, to, subject, body)
+	message := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s", from, to, subject, body))
 
 	// Set authentication
 	auth := smtp.PlainAuth("", e.SMTPUser, e.SMTPPassword, e.SMTPServer)
