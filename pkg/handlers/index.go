@@ -84,9 +84,9 @@ func createCertificateHandler(certSvc *certificates.CertificateService, store *s
 		additionalDomains := c.PostForm("additional_domains")
 
 		// Validate input
-		if commonName == "" {
+		if commonName == "" || strings.Contains(commonName, "/") || strings.Contains(commonName, "\\") || strings.Contains(commonName, "..") {
 			c.HTML(http.StatusBadRequest, "index.html", gin.H{
-				"Error": "Common Name is required",
+				"Error": "Invalid Common Name",
 			})
 			return
 		}
