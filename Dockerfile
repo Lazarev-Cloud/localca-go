@@ -1,4 +1,4 @@
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.24-bookworm AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o localca-go .
 
 # Use a smaller base image for the final container
-FROM alpine:3.19
+FROM alpine:3.21
 
 # Install required packages
 RUN apk add --no-cache \
@@ -23,7 +23,7 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \
-    bash
+    bash 
 
 # We'll keep using root user for now to avoid permission issues
 # but with better security practices
