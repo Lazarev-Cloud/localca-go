@@ -1,5 +1,5 @@
 # Dockerfile
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o localca-go .
 
 # Use a smaller base image for the final container
-FROM alpine:3.18
+FROM alpine:3.21
 
 # Install required packages
 RUN apk add --no-cache \
