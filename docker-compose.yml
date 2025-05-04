@@ -1,0 +1,29 @@
+version: '3.8'
+
+secrets:
+  cakey:
+    file: ./cakey.txt
+
+services:
+  localca:
+    container_name: localca
+    hostname: ca
+    domainname: local.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"  # For HTTPS
+    volumes:
+      - ./data:/app/certs
+    environment:
+      - CA_NAME=ca.homelab.local  # Name of the CA including domain (FQDN)
+      - CA_KEY_FILE=/run/secrets/cakey
+      - ORGANIZATION=LocalCA
+      - COUNTRY=US  # Country code
+      - EMAIL_NOTIFY=false
+      - TLS_ENABLED=true  # Enable HTTPS
+    secrets:
+      - cakey
