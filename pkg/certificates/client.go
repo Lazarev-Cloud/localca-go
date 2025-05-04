@@ -17,6 +17,11 @@ import (
 
 // CreateClientCertificate creates a new client certificate and p12 file
 func (c *CertificateService) CreateClientCertificate(commonName string, p12Password string) error {
+	// Validate commonName
+	if strings.Contains(commonName, "/") || strings.Contains(commonName, "\\") || strings.Contains(commonName, "..") {
+		return fmt.Errorf("invalid common name: %s", commonName)
+	}
+
 	// Create directory for the certificate
 	certDir := c.storage.GetCertificateDirectory(commonName)
 	if err := os.MkdirAll(certDir, 0755); err != nil {
