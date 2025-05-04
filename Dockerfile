@@ -1,12 +1,12 @@
-FROM golang:1.22-alpine as builder
+FROM golang:1.23.8-alpine3.20 as builder
 
 WORKDIR /app
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Fix go.sum entries before proceeding
+RUN go mod tidy && go mod download
 
 # Copy source code
 COPY . .
