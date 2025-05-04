@@ -4,15 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalCA - Email Settings</title>
-    <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="container content">
-        <h1 class="mt-4 mb-4"><a href="/">LocalCA</a> - Email Notification Settings</h1>
+    <header class="app-header">
+        <div class="container">
+            <a href="/" class="app-title">
+                <i class="fa fa-lock"></i> LocalCA
+            </a>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="page-title">
+            <h1>Email Notification Settings</h1>
+        </div>
         
         {{if .Error}}
         <div class="alert alert-danger">
@@ -27,18 +37,18 @@
                         <h2>Email Settings</h2>
                     </div>
                     <div class="card-body">
+                        <div class="alert alert-info mb-4">
+                            <i class="fa fa-info-circle"></i> Configure email settings to receive notifications when certificates are about to expire.
+                        </div>
+                        
                         <form action="/settings" method="POST">
                             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                            
-                            <div class="alert alert-info">
-                                <i class="fa fa-info-circle"></i> Configure email settings to receive notifications when certificates are about to expire.
-                            </div>
                             
                             <div class="form-group row">
                                 <label for="email_to" class="col-sm-3 col-form-label">Send Notifications To:</label>
                                 <div class="col-sm-9">
                                     <input type="email" class="form-control" id="email_to" name="email_to" value="{{.EmailTo}}" placeholder="recipient@example.com">
-                                    <small class="form-text text-muted">Email address to receive certificate expiration notifications</small>
+                                    <small class="form-text">Email address to receive certificate expiration notifications</small>
                                 </div>
                             </div>
                             
@@ -46,7 +56,7 @@
                                 <label for="smtp_server" class="col-sm-3 col-form-label">SMTP Server:</label>
                                 <div class="col-sm-9">
                                     <input type="text" class="form-control" id="smtp_server" name="smtp_server" value="{{.SMTPServer}}" placeholder="smtp.example.com">
-                                    <small class="form-text text-muted">SMTP server hostname</small>
+                                    <small class="form-text">SMTP server hostname</small>
                                 </div>
                             </div>
                             
@@ -54,7 +64,8 @@
                                 <label for="smtp_port" class="col-sm-3 col-form-label">SMTP Port:</label>
                                 <div class="col-sm-9">
                                     <input type="text" class="form-control" id="smtp_port" name="smtp_port" value="{{.SMTPPort}}" placeholder="587">
-                                    <small class="form-text text-muted">SMTP server port (usually 25, 465, or 587)</small>
+                  id="smtp_port" name="smtp_port" value="{{.SMTPPort}}" placeholder="587">
+                                    <small class="form-text">SMTP server port (usually 25, 465, or 587)</small>
                                 </div>
                             </div>
                             
@@ -62,7 +73,7 @@
                                 <label for="email_from" class="col-sm-3 col-form-label">From Address:</label>
                                 <div class="col-sm-9">
                                     <input type="email" class="form-control" id="email_from" name="email_from" value="{{.EmailFrom}}" placeholder="localca@example.com">
-                                    <small class="form-text text-muted">Email address to send from</small>
+                                    <small class="form-text">Email address to send from</small>
                                 </div>
                             </div>
                             
@@ -70,7 +81,7 @@
                                 <label for="smtp_user" class="col-sm-3 col-form-label">SMTP Username:</label>
                                 <div class="col-sm-9">
                                     <input type="text" class="form-control" id="smtp_user" name="smtp_user" value="{{.SMTPUser}}" placeholder="username">
-                                    <small class="form-text text-muted">SMTP authentication username (if required)</small>
+                                    <small class="form-text">SMTP authentication username (if required)</small>
                                 </div>
                             </div>
                             
@@ -78,7 +89,7 @@
                                 <label for="smtp_pass" class="col-sm-3 col-form-label">SMTP Password:</label>
                                 <div class="col-sm-9">
                                     <input type="password" class="form-control" id="smtp_pass" name="smtp_pass" value="{{.SMTPPass}}" placeholder="password">
-                                    <small class="form-text text-muted">SMTP authentication password (if required)</small>
+                                    <small class="form-text">SMTP authentication password (if required)</small>
                                 </div>
                             </div>
                             
@@ -118,7 +129,9 @@
                                     <input type="email" class="form-control" id="test_email" name="test_email" placeholder="test@example.com">
                                 </div>
                                 <div class="col-sm-3">
-                                    <button type="button" id="send-test-email" class="btn btn-info">Send Test Email</button>
+                                    <button type="button" id="send-test-email" class="btn btn-info">
+                                        <i class="fa fa-paper-plane"></i> Send Test Email
+                                    </button>
                                 </div>
                             </div>
                         </form>
@@ -155,7 +168,7 @@
                     alert('Failed to send test email: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown error'));
                 })
                 .always(function() {
-                    $('#send-test-email').prop('disabled', false).html('Send Test Email');
+                    $('#send-test-email').prop('disabled', false).html('<i class="fa fa-paper-plane"></i> Send Test Email');
                 });
             });
         });

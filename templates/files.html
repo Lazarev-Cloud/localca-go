@@ -4,15 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalCA - Certificate Files</title>
-    <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="container content">
-        <h1 class="mt-4 mb-4"><a href="/">LocalCA</a> - Certificate Files</h1>
+    <header class="app-header">
+        <div class="container">
+            <a href="/" class="app-title">
+                <i class="fa fa-lock"></i> LocalCA
+            </a>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="page-title">
+            <h1>Certificate Files</h1>
+        </div>
         
         {{if .Error}}
         <div class="alert alert-danger">
@@ -23,9 +33,11 @@
         <div class="row">
             <div class="col-md-12">
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header">
                         <h2>Certificate Details: {{.Name}}</h2>
-                        <a href="/" class="btn btn-secondary">Back to List</a>
+                        <a href="/" class="btn btn-secondary">
+                            <i class="fa fa-arrow-left"></i> Back to List
+                        </a>
                     </div>
                     <div class="card-body">
                         {{if .CertificateDetails}}
@@ -46,7 +58,7 @@
                             </div>
                             
                             {{if .CertificateDetails.SubjectAltNames}}
-                            <div class="row">
+                            <div class="row mt-3">
                                 <div class="col-md-12">
                                     <p><span class="certificate-detail-label">Subject Alternative Names:</span></p>
                                     <ul>
@@ -62,21 +74,23 @@
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card mb-4">
                     <div class="card-header">
                         <h2>Certificate Files</h2>
                     </div>
-                    <div class="card-body p-0">
+                    <div class="card-body">
                         <div class="accordion" id="fileAccordion">
                             {{range $index, $file := .Files}}
-                            <div class="card">
+                            <div class="card mb-2">
                                 <div class="card-header d-flex justify-content-between align-items-center" id="heading{{$index}}">
                                     <h5 class="mb-0">
                                         <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#collapse{{$index}}" aria-expanded="{{if eq $index 0}}true{{else}}false{{end}}" aria-controls="collapse{{$index}}">
                                             {{$file.Name}} ({{$file.FileSize}})
                                         </button>
                                     </h5>
-                                    <a href="/download/{{$.Name}}/{{if eq $file.Name (printf "%s.crt" $.Name)}}crt{{else if eq $file.Name (printf "%s.key" $.Name)}}key{{else if eq $file.Name (printf "%s.p12" $.Name)}}p12{{else if eq $file.Name (printf "%s.bundle.crt" $.Name)}}bundle{{end}}" class="btn btn-sm btn-primary" download>Download</a>
+                                    <a href="/download/{{$.Name}}/{{if eq $file.Name (printf "%s.crt" $.Name)}}crt{{else if eq $file.Name (printf "%s.key" $.Name)}}key{{else if eq $file.Name (printf "%s.p12" $.Name)}}p12{{else if eq $file.Name (printf "%s.bundle.crt" $.Name)}}bundle{{end}}" class="btn btn-sm btn-primary" download>
+                                        <i class="fa fa-download"></i> Download
+                                    </a>
                                 </div>
 
                                 <div id="collapse{{$index}}" class="collapse {{if eq $index 0}}show{{end}}" aria-labelledby="heading{{$index}}" data-parent="#fileAccordion">
@@ -95,11 +109,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="row mt-4">
-            <div class="col-md-12">
                 <div class="card">
                     <div class="card-header">
                         <h2>Installation Instructions</h2>
@@ -119,49 +129,49 @@
                                 <a class="nav-link" id="windows-tab" data-toggle="tab" href="#windows" role="tab" aria-controls="windows" aria-selected="false">Windows</a>
                             </li>
                         </ul>
-                        <div class="tab-content" id="instructionTabsContent">
+                        <div class="tab-content mt-3" id="instructionTabsContent">
                             <div class="tab-pane fade show active" id="nginx" role="tabpanel" aria-labelledby="nginx-tab">
-                                <div class="code-block mt-3">
-                                    # Nginx Server Configuration
-                                    server {
-                                        listen 443 ssl;
-                                        server_name {{.Name}};
+                                <div class="code-block">
+# Nginx Server Configuration
+server {
+    listen 443 ssl;
+    server_name {{.Name}};
 
-                                        # Certificate files
-                                        ssl_certificate /path/to/{{.Name}}.bundle.crt;
-                                        ssl_certificate_key /path/to/{{.Name}}.key;
+    # Certificate files
+    ssl_certificate /path/to/{{.Name}}.bundle.crt;
+    ssl_certificate_key /path/to/{{.Name}}.key;
 
-                                        # Enable client certificate validation (optional)
-                                        ssl_client_certificate /path/to/ca.pem;
-                                        ssl_verify_client on;
-                                        
-                                        # SSL settings
-                                        ssl_protocols TLSv1.2 TLSv1.3;
-                                        ssl_ciphers HIGH:!aNULL:!MD5;
-                                        ssl_prefer_server_ciphers on;
-                                        
-                                        # Other server settings...
-                                    }
+    # Enable client certificate validation (optional)
+    ssl_client_certificate /path/to/ca.pem;
+    ssl_verify_client on;
+    
+    # SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    
+    # Other server settings...
+}
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="apache" role="tabpanel" aria-labelledby="apache-tab">
-                                <div class="code-block mt-3">
-                                    # Apache VirtualHost Configuration
-                                    &lt;VirtualHost *:443&gt;
-                                        ServerName {{.Name}}
-                                        
-                                        # Certificate files
-                                        SSLEngine on
-                                        SSLCertificateFile /path/to/{{.Name}}.crt
-                                        SSLCertificateKeyFile /path/to/{{.Name}}.key
-                                        SSLCACertificateFile /path/to/ca.pem
-                                        
-                                        # Enable client certificate validation (optional)
-                                        SSLVerifyClient require
-                                        SSLVerifyDepth 1
-                                        
-                                        # Other VirtualHost settings...
-                                    &lt;/VirtualHost&gt;
+                                <div class="code-block">
+# Apache VirtualHost Configuration
+&lt;VirtualHost *:443&gt;
+    ServerName {{.Name}}
+    
+    # Certificate files
+    SSLEngine on
+    SSLCertificateFile /path/to/{{.Name}}.crt
+    SSLCertificateKeyFile /path/to/{{.Name}}.key
+    SSLCACertificateFile /path/to/ca.pem
+    
+    # Enable client certificate validation (optional)
+    SSLVerifyClient require
+    SSLVerifyDepth 1
+    
+    # Other VirtualHost settings...
+&lt;/VirtualHost&gt;
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="browser" role="tabpanel" aria-labelledby="browser-tab">
@@ -169,7 +179,7 @@
                                     <h4>Client Certificate Installation</h4>
                                     <p>To install the client certificate in your browser:</p>
                                     <ol>
-                                        <li>Download the <code>.p12</code> file</li>
+                                        <li>Download the <code>{{.Name}}.p12</code> file</li>
                                         <li>Import the certificate into your browser:
                                             <ul>
                                                 <li><strong>Chrome:</strong> Settings → Privacy and security → Security → Manage certificates → Import</li>
@@ -199,7 +209,7 @@
                                     <h4>Windows Certificate Installation</h4>
                                     <p>To install certificates in Windows:</p>
                                     <ol>
-                                        <li>Double-click the <code>.p12</code> file</li>
+                                        <li>Double-click the <code>{{.Name}}.p12</code> file</li>
                                         <li>Select "Current User" or "Local Machine" as the store location</li>
                                         <li>Enter the password you provided when creating the certificate</li>
                                         <li>Select "Automatically select the certificate store" or manually place it in the "Personal" store</li>
@@ -217,11 +227,11 @@
                                     
                                     <p>You can also use PowerShell to install certificates:</p>
                                     <div class="code-block">
-                                        # Install CA certificate
-                                        Import-Certificate -FilePath "ca.pem" -CertStoreLocation Cert:\LocalMachine\Root
-                                        
-                                        # Install client certificate
-                                        Import-PfxCertificate -FilePath "{{.Name}}.p12" -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "your-password" -Force -AsPlainText)
+# Install CA certificate
+Import-Certificate -FilePath "ca.pem" -CertStoreLocation Cert:\LocalMachine\Root
+
+# Install client certificate
+Import-PfxCertificate -FilePath "{{.Name}}.p12" -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "your-password" -Force -AsPlainText)
                                     </div>
                                 </div>
                             </div>
