@@ -1,9 +1,5 @@
 version: '3.8'
 
-secrets:
-  cakey:
-    file: ./cakey.txt
-
 services:
   localca:
     container_name: localca
@@ -18,6 +14,7 @@ services:
       - "8443:8443"  # For HTTPS
     volumes:
       - ./data:/app/certs
+      - ./cakey.txt:/run/secrets/cakey:ro  # Mount CA key as read-only
     environment:
       - CA_NAME=ca.homelab.local  # Name of the CA including domain (FQDN)
       - CA_KEY_FILE=/run/secrets/cakey
@@ -25,5 +22,15 @@ services:
       - COUNTRY=US  # Country code
       - EMAIL_NOTIFY=false
       - TLS_ENABLED=true  # Enable HTTPS
-    secrets:
-      - cakey
+    networks:
+      - localca-network
+    healthcheck:
+      test: ["CMD", "curl", "-k", "https://localhost:8443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  localca-network:
+    driver: bridge
