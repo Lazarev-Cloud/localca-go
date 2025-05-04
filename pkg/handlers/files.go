@@ -226,8 +226,9 @@ func getCertificateDetails(certPath string) (CertificateDetails, error) {
 		if valueIdx := strings.Index(kuPart, "\n"); valueIdx != -1 {
 			kuLine := kuPart[:valueIdx]
 			if nextLineIdx := strings.Index(kuPart[valueIdx+1:], "\n"); nextLineIdx != -1 {
-				details.KeyUsage = strings.TrimSpace(kuPart[valueIdx+1 : valueIdx+1+nextLineIdx])
+				details.KeyUsage = strings.TrimSpace(kuPart[valueIdx+1 : valueIdx+1+nextLineIdx]) // Existing logic
 			}
+			details.KeyUsage = strings.TrimSpace(kuLine) // Use kuLine here
 		}
 	}
 
@@ -237,8 +238,9 @@ func getCertificateDetails(certPath string) (CertificateDetails, error) {
 		if valueIdx := strings.Index(ekuPart, "\n"); valueIdx != -1 {
 			ekuLine := ekuPart[:valueIdx]
 			if nextLineIdx := strings.Index(ekuPart[valueIdx+1:], "\n"); nextLineIdx != -1 {
-				details.ExtKeyUsage = strings.TrimSpace(ekuPart[valueIdx+1 : valueIdx+1+nextLineIdx])
+				details.ExtKeyUsage = strings.TrimSpace(ekuPart[valueIdx+1 : valueIdx+1+nextLineIdx]) // Existing logic
 			}
+			details.ExtKeyUsage = strings.TrimSpace(ekuLine) // Use ekuLine here
 		}
 	}
 

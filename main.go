@@ -117,6 +117,13 @@ func main() {
 		// Check if service certificate exists
 		if _, err := os.Stat(serviceCert); os.IsNotExist(err) {
 			log.Println("Creating service certificate for HTTPS...")
+			// Use caCertPath and caKeyPath here
+			if _, err := os.Stat(caCertPath); os.IsNotExist(err) {
+				log.Fatalf("CA certificate not found at %s", caCertPath)
+			}
+			if _, err := os.Stat(caKeyPath); os.IsNotExist(err) {
+				log.Fatalf("CA private key not found at %s", caKeyPath)
+			}
 			if err := certSvc.CreateServiceCertificate(); err != nil {
 				log.Printf("Warning: Failed to create service certificate: %v. HTTPS will not be available.", err)
 			} else {
@@ -134,20 +141,6 @@ func main() {
 					}
 				}()
 			}
-		} else {
-			// Certificate exists, start HTTPS server
-			go func() {
-				httpsServer := &http.Server{
-					Addr:      ":8443",
-					Handler:   router,
-					TLSConfig: getSecureTLSConfig(),
-				}
-				
-				log.Println("HTTPS server starting on port 8443...")
-				if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
-					log.Printf("HTTPS server error: %v", err)
-				}
-			}()
 		}
 	}
 

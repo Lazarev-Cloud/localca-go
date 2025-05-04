@@ -1,4 +1,4 @@
-FROM golang:1.23.8-alpine3.20 as builder
+FROM golang:1.23.8-alpine3.20 AS builder
 
 WORKDIR /app
 
@@ -15,14 +15,15 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o localca-go .
 
 # Use a smaller base image for the final container
-FROM alpine:3.19
+FROM alpine:3.20
 
 # Install required packages
 RUN apk add --no-cache \
     openssl \
     ca-certificates \
     tzdata \
-    curl
+    curl \
+    bash
 
 # Create app directory
 WORKDIR /app
