@@ -180,10 +180,10 @@ func deleteCertificateHandler(certSvc *certificates.CertificateService, store *s
 	return func(c *gin.Context) {
 		// Get certificate name
 		name := c.PostForm("name")
-		if name == "" {
+		if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
-				Message: "Certificate name is required",
+				Message: "Invalid certificate name",
 			})
 			return
 		}
