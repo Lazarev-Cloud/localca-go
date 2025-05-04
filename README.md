@@ -34,7 +34,7 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/localca.git
+   git clone https://github.com/Lazarev-Cloud/localca.git
    cd localca
    ```
 
@@ -54,7 +54,7 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/localca.git
+   git clone https://github.com/Lazarev-Cloud/localca.git
    cd localca
    ```
 
@@ -70,7 +70,7 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
    )
    ```
 
-3. Update import paths in all Go files (replace `github.com/yourusername/localca-go` with `localca-go`)
+3. Update import paths in all Go files (replace `github.com/Lazarev-Cloud/localca-go` with `localca-go`)
 
 4. Download dependencies and build:
    ```bash
