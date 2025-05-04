@@ -45,14 +45,10 @@ func (e *EmailService) SendEmail(from, to, subject, body string) error {
 	}
 
 	// Format the message
-	message := []byte(
-		fmt.Sprintf("To: %s\r\n"+
-			"From: %s\r\n"+
-			"Subject: %s\r\n"+
-			"MIME-Version: 1.0\r\n"+
-			"Content-Type: text/plain; charset=UTF-8\r\n"+
-			"\r\n"+
-			"%s", to, from, subject, body))
+	message, err := constructEmailMessage(from, to, subject, body)
+	if err != nil {
+		return fmt.Errorf("failed to construct email message: %w", err)
+	}
 
 	// Set authentication
 	auth := smtp.PlainAuth("", e.SMTPUser, e.SMTPPassword, e.SMTPServer)
