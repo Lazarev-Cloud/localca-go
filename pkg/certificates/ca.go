@@ -373,7 +373,7 @@ func (c *CertificateService) GetCertificateInfo(name string) (*Certificate, erro
 		"-text",
 		"-serial",
 	)
-	output, err := cmd.Output()
+	_, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get certificate info: %w", err)
 	}

@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
-	"strings"
+	// "strings"
 	"time"
 )
 
