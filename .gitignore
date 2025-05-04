@@ -1,27 +1,28 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# dependencies
-/node_modules
+# Test binary, built with `go test -c`
+*.test
 
-# next.js
-/.next/
-/out/
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
 
-# production
-/build
+# Dependency directories (remove the comment below to include it)
+# vendor/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# Go workspace file
+go.work
 
-# env files
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# LocalCA specific
+certs/
+data/
+cakey.txt
+*.p12
+/data
