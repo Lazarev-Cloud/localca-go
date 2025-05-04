@@ -147,7 +147,18 @@ func testEmailHandler(certSvc *certificates.CertificateService, store *storage.S
 		// Send test email
 		subject := "LocalCA Test Email"
 		body := "This is a test email from LocalCA."
-		if err := emailSvc.SendEmail(emailFrom, testEmail, subject, body); err != nil {
+		
+		// Sanitize the testEmail input
+		sanitizedEmail := sanitizeEmail(testEmail)
+		if sanitizedEmail == "" {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid or unsafe email address",
+			})
+			return
+		}
+		
+		if err := emailSvc.SendEmail(emailFrom, sanitizedEmail, subject, body); err != nil {
 			log.Printf("Failed to send test email: %v", err)
 			c.JSON(http.StatusInternalServerError, APIResponse{
 				Success: false,
