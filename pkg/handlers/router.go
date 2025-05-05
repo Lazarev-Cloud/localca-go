@@ -113,27 +113,27 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 	router.Use(securityHeadersMiddleware())
 
 	// Home page
-	router.GET("/", indexHandler(certSvc, store, cfg))
-	router.POST("/", createCertificateHandler(certSvc, store))
+	router.GET("/", indexHandler(store))
+	router.POST("/", createCertificateHandler(certSvc))
 
 	// Certificate file view
-	router.GET("/files", filesHandler(certSvc, store))
+	router.GET("/files", filesHandler(store))
 
 	// Operations
 	router.POST("/renew", renewCertificateHandler(certSvc, store))
-	router.POST("/delete", deleteCertificateHandler(certSvc, store))
-	router.POST("/renew-ca", renewCAHandler(certSvc, store))
-	router.POST("/revoke", revokeCertificateHandler(certSvc, store))
+	router.POST("/delete", deleteCertificateHandler(store))
+	router.POST("/renew-ca", renewCAHandler(certSvc))
+	router.POST("/revoke", revokeCertificateHandler(certSvc))
 
 	// Settings
-	router.GET("/settings", settingsHandler(certSvc, store, cfg))
-	router.POST("/settings", saveSettingsHandler(certSvc, store, cfg))
-	router.POST("/test-email", testEmailHandler(certSvc, store, cfg))
+	router.GET("/settings", settingsHandler(store))
+	router.POST("/settings", saveSettingsHandler(store))
+	router.POST("/test-email", testEmailHandler(store))
 
 	// Certificate download
-	router.GET("/download/ca", downloadCAHandler(certSvc, store))
-	router.GET("/download/crl", downloadCRLHandler(certSvc, store))
-	router.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
+	router.GET("/download/ca", downloadCAHandler(store))
+	router.GET("/download/crl", downloadCRLHandler(store))
+	router.GET("/download/:name/:type", downloadCertificateHandler(store))
 }
 
 // securityHeadersMiddleware adds security headers to responses
