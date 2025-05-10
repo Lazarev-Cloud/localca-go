@@ -113,15 +113,15 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 	router.Use(securityHeadersMiddleware())
 
 	// Home page
-	router.GET("/", indexHandler(store))
-	router.POST("/", createCertificateHandler(certSvc))
+	router.GET("/", indexHandler(certSvc, store, cfg))
+	router.POST("/", createCertificateHandler(certSvc, store))
 
 	// Certificate file view
-	router.GET("/files", filesHandler(store))
+	router.GET("/files", filesHandler(certSvc, store))
 
 	// Operations
 	router.POST("/renew", renewCertificateHandler(certSvc, store))
-	router.POST("/delete", deleteCertificateHandler(store))
+	router.POST("/delete", deleteCertificateHandler(certSvc, store))
 	router.POST("/renew-ca", renewCAHandler(certSvc))
 	router.POST("/revoke", revokeCertificateHandler(certSvc))
 
@@ -130,10 +130,13 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 	router.POST("/settings", saveSettingsHandler(store))
 	router.POST("/test-email", testEmailHandler(store))
 
+	// ACME UI routes - Added in this update
+	setupACMEUIRoutes(router, certSvc, store, cfg)
+
 	// Certificate download
-	router.GET("/download/ca", downloadCAHandler(store))
-	router.GET("/download/crl", downloadCRLHandler(store))
-	router.GET("/download/:name/:type", downloadCertificateHandler(store))
+	router.GET("/download/ca", downloadCAHandler(certSvc, store))
+	router.GET("/download/crl", downloadCRLHandler(certSvc, store))
+	router.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
 }
 
 // securityHeadersMiddleware adds security headers to responses
@@ -153,6 +156,14 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 // csrfMiddleware adds CSRF protection
 func csrfMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip CSRF check for ACME endpoints
+		if strings.HasPrefix(c.Request.URL.Path, "/acme/") && 
+		   !strings.HasPrefix(c.Request.URL.Path, "/acme/enable") && 
+		   !strings.HasPrefix(c.Request.URL.Path, "/acme/disable") {
+			c.Next()
+			return
+		}
+
 		// Skip CSRF check for GET requests
 		if c.Request.Method == "GET" {
 			// Generate a new token for the response
@@ -210,6 +221,14 @@ func generateCSRFToken() string {
 func secureSessionMiddleware() gin.HandlerFunc {
 	// In a production app, you'd use a proper session library like gorilla/sessions
 	return func(c *gin.Context) {
+		// Skip for ACME endpoints
+		if strings.HasPrefix(c.Request.URL.Path, "/acme/") && 
+		   !strings.HasPrefix(c.Request.URL.Path, "/acme/enable") && 
+		   !strings.HasPrefix(c.Request.URL.Path, "/acme/disable") {
+			c.Next()
+			return
+		}
+
 		// Generate session ID if not exist
 		sessionID, err := c.Cookie("session_id")
 		if err != nil || sessionID == "" {

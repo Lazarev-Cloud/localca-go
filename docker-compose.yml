@@ -11,18 +11,25 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8080:8080"
-      - "8443:8443"  # For HTTPS
+      - "8080:8080"  # HTTP
+      - "8443:8443"  # HTTPS
+      - "80:80"      # HTTP for ACME challenges
+      - "443:443"    # HTTPS for ACME-secured websites
     volumes:
       - ./data:/app/certs
       - ./cakey.txt:/app/cakey.txt:ro  # Mount CA key as read-only
     environment:
-      - CA_NAME=ca.in.lc  # Name of the CA including domain (FQDN)
+      - CA_NAME=ca.in.lc                # Name of the CA including domain (FQDN)
       - CA_KEY_FILE=/app/cakey.txt
       - ORGANIZATION=LazarevCloud
-      - COUNTRY=RS  # Country code
+      - COUNTRY=RS                      # Country code
       - EMAIL_NOTIFY=true
-      - TLS_ENABLED=true  # Enable HTTPS
+      - TLS_ENABLED=true                # Enable HTTPS
+      - HOSTNAME=ca.in.lc               # FQDN of the server
+      - HTTP_PORT=8080                  # Internal HTTP port for UI
+      - HTTPS_PORT=8443                 # Internal HTTPS port for UI
+      - ACME_ENABLED=true               # Enable ACME protocol
+      - ACME_BASE_URL=https://ca.in.lc  # Base URL for ACME endpoints
     networks:
       - localca-network
     healthcheck:

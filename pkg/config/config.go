@@ -23,6 +23,11 @@ type Config struct {
 	EmailFrom     string
 	EmailTo       string
 	TLSEnabled    bool
+	HTTPPort      int
+	HTTPSPort     int
+	Hostname      string
+	ACMEEnabled   bool
+	ACMEBaseURL   string
 }
 
 // LoadConfig loads configuration from environment variables
@@ -85,9 +90,39 @@ func LoadConfig() (*Config, error) {
 		config.EmailTo = getEnv("EMAIL_TO", "")
 	}
 
+	// Load server configuration
+	config.Hostname = getEnv("HOSTNAME", "localhost")
+	
+	// Load HTTP port 
+	httpPort := getEnv("HTTP_PORT", "8080")
+	port, err := strconv.Atoi(httpPort)
+	if err != nil {
+		return nil, errors.New("invalid HTTP_PORT value")
+	}
+	config.HTTPPort = port
+
 	// Load TLS settings
 	tlsEnabled := getEnv("TLS_ENABLED", "false")
 	config.TLSEnabled = strings.ToLower(tlsEnabled) == "true"
+
+	// Load HTTPS port if TLS is enabled
+	if config.TLSEnabled {
+		httpsPort := getEnv("HTTPS_PORT", "8443")
+		port, err := strconv.Atoi(httpsPort)
+		if err != nil {
+			return nil, errors.New("invalid HTTPS_PORT value")
+		}
+		config.HTTPSPort = port
+	}
+
+	// Load ACME settings
+	acmeEnabled := getEnv("ACME_ENABLED", "false")
+	config.ACMEEnabled = strings.ToLower(acmeEnabled) == "true"
+	
+	if config.ACMEEnabled {
+		config.ACMEBaseURL = getEnv("ACME_BASE_URL", "")
+		// Will be auto-set in main.go if not provided
+	}
 
 	return config, nil
 }

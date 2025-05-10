@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalCA - ACME Settings</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="container">
+            <a href="/" class="app-title">
+                <i class="fa fa-lock"></i> LocalCA
+            </a>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="page-title">
+            <h1>ACME Protocol Settings</h1>
+        </div>
+        
+        {{if .Error}}
+        <div class="alert alert-danger">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>ACME Status</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert {{if .ACMEEnabled}}alert-success{{else}}alert-secondary{{end}} mb-4">
+                            <i class="fa {{if .ACMEEnabled}}fa-check-circle{{else}}fa-info-circle{{end}}"></i> 
+                            ACME Protocol is currently <strong>{{if .ACMEEnabled}}Enabled{{else}}Disabled{{end}}</strong>
+                        </div>
+                        
+                        {{if .ACMEEnabled}}
+                            <p>The ACME directory is available at: <code>{{.ACMEBaseURL}}/acme/directory</code></p>
+                            
+                            <div class="alert alert-info">
+                                <i class="fa fa-info-circle"></i> ACME Protocol allows automated certificate issuance and renewal for your internal services.
+                            </div>
+                            
+                            <form action="/acme/disable" method="POST" onsubmit="return confirm('Are you sure you want to disable the ACME protocol? This will prevent automated certificate renewals.');">
+                                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                                <button type="submit" class="btn btn-warning">Disable ACME Protocol</button>
+                                <a href="/acme/logs" class="btn btn-info ml-2">View ACME Logs</a>
+                            </form>
+                        {{else}}
+                            <div class="alert alert-info">
+                                <i class="fa fa-info-circle"></i> Enabling the ACME Protocol allows your internal services to request and renew certificates automatically, similar to Let's Encrypt but for your private network.
+                            </div>
+                            
+                            <form action="/acme/enable" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                                <div class="form-group">
+                                    <label for="base_url">ACME Base URL:</label>
+                                    <input type="text" class="form-control" id="base_url" name="base_url" value="{{.BaseURL}}" placeholder="https://ca.example.com">
+                                    <small class="form-text text-muted">The base URL where your CA is accessible from your internal network.</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Enable ACME Protocol</button>
+                            </form>
+                        {{end}}
+                    </div>
+                </div>
+
+                {{if .ACMEEnabled}}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>ACME Statistics</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h3 class="card-title">{{.Stats.Accounts}}</h3>
+                                        <p class="card-text">Registered Accounts</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h3 class="card-title">{{.Stats.Orders}}</h3>
+                                        <p class="card-text">Certificate Orders</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h3 class="card-title">{{.Stats.PendingOrders}}</h3>
+                                        <p class="card-text">Pending Orders</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h3 class="card-title">{{.Stats.IssuedCerts}}</h3>
+                                        <p class="card-text">Issued Certificates</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Client Setup Guide</h2>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="setupTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link active" id="certbot-tab" data-toggle="tab" href="#certbot" role="tab" aria-controls="certbot" aria-selected="true">Certbot</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="acmesh-tab" data-toggle="tab" href="#acmesh" role="tab" aria-controls="acmesh" aria-selected="false">acme.sh</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="traefik-tab" data-toggle="tab" href="#traefik" role="tab" aria-controls="traefik" aria-selected="false">Traefik</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" id="nginx-tab" data-toggle="tab" href="#nginx" role="tab" aria-controls="nginx" aria-selected="false">NGINX</a>
+                            </li>
+                        </ul>
+                        <div class="tab-content mt-3" id="setupTabsContent">
+                            <div class="tab-pane fade show active" id="certbot" role="tabpanel" aria-labelledby="certbot-tab">
+                                <h4>Using Certbot with LocalCA</h4>
+                                <p>Certbot is a popular ACME client that can be used with your LocalCA instance.</p>
+                                
+                                <div class="alert alert-info">
+                                    <i class="fa fa-info-circle"></i> 
+                                    First, install the CA certificate on the client machine to ensure it trusts certificates issued by your LocalCA.
+                                </div>
+                                
+                                <h5>1. Install the CA certificate</h5>
+                                <div class="code-block">
+# Download the CA certificate
+curl -k {{.BaseURL}}/download/ca -o ca.pem
+
+# For Debian/Ubuntu:
+sudo cp ca.pem /usr/local/share/ca-certificates/localca.crt
+sudo update-ca-certificates
+
+# For CentOS/RHEL:
+sudo cp ca.pem /etc/pki/ca-trust/source/anchors/localca.crt
+sudo update-ca-trust
+                                </div>
+                                
+                                <h5>2. Install Certbot</h5>
+                                <div class="code-block">
+# Debian/Ubuntu:
+sudo apt-get update
+sudo apt-get install -y certbot
+
+# CentOS/RHEL:
+sudo dnf install -y certbot
+                                </div>
+                                
+                                <h5>3. Request a certificate</h5>
+                                <div class="code-block">
+# For standalone verification (port 80 must be available):
+sudo certbot certonly --standalone \
+  --server {{.ACMEBaseURL}}/acme/directory \
+  --domain your-service.your-domain.local
+
+# For webroot verification:
+sudo certbot certonly --webroot \
+  --webroot-path /var/www/html \
+  --server {{.ACMEBaseURL}}/acme/directory \
+  --domain your-service.your-domain.local
+                                </div>
+                                
+                                <h5>4. Automatic renewal</h5>
+                                <div class="code-block">
+# Test automatic renewal
+sudo certbot renew --dry-run
+
+# Certbot will automatically create a timer/cron job for renewals
+                                </div>
+                            </div>
+                            
+                            <div class="tab-pane fade" id="acmesh" role="tabpanel" aria-labelledby="acmesh-tab">
+                                <h4>Using acme.sh with LocalCA</h4>
+                                <p>acme.sh is a lightweight ACME client with low dependencies.</p>
+                                
+                                <h5>1. Install acme.sh</h5>
+                                <div class="code-block">
+# Install acme.sh
+curl https://get.acme.sh | sh -s email=your-email@example.com
+                                </div>
+                                
+                                <h5>2. Set up the CA certificate</h5>
+                                <div class="code-block">
+# Download the CA certificate
+curl -k {{.BaseURL}}/download/ca -o ca.pem
+
+# Tell acme.sh to use this CA
+export ACME_CA_CERT=`pwd`/ca.pem
+                                </div>
+                                
+                                <h5>3. Issue a certificate</h5>
+                                <div class="code-block">
+# For HTTP verification
+~/.acme.sh/acme.sh --issue \
+  --server {{.ACMEBaseURL}}/acme/directory \
+  -d your-service.your-domain.local \
+  -w /var/www/html
+
+# For DNS verification (add DNS record manually)
+~/.acme.sh/acme.sh --issue \
+  --server {{.ACMEBaseURL}}/acme/directory \
+  -d your-service.your-domain.local \
+  --dns \
+  --yes-I-know-dns-manual-mode-enough-go-ahead-please
+                                </div>
+                                
+                                <h5>4. Install the certificate</h5>
+                                <div class="code-block">
+# Install to Nginx
+~/.acme.sh/acme.sh --install-cert -d your-service.your-domain.local \
+  --key-file /path/to/keyfile/in/nginx \
+  --fullchain-file /path/to/fullchain/in/nginx \
+  --reloadcmd "service nginx reload"
+                                </div>
+                            </div>
+                            
+                            <div class="tab-pane fade" id="traefik" role="tabpanel" aria-labelledby="traefik-tab">
+                                <h4>Using Traefik with LocalCA</h4>
+                                <p>Traefik is a modern reverse proxy and load balancer that can automatically manage certificates via ACME.</p>
+                                
+                                <h5>1. Set up your Traefik configuration</h5>
+                                <div class="code-block">
+# docker-compose.yml example
+version: '3'
+
+services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.localca.acme.httpchallenge=true"
+      - "--certificatesresolvers.localca.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.localca.acme.caserver={{.ACMEBaseURL}}/acme/directory"
+      - "--certificatesresolvers.localca.acme.email=your-email@example.com"
+      - "--certificatesresolvers.localca.acme.storage=/etc/traefik/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./ca.pem:/etc/ssl/certs/localca.pem:ro"
+      - "./acme.json:/etc/traefik/acme.json"
+    environment:
+      - "LEGO_CA_CERTIFICATES=/etc/ssl/certs/localca.pem"
+      - "SSL_CERT_FILE=/etc/ssl/certs/localca.pem"
+    restart: unless-stopped
+
+  whoami:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.yourdomain.local`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=localca"
+                                </div>
+                                
+                                <h5>2. Download the CA certificate</h5>
+                                <div class="code-block">
+# Download the CA certificate
+curl -k {{.BaseURL}}/download/ca -o ca.pem
+
+# Create an empty acme.json file with proper permissions
+touch acme.json
+chmod 600 acme.json
+                                </div>
+                                
+                                <h5>3. Start Traefik</h5>
+                                <div class="code-block">
+docker-compose up -d
+                                </div>
+                            </div>
+                            
+                            <div class="tab-pane fade" id="nginx" role="tabpanel" aria-labelledby="nginx-tab">
+                                <h4>Using NGINX with LocalCA</h4>
+                                <p>You can use certbot or acme.sh with NGINX to automate certificate management.</p>
+                                
+                                <h5>1. Install NGINX and Certbot</h5>
+                                <div class="code-block">
+# Debian/Ubuntu:
+sudo apt-get update
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+
+# Download the CA certificate
+curl -k {{.BaseURL}}/download/ca -o ca.pem
+sudo cp ca.pem /usr/local/share/ca-certificates/localca.crt
+sudo update-ca-certificates
+                                </div>
+                                
+                                <h5>2. Configure NGINX</h5>
+                                <div class="code-block">
+# Example server block
+server {
+    listen 80;
+    server_name your-service.your-domain.local;
+    
+    location / {
+        # Your configuration here
+        proxy_pass http://localhost:8080;
+    }
+    
+    # Allow /.well-known/acme-challenge/ for HTTP-01 challenges
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+}
+                                </div>
+                                
+                                <h5>3. Request certificate with Certbot</h5>
+                                <div class="code-block">
+sudo certbot --nginx \
+  --server {{.ACMEBaseURL}}/acme/directory \
+  -d your-service.your-domain.local
+                                </div>
+                                
+                                <h5>4. Verify automatic renewal</h5>
+                                <div class="code-block">
+sudo certbot renew --dry-run
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        $(document).ready(function() {
+            // Tab functionality is handled by Bootstrap
+        });
+    </script>
+</body>
+</html>

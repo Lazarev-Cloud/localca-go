@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Lazarev-Cloud/localca-go/pkg/acme"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/cron"
@@ -97,9 +99,45 @@ func main() {
 	// Setup routes
 	handlers.SetupRoutes(router, certSvc, store, cfg)
 
+	// Setup ACME service if enabled
+	if cfg.ACMEEnabled {
+		// Determine ACME base URL
+		acmeBaseURL := cfg.ACMEBaseURL
+		if acmeBaseURL == "" {
+			// Default to the configured hostname or local URL
+			if cfg.TLSEnabled {
+				acmeBaseURL = "https://" + cfg.Hostname
+				if cfg.HTTPSPort != 443 {
+					acmeBaseURL = acmeBaseURL + ":" + string(cfg.HTTPSPort)
+				}
+			} else {
+				acmeBaseURL = "http://" + cfg.Hostname
+				if cfg.HTTPPort != 80 {
+					acmeBaseURL = acmeBaseURL + ":" + string(cfg.HTTPPort)
+				}
+			}
+		}
+
+		// Create ACME service
+		acmeSvc, err := acme.NewACMEService(certSvc, store, acmeBaseURL)
+		if err != nil {
+			log.Fatalf("Failed to initialize ACME service: %v", err)
+		}
+
+		// Setup ACME routes
+		handlers.SetupACMERoutes(router, acmeSvc)
+
+		log.Printf("ACME server enabled at %s/acme/directory", acmeBaseURL)
+	}
+
 	// Configure server with timeouts
+	httpPort := ":8080"
+	if cfg.HTTPPort != 0 {
+		httpPort = fmt.Sprintf(":%d", cfg.HTTPPort)
+	}
+
 	server := &http.Server{
-		Addr:           ":8080",
+		Addr:           httpPort,
 		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
@@ -145,9 +183,14 @@ func main() {
 				log.Printf("Warning: Failed to create service certificate: %v. HTTPS will not be available.", err)
 			} else {
 				// Start HTTPS server with security enhancements
+				httpsPort := ":8443"
+				if cfg.HTTPSPort != 0 {
+					httpsPort = fmt.Sprintf(":%d", cfg.HTTPSPort)
+				}
+
 				go func() {
 					httpsServer := &http.Server{
-						Addr:         ":8443",
+						Addr:         httpsPort,
 						Handler:      router,
 						TLSConfig:    getSecureTLSConfig(),
 						ReadTimeout:  10 * time.Second,
@@ -155,7 +198,7 @@ func main() {
 						IdleTimeout:  120 * time.Second,
 					}
 
-					log.Println("HTTPS server starting on port 8443...")
+					log.Printf("HTTPS server starting on port %s...", strings.TrimPrefix(httpsPort, ":"))
 					if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 						log.Printf("HTTPS server error: %v", err)
 					}
@@ -165,7 +208,7 @@ func main() {
 	}
 
 	// Start HTTP server
-	log.Println("HTTP server starting on port 8080...")
+	log.Printf("HTTP server starting on port %s...", strings.TrimPrefix(httpPort, ":"))
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
