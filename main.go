@@ -36,6 +36,8 @@ func getSecureTLSConfig() *tls.Config {
 			tls.CurveP256,
 			tls.X25519,
 		},
+		SessionTicketsDisabled: true,
+		Renegotiation:          tls.RenegotiateNever,
 	}
 }
 
@@ -99,13 +101,13 @@ func main() {
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
-		
+
 		log.Println("Shutting down server...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
-		
+
 		cancel() // Cancel the context for ACME server
-		
+
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Fatalf("Server shutdown error: %v", err)
 		}
@@ -126,11 +128,11 @@ func main() {
 		// Make sure we have a CA cert and key
 		caCertPath := store.GetCAPublicKeyPath()
 		caKeyPath := store.GetCAPrivateKeyPath()
-		
+
 		// Certificate paths for the service
 		serviceCert := filepath.Join(store.GetBasePath(), "service.crt")
 		serviceKey := filepath.Join(store.GetBasePath(), "service.key")
-		
+
 		// Check if service certificate exists
 		if _, err := os.Stat(serviceCert); os.IsNotExist(err) {
 			log.Println("Creating service certificate for HTTPS...")
@@ -151,7 +153,7 @@ func main() {
 						Handler:   router,
 						TLSConfig: getSecureTLSConfig(),
 					}
-					
+
 					log.Println("HTTPS server starting on port 8443...")
 					if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 						log.Printf("HTTPS server error: %v", err)
@@ -166,7 +168,7 @@ func main() {
 					Handler:   router,
 					TLSConfig: getSecureTLSConfig(),
 				}
-				
+
 				log.Println("HTTPS server starting on port 8443...")
 				if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 					log.Printf("HTTPS server error: %v", err)
