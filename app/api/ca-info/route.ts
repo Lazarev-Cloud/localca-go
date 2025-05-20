@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import config from '@/lib/config'
 
 export async function GET(request: NextRequest) {
   try {
     // Make a request to the Go backend
-    const response = await fetch('http://localhost:8080/api/ca-info', {
+    const response = await fetch(`${config.apiUrl}/api/ca-info`, {
       headers: {
         'Content-Type': 'application/json',
       },
