@@ -149,8 +149,9 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 		accountRateLimits: make(map[string]*RateLimit),
 	}
 
-	// Start cleanup goroutine
+	// Start cleanup goroutines
 	go server.cleanupExpiredNonces()
+	go server.cleanupRateLimits()
 
 	return server, nil
 }
