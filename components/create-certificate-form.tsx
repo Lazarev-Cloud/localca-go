@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, Info, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useCertificates } from "@/hooks/use-certificates"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast-new"
 
 export function CreateCertificateForm() {
   const [isClientCert, setIsClientCert] = useState(false)
@@ -43,7 +43,7 @@ export function CreateCertificateForm() {
         toast({
           variant: "destructive",
           title: "Error creating certificate",
-          description: result.error || "An unknown error occurred.",
+          description: result.message || "An unknown error occurred.",
         })
       }
     } catch (error) {
