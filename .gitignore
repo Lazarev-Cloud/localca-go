@@ -26,3 +26,4 @@ data/
 cakey.txt
 *.p12
 /data
+/node_modules
