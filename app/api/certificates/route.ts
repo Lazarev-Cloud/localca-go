@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import config from '@/lib/config'
 
 // GET handler to fetch all certificates
 export async function GET(request: NextRequest) {
   try {
     // Make a request to the Go backend
-    const response = await fetch('http://localhost:8080/api/certificates', {
+    const response = await fetch(`${config.apiUrl}/api/certificates`, {
       headers: {
         'Content-Type': 'application/json',
       },
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     
     // Forward the request to the Go backend
-    const response = await fetch('http://localhost:8080/api/certificates', {
+    const response = await fetch(`${config.apiUrl}/api/certificates`, {
       method: 'POST',
       body: formData,
     })
