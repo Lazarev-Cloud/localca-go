@@ -9,15 +9,56 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, Info } from "lucide-react"
+import { AlertCircle, Info, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useCertificates } from "@/hooks/use-certificates"
+import { useToast } from "@/hooks/use-toast"
 
 export function CreateCertificateForm() {
   const [isClientCert, setIsClientCert] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const { createCertificate } = useCertificates()
+  const { toast } = useToast()
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    const formData = new FormData(e.currentTarget)
+    
+    try {
+      const result = await createCertificate(formData)
+      
+      if (result.success) {
+        toast({
+          title: "Certificate created",
+          description: "The certificate was created successfully.",
+        })
+        // Reset form
+        e.currentTarget.reset()
+        setIsClientCert(false)
+        setShowAdvanced(false)
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error creating certificate",
+          description: result.error || "An unknown error occurred.",
+        })
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error creating certificate",
+        description: error instanceof Error ? error.message : "An unknown error occurred.",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
-    <form className="space-y-8">
+    <form className="space-y-8" onSubmit={handleSubmit}>
       <Tabs defaultValue="basic" className="space-y-4">
         <TabsList>
           <TabsTrigger value="basic">Basic Information</TabsTrigger>
@@ -31,7 +72,12 @@ export function CreateCertificateForm() {
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="commonName">Common Name</Label>
-                  <Input id="commonName" placeholder="e.g., server.local or john.doe" />
+                  <Input 
+                    id="commonName" 
+                    name="common_name"
+                    placeholder="e.g., server.local or john.doe" 
+                    required 
+                  />
                   <p className="text-sm text-muted-foreground">
                     For server certificates, use the server's hostname. For client certificates, use the user's name.
                   </p>
@@ -41,6 +87,7 @@ export function CreateCertificateForm() {
                   <Label htmlFor="alternativeNames">Subject Alternative Names (SAN)</Label>
                   <Textarea
                     id="alternativeNames"
+                    name="alt_names"
                     placeholder="e.g., www.server.local, api.server.local"
                     disabled={isClientCert}
                   />
@@ -51,14 +98,24 @@ export function CreateCertificateForm() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Switch id="isClientCert" checked={isClientCert} onCheckedChange={setIsClientCert} />
+                  <Switch 
+                    id="isClientCert" 
+                    name="is_client"
+                    checked={isClientCert} 
+                    onCheckedChange={setIsClientCert} 
+                  />
                   <Label htmlFor="isClientCert">Create client certificate</Label>
                 </div>
 
                 {isClientCert && (
                   <div className="grid gap-2">
                     <Label htmlFor="p12Password">P12 Password</Label>
-                    <Input id="p12Password" type="password" placeholder="Enter a secure password" />
+                    <Input 
+                      id="p12Password" 
+                      name="p12_password"
+                      type="password" 
+                      placeholder="Enter a secure password" 
+                    />
                     <p className="text-sm text-muted-foreground">
                       This password will be required when importing the certificate into browsers or devices.
                     </p>
@@ -67,7 +124,7 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="validityPeriod">Validity Period</Label>
-                  <Select defaultValue="365">
+                  <Select defaultValue="365" name="validity_days">
                     <SelectTrigger id="validityPeriod">
                       <SelectValue placeholder="Select validity period" />
                     </SelectTrigger>
@@ -105,17 +162,27 @@ export function CreateCertificateForm() {
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="organization">Organization</Label>
-                  <Input id="organization" placeholder="e.g., Your Company" defaultValue="LocalCA" />
+                  <Input 
+                    id="organization" 
+                    name="organization"
+                    placeholder="e.g., Your Company" 
+                    defaultValue="LocalCA" 
+                  />
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="country">Country</Label>
-                  <Input id="country" placeholder="e.g., US" defaultValue="US" />
+                  <Input 
+                    id="country" 
+                    name="country"
+                    placeholder="e.g., US" 
+                    defaultValue="US" 
+                  />
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="keyType">Key Type</Label>
-                  <Select defaultValue="rsa">
+                  <Select defaultValue="rsa" name="key_type">
                     <SelectTrigger id="keyType">
                       <SelectValue placeholder="Select key type" />
                     </SelectTrigger>
@@ -128,7 +195,7 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="keySize">Key Size</Label>
-                  <Select defaultValue="2048">
+                  <Select defaultValue="2048" name="key_size">
                     <SelectTrigger id="keySize">
                       <SelectValue placeholder="Select key size" />
                     </SelectTrigger>
@@ -146,7 +213,7 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="signatureAlgorithm">Signature Algorithm</Label>
-                  <Select defaultValue="sha256">
+                  <Select defaultValue="sha256" name="signature_algorithm">
                     <SelectTrigger id="signatureAlgorithm">
                       <SelectValue placeholder="Select signature algorithm" />
                     </SelectTrigger>
@@ -172,8 +239,11 @@ export function CreateCertificateForm() {
       </Tabs>
 
       <div className="flex justify-end space-x-4">
-        <Button variant="outline">Cancel</Button>
-        <Button>Create Certificate</Button>
+        <Button variant="outline" type="button" onClick={() => window.history.back()}>Cancel</Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create Certificate
+        </Button>
       </div>
     </form>
   )
