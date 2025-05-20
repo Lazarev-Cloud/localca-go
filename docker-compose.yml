@@ -12,14 +12,17 @@ services:
     ports:
       - "8080:8080"
       - "8443:8443"  # For HTTPS
+      - "8555:8555"  # For ACME protocol
     volumes:
-      - ./data:/app/certs
+      - ./data:/app/data
       - ./cakey.txt:/run/secrets/cakey:ro  # Mount CA key as read-only
     environment:
       - CA_NAME=ca.homelab.local  # Name of the CA including domain (FQDN)
       - CA_KEY_FILE=/run/secrets/cakey
       - ORGANIZATION=LocalCA
       - COUNTRY=US  # Country code
+      - DATA_DIR=/app/data
+      - LISTEN_ADDR=:8080
       - EMAIL_NOTIFY=false
       - TLS_ENABLED=true  # Enable HTTPS
     networks:
@@ -30,6 +33,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+  
+  frontend:
+    container_name: localca-frontend
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localca:8080
+    networks:
+      - localca-network
+    depends_on:
+      - localca
 
 networks:
   localca-network:

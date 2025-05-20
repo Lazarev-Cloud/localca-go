@@ -83,17 +83,25 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
    echo "your-secure-password" > cakey.txt
    ```
 
-6. Run the application:
+6. Run the application using the provided scripts:
+   
+   Windows:
    ```bash
-   export CA_NAME=ca.homelab.local
-   export CA_KEY_FILE=./cakey.txt
-   export ORGANIZATION=LocalCA
-   export COUNTRY=US
-   export TLS_ENABLED=true
-   ./localca-go
+   run-dev.bat
+   ```
+   
+   Linux/macOS:
+   ```bash
+   chmod +x run-dev.sh
+   ./run-dev.sh
    ```
 
-7. Access the web interface at https://localhost:8443
+7. In a separate terminal, start the frontend:
+   ```bash
+   pnpm dev
+   ```
+
+8. Access the web interface at http://localhost:3000
 
 ## Configuration
 
@@ -101,12 +109,13 @@ LocalCA is configured through environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CA_NAME` | Name of the Certificate Authority (FQDN) | *required* |
+| `CA_NAME` | Name of the Certificate Authority (FQDN) | "LocalCA" |
 | `CA_KEY_FILE` | Path to the file containing the CA key password | *required* |
 | `CA_KEY` | Direct CA key password (alternative to CA_KEY_FILE) | "" |
-| `ORGANIZATION` | Organization name for the CA | "LocalCA" |
+| `ORGANIZATION` | Organization name for the CA | "LocalCA Organization" |
 | `COUNTRY` | Country code for the CA | "US" |
-| `STORAGE_PATH` | Path where certificates are stored | "/app/certs" |
+| `DATA_DIR` | Path where certificates are stored | "./data" |
+| `LISTEN_ADDR` | Address and port for the HTTP server | ":8080" |
 | `EMAIL_NOTIFY` | Enable email notifications for expiring certificates | "false" |
 | `SMTP_SERVER` | SMTP server for notifications | "" |
 | `SMTP_PORT` | SMTP port | "25" |
@@ -116,6 +125,7 @@ LocalCA is configured through environment variables:
 | `EMAIL_FROM` | From address for notification emails | "" |
 | `EMAIL_TO` | Default recipient for notification emails | "" |
 | `TLS_ENABLED` | Enable HTTPS for the web interface | "false" |
+| `NEXT_PUBLIC_API_URL` | URL for the frontend to connect to the backend | "http://localhost:8080" |
 
 ## Usage Guide
 
