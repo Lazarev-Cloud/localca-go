@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Lazarev-Cloud/localca-go/pkg/acme"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/handlers"
@@ -89,6 +90,10 @@ func main() {
 		Handler: router,
 	}
 
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Graceful shutdown
 	go func() {
 		quit := make(chan os.Signal, 1)
@@ -96,11 +101,23 @@ func main() {
 		<-quit
 		
 		log.Println("Shutting down server...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
 		
-		if err := server.Shutdown(ctx); err != nil {
+		cancel() // Cancel the context for ACME server
+		
+		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Fatalf("Server shutdown error: %v", err)
+		}
+	}()
+
+	// Start ACME server
+	go func() {
+		log.Println("Starting ACME server on port 8555...")
+		if err := acme.StartACMEServer(ctx, certSvc, store, ":8555", getSecureTLSConfig()); err != nil {
+			if err != http.ErrServerClosed {
+				log.Printf("ACME server error: %v", err)
+			}
 		}
 	}()
 
@@ -141,6 +158,20 @@ func main() {
 					}
 				}()
 			}
+		} else {
+			// Start HTTPS server with existing certificate
+			go func() {
+				httpsServer := &http.Server{
+					Addr:      ":8443",
+					Handler:   router,
+					TLSConfig: getSecureTLSConfig(),
+				}
+				
+				log.Println("HTTPS server starting on port 8443...")
+				if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
+					log.Printf("HTTPS server error: %v", err)
+				}
+			}()
 		}
 	}
 
