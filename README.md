@@ -275,6 +275,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Running Tests
 
+LocalCA-Go includes a comprehensive test suite for all packages. You can run the tests using the provided scripts.
+
 ### On Linux/macOS
 ```bash
 ./run-tests.sh
@@ -282,8 +284,14 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ### On Windows
 ```batch
-run-tests.bat
+.\run-tests.bat
 ```
+
+The test scripts will:
+1. Run all package tests with coverage
+2. Run the main package test
+3. Test Docker build if Docker is available
+4. Test Docker Compose configuration if available
 
 ## Docker Deployment
 
@@ -314,15 +322,18 @@ The application uses a Docker volume named `localca-data` to persist certificate
 
 ### Custom Configuration
 
-You can customize the application by setting environment variables in the `docker-compose.yml` file:
+You can customize the application by setting environment variables in the docker-compose.yml file:
 
 ```yaml
 environment:
   - LOCALCA_DATA_DIR=/app/data
   - LOCALCA_HOST=0.0.0.0
-  - LOCALCA_CA_NAME=My Custom CA
-  - LOCALCA_CA_EMAIL=ca@example.com
+  - CA_NAME=My Custom CA
+  - CA_KEY=mysecretpassword
+  # Add more environment variables as needed
 ```
+
+For a complete list of configuration options, see the Configuration section above.
 
 ---
 
