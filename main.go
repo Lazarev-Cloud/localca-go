@@ -156,6 +156,10 @@ func main() {
 						Addr:      ":8443",
 						Handler:   router,
 						TLSConfig: getSecureTLSConfig(),
+						// Add timeouts to prevent slow client attacks
+						ReadTimeout:  10 * time.Second,
+						WriteTimeout: 30 * time.Second,
+						IdleTimeout:  120 * time.Second,
 					}
 
 					log.Println("HTTPS server starting on port 8443...")
@@ -171,6 +175,10 @@ func main() {
 					Addr:      ":8443",
 					Handler:   router,
 					TLSConfig: getSecureTLSConfig(),
+					// Add timeouts to prevent slow client attacks
+					ReadTimeout:  10 * time.Second,
+					WriteTimeout: 30 * time.Second,
+					IdleTimeout:  120 * time.Second,
 				}
 
 				log.Println("HTTPS server starting on port 8443...")
