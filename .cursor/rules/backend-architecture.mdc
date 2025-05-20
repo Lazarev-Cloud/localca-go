@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Backend Architecture
+
+The LocalCA backend is written in Go and follows a modular architecture with clear separation of concerns.
+
+## Key Components
+
+- [main.go](mdc:main.go) - Application entry point
+- [pkg/certificates/](mdc:pkg/certificates) - Core certificate operations
+  - Certificate generation
+  - CA management
+  - Certificate signing
+  - Certificate revocation
+- [pkg/config/](mdc:pkg/config) - Configuration management
+  - Environment variable loading
+  - Default configuration values
+- [pkg/storage/](mdc:pkg/storage) - Certificate storage
+  - File system operations
+  - Certificate metadata handling
+- [pkg/handlers/](mdc:pkg/handlers) - HTTP API handlers
+  - REST endpoints for certificate operations
+  - Web UI serving
+- [pkg/email/](mdc:pkg/email) - Email notification system
+  - Expiry notifications
+  - SMTP configuration
+
+## Flow
+
+1. The application starts in [main.go](mdc:main.go)
+2. Configuration is loaded from environment variables
+3. Storage is initialized for certificate management
+4. Certificate service is created to handle certificate operations
+5. If no CA exists, a new one is created
+6. HTTP/HTTPS servers are started with the configured routes
+

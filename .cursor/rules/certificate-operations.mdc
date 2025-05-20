@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Certificate Operations
+
+LocalCA provides a complete solution for certificate lifecycle management.
+
+## Certificate Types
+
+- **CA Certificate** - The root certificate authority certificate
+- **Server Certificates** - For securing websites and services
+- **Client Certificates** - For client authentication
+- **Service Certificate** - For securing the LocalCA web interface
+
+## Certificate Operations
+
+- **Create** - Generate new certificates
+  - Server certificates with SAN support
+  - Client certificates with PKCS#12 export
+- **Renew** - Extend certificate validity
+- **Revoke** - Add certificates to the Certificate Revocation List (CRL)
+- **Delete** - Remove certificates from storage
+
+## Certificate Storage
+
+Certificates are stored in the file system:
+- CA certificate and private key
+- Server and client certificates
+- Certificate metadata
+- Certificate Revocation List (CRL)
+
+## Certificate Formats
+
+- **PEM** (.crt, .key) - Standard format for certificates and keys
+- **PKCS#12** (.p12) - For client certificates (includes private key)
+- **CRL** (.crl) - Certificate Revocation List
+

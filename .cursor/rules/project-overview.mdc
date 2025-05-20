@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# LocalCA-Go Project Overview
+
+LocalCA is a self-hosted Certificate Authority (CA) solution for managing SSL/TLS certificates in local network environments. The project has both a Go backend and a Next.js frontend.
+
+## Project Structure
+
+- [main.go](mdc:main.go) - Application entry point that initializes services and starts the HTTP/HTTPS servers
+- [pkg/](mdc:pkg) - Core Go backend packages
+  - [certificates/](mdc:pkg/certificates) - Certificate generation and management
+  - [config/](mdc:pkg/config) - Configuration loading and management
+  - [email/](mdc:pkg/email) - Email notification system
+  - [handlers/](mdc:pkg/handlers) - HTTP request handlers
+  - [storage/](mdc:pkg/storage) - Certificate storage management
+- [app/](mdc:app) - Next.js frontend application
+  - [page.tsx](mdc:app/page.tsx) - Main dashboard page
+  - [create/](mdc:app/create) - Certificate creation UI
+  - [certificates/](mdc:app/certificates) - Certificate management UI
+  - [settings/](mdc:app/settings) - Application settings UI
+- [components/](mdc:components) - React components
+- [data/](mdc:data) - Data access layer for frontend
+- [docker-compose.yml](mdc:docker-compose.yml) - Docker Compose configuration
+- [Dockerfile](mdc:Dockerfile) - Docker build instructions
+

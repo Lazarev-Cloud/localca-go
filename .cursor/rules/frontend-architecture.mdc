@@ -1,0 +1,34 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Frontend Architecture
+
+The LocalCA frontend is built with Next.js and uses a modern React architecture with Tailwind CSS for styling.
+
+## Key Components
+
+- [app/](mdc:app) - Next.js app directory (App Router)
+  - [page.tsx](mdc:app/page.tsx) - Main dashboard page
+  - [layout.tsx](mdc:app/layout.tsx) - Root layout component
+  - [create/](mdc:app/create) - Certificate creation pages
+  - [certificates/](mdc:app/certificates) - Certificate management pages
+  - [settings/](mdc:app/settings) - Settings pages
+- [components/](mdc:components) - Reusable React components
+  - [ui/](mdc:components/ui) - UI components (buttons, cards, etc.)
+- [data/](mdc:data) - Data fetching and state management
+  - [ca/](mdc:data/ca) - CA-related data operations
+  - [service/](mdc:data/service) - Service API clients
+- [hooks/](mdc:hooks) - Custom React hooks
+- [styles/](mdc:styles) - Global styles and theme configuration
+
+## Technologies
+
+- Next.js - React framework
+- React - UI library
+- Tailwind CSS - Styling
+- Radix UI - Accessible component primitives
+- React Hook Form - Form handling
+- Zod - Schema validation
+
