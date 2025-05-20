@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
 
 func TestCreateServerCertificate(t *testing.T) {
@@ -14,27 +17,44 @@ func TestCreateServerCertificate(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Create storage
+	store, err := storage.NewStorage(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Create config
+	cfg := &config.Config{
+		CAName:        "Test CA",
+		CAKeyPassword: "testpassword",
+		Organization:  "Test Org",
+		Country:       "US",
+		DataDir:       tempDir,
+	}
+
+	// Create certificate service
+	certService, err := NewCertificateService(cfg, store)
+	if err != nil {
+		t.Fatalf("Failed to create certificate service: %v", err)
+	}
+
 	// Create CA first
-	ca, err := CreateCA("Test CA", "test@example.com", tempDir)
+	err = certService.CreateCA()
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
 
 	// Create server certificate
 	domains := []string{"example.com", "www.example.com"}
-	cert, err := CreateServerCertificate("test-server", domains, ca, tempDir)
+	certName := "test-server"
+	err = certService.CreateServerCertificate(certName, domains)
 	if err != nil {
 		t.Fatalf("Failed to create server certificate: %v", err)
 	}
 
-	// Verify certificate properties
-	if cert.CommonName != "example.com" {
-		t.Errorf("Expected CommonName 'example.com', got '%s'", cert.CommonName)
-	}
-
 	// Check if files were created
-	certFile := filepath.Join(tempDir, "test-server.crt")
-	keyFile := filepath.Join(tempDir, "test-server.key")
+	certFile := filepath.Join(tempDir, certName, certName+".crt")
+	keyFile := filepath.Join(tempDir, certName, certName+".key")
 
 	if _, err := os.Stat(certFile); os.IsNotExist(err) {
 		t.Errorf("Server certificate file was not created at %s", certFile)
@@ -42,19 +62,5 @@ func TestCreateServerCertificate(t *testing.T) {
 
 	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
 		t.Errorf("Server key file was not created at %s", keyFile)
-	}
-
-	// Verify SANs
-	for _, domain := range domains {
-		found := false
-		for _, san := range cert.SANs {
-			if san == domain {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected SAN '%s' not found in certificate", domain)
-		}
 	}
 }

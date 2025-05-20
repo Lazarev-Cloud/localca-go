@@ -1,49 +1,40 @@
-FROM golang:1.23.8-alpine3.20 AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod and sum files
+# Copy go.mod and go.sum first for better caching
 COPY go.mod go.sum ./
+RUN go mod download
 
-# Fix go.sum entries before proceeding
-RUN go mod tidy && go mod download
-
-# Copy source code
+# Copy the rest of the application
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o localca-go .
+RUN CGO_ENABLED=0 GOOS=linux go build -o localca-go
 
-# Use a smaller base image for the final container
-FROM alpine:3.20
+# Use a smaller image for the final container
+FROM alpine:latest
 
-# Install required packages
-RUN apk add --no-cache \
-    openssl \
-    ca-certificates \
-    tzdata \
-    curl \
-    bash
+# Install CA certificates for HTTPS connections
+RUN apk --no-cache add ca-certificates
 
-# Create app directory
 WORKDIR /app
 
-# Copy the binary from builder
-COPY --from=builder /app/localca-go /app/
+# Copy the binary from the builder stage
+COPY --from=builder /app/localca-go .
 
-# Copy templates and static files
-COPY --from=builder /app/templates /app/templates
+# Copy static files
 COPY --from=builder /app/static /app/static
+COPY --from=builder /app/templates /app/templates
 
-# Create directory for certificates
-RUN mkdir -p /app/certs/ca
+# Create data directory
+RUN mkdir -p /app/data
+
+# Expose ports
+EXPOSE 8080 8443 8555
 
 # Set environment variables
-ENV GIN_MODE=release
+ENV LOCALCA_DATA_DIR=/app/data
 
-# Expose port
-EXPOSE 8080
-EXPOSE 8443
-
-# Command to run
-CMD ["/app/localca-go"]
+# Run the application
+CMD ["./localca-go"]

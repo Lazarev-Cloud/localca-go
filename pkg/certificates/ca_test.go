@@ -5,7 +5,112 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Lazarev-Cloud/localca-go/pkg/config"
+	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 )
+
+func TestCertificateService_CreateCA(t *testing.T) {
+	// Create temporary directory for test
+	tempDir, err := os.MkdirTemp("", "localca-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create storage
+	store, err := storage.NewStorage(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Create config
+	cfg := &config.Config{
+		CAName:        "Test CA",
+		CAKeyPassword: "testpassword",
+		Organization:  "Test Org",
+		Country:       "US",
+		DataDir:       tempDir,
+	}
+
+	// Create certificate service
+	certService, err := NewCertificateService(cfg, store)
+	if err != nil {
+		t.Fatalf("Failed to create certificate service: %v", err)
+	}
+
+	// Create CA
+	err = certService.CreateCA()
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+
+	// Check if files were created
+	certFile := store.GetCAPublicKeyPath()
+	keyFile := store.GetCAPrivateKeyPath()
+
+	if _, err := os.Stat(certFile); os.IsNotExist(err) {
+		t.Errorf("CA certificate file was not created at %s", certFile)
+	}
+
+	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+		t.Errorf("CA key file was not created at %s", keyFile)
+	}
+}
+
+func TestCertificateService_CAExists(t *testing.T) {
+	// Create temporary directory for test
+	tempDir, err := os.MkdirTemp("", "localca-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create storage
+	store, err := storage.NewStorage(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Create config
+	cfg := &config.Config{
+		CAName:        "Test CA",
+		CAKeyPassword: "testpassword",
+		Organization:  "Test Org",
+		Country:       "US",
+		DataDir:       tempDir,
+	}
+
+	// Create certificate service
+	certService, err := NewCertificateService(cfg, store)
+	if err != nil {
+		t.Fatalf("Failed to create certificate service: %v", err)
+	}
+
+	// Check if CA exists (should not exist yet)
+	exists, err := certService.CAExists()
+	if err != nil {
+		t.Fatalf("Failed to check if CA exists: %v", err)
+	}
+	if exists {
+		t.Errorf("CA should not exist yet")
+	}
+
+	// Create CA
+	err = certService.CreateCA()
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+
+	// Check if CA exists (should exist now)
+	exists, err = certService.CAExists()
+	if err != nil {
+		t.Fatalf("Failed to check if CA exists: %v", err)
+	}
+	if !exists {
+		t.Errorf("CA should exist now")
+	}
+}
 
 func TestCreateCA(t *testing.T) {
 	// Create temporary directory for test

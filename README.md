@@ -273,6 +273,57 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [ ] Improved audit logging
 - [ ] OCSP responder
 
+## Running Tests
+
+### On Linux/macOS
+```bash
+./run-tests.sh
+```
+
+### On Windows
+```batch
+run-tests.bat
+```
+
+## Docker Deployment
+
+You can easily deploy LocalCA using Docker and Docker Compose.
+
+### Building and Running with Docker Compose
+
+```bash
+# Build and start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+```
+
+### Accessing the Application
+
+- Web UI: http://localhost:3000
+- Backend API: http://localhost:8080
+- ACME Server: http://localhost:8555
+
+### Docker Volumes
+
+The application uses a Docker volume named `localca-data` to persist certificate data. This ensures that your certificates and CA information are preserved even if the containers are removed.
+
+### Custom Configuration
+
+You can customize the application by setting environment variables in the `docker-compose.yml` file:
+
+```yaml
+environment:
+  - LOCALCA_DATA_DIR=/app/data
+  - LOCALCA_HOST=0.0.0.0
+  - LOCALCA_CA_NAME=My Custom CA
+  - LOCALCA_CA_EMAIL=ca@example.com
+```
+
 ---
 
 Created by @lazarevtill - feel free to contact me!
