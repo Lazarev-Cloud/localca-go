@@ -5,17 +5,17 @@ import (
 	"encoding/base64"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
+	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes configures the routes for the application
 func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) {
 	// Add middleware
 	router.Use(gin.Recovery())
-	
+
 	// Configure CSRF protection
 	router.Use(csrfMiddleware())
 
@@ -28,7 +28,7 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 
 	// Certificate file view
 	router.GET("/files", filesHandler(certSvc, store))
-	
+
 	// Operations
 	router.POST("/renew", renewCertificateHandler(certSvc, store))
 	router.POST("/delete", deleteCertificateHandler(certSvc, store))
@@ -44,6 +44,9 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 	router.GET("/download/ca", downloadCAHandler(certSvc, store))
 	router.GET("/download/crl", downloadCRLHandler(certSvc, store))
 	router.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
+
+	// Setup API routes for the Next.js frontend
+	SetupAPIRoutes(router, certSvc, store)
 }
 
 // csrfMiddleware adds CSRF protection
@@ -107,13 +110,13 @@ type APIResponse struct {
 
 // CertificateInfo represents certificate information for display
 type CertificateInfo struct {
-	CommonName      string `json:"common_name"`
-	ExpiryDate      string `json:"expiry_date"`
-	IsClient        bool   `json:"is_client"`
-	SerialNumber    string `json:"serial_number"`
-	IsExpired       bool   `json:"is_expired"`
-	IsExpiringSoon  bool   `json:"is_expiring_soon"`
-	IsRevoked       bool   `json:"is_revoked"`
+	CommonName     string `json:"common_name"`
+	ExpiryDate     string `json:"expiry_date"`
+	IsClient       bool   `json:"is_client"`
+	SerialNumber   string `json:"serial_number"`
+	IsExpired      bool   `json:"is_expired"`
+	IsExpiringSoon bool   `json:"is_expiring_soon"`
+	IsRevoked      bool   `json:"is_revoked"`
 }
 
 // CAInfo represents CA information for display
