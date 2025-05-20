@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import config from '@/lib/config'
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     
     // Forward the request to the Go backend
-    const response = await fetch('http://localhost:8080/api/renew', {
+    const response = await fetch(`${config.apiUrl}/api/renew`, {
       method: 'POST',
       body: formData,
     })
