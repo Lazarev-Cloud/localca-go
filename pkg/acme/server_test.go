@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -17,6 +18,12 @@ import (
 )
 
 func setupTestEnvironment(t *testing.T) (*ACMEServer, *certificates.CertificateService, *storage.Storage, func()) {
+	// Check if OpenSSL is available
+	_, err := exec.LookPath("openssl")
+	if err != nil {
+		t.Skip("OpenSSL not available, skipping test")
+	}
+
 	// Create temporary directory for test data
 	tempDir, err := os.MkdirTemp("", "acme-test")
 	if err != nil {
