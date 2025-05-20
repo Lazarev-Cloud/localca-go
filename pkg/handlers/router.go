@@ -92,4 +92,11 @@ func generateCSRFToken() string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-// sessionMiddleware adds session managementfunc sessionMiddleware() gin.HandlerFunc {	return func(c *gin.Context) {		// In a real implementation, this would initialize and manage user sessions		// For now, just pass through		c.Next()	}}
+// sessionMiddleware adds session management
+func sessionMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// In a real implementation, this would initialize and manage user sessions
+		// For now, just pass through
+		c.Next()
+	}
+}
