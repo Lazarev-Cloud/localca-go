@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Certificate Operations
 
@@ -36,4 +36,13 @@ Certificates are stored in the file system:
 - **PEM** (.crt, .key) - Standard format for certificates and keys
 - **PKCS#12** (.p12) - For client certificates (includes private key)
 - **CRL** (.crl) - Certificate Revocation List
+
+## ACME Protocol Support
+
+LocalCA implements the ACME (Automated Certificate Management Environment) protocol:
+- Automated certificate issuance
+- HTTP-01 challenge validation
+- Account management
+- Certificate renewal
+- Accessible via port 8555
 

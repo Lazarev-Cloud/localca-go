@@ -1,5 +1,40 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# UI Components
+
+LocalCA uses a modern React component architecture with reusable UI components.
+
+## Key Components
+
+- [components/certificate-details.tsx](mdc:components/certificate-details.tsx) - Displays detailed certificate information
+- [components/certificate-table.tsx](mdc:components/certificate-table.tsx) - Table view of certificates with sorting and filtering
+- [components/certificate-actions.tsx](mdc:components/certificate-actions.tsx) - Action buttons for certificate operations
+- [components/create-certificate-form.tsx](mdc:components/create-certificate-form.tsx) - Form for creating new certificates
+- [components/dashboard-header.tsx](mdc:components/dashboard-header.tsx) - Main dashboard header with navigation
+- [components/ca-info-card.tsx](mdc:components/ca-info-card.tsx) - Displays CA information
+- [components/system-status.tsx](mdc:components/system-status.tsx) - System status information
+- [components/settings-tabs.tsx](mdc:components/settings-tabs.tsx) - Settings page tabs
+- [components/recent-activity.tsx](mdc:components/recent-activity.tsx) - Recent certificate activity
+
+## UI Component Library
+
+The project uses ShadcnUI, a component library based on Tailwind CSS:
+
+- [components/ui/](mdc:components/ui) - Base UI components
+  - Buttons
+  - Cards
+  - Dialogs
+  - Forms
+  - Tables
+  - Tabs
+
+## Component Usage
+
+- Pages use components to build the UI
+- Components are reusable across different pages
+- Components follow a consistent design system
+- Form components handle validation using React Hook Form and Zod
+

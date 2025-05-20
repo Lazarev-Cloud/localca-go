@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Backend Architecture
 
@@ -27,6 +27,10 @@ The LocalCA backend is written in Go and follows a modular architecture with cle
 - [pkg/email/](mdc:pkg/email) - Email notification system
   - Expiry notifications
   - SMTP configuration
+- [pkg/acme/](mdc:pkg/acme) - ACME protocol implementation
+  - Automated certificate issuance
+  - Challenge validation
+  - Account management
 
 ## Flow
 
@@ -36,4 +40,5 @@ The LocalCA backend is written in Go and follows a modular architecture with cle
 4. Certificate service is created to handle certificate operations
 5. If no CA exists, a new one is created
 6. HTTP/HTTPS servers are started with the configured routes
+7. ACME server is started on port 8555 for automated certificate issuance
 

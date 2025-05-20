@@ -10,8 +10,14 @@ LocalCA can be deployed using Docker or built from source. The application is co
 ## Deployment Options
 
 - [docker-compose.yml](mdc:docker-compose.yml) - Docker Compose configuration
-- [Dockerfile](mdc:Dockerfile) - Docker build instructions
+  - Backend service
+  - Frontend service
+  - Volume mounts for certificate persistence
+- [Dockerfile](mdc:Dockerfile) - Backend Docker build instructions
+- [Dockerfile.frontend](mdc:Dockerfile.frontend) - Frontend Docker build instructions
 - [DEPLOYMENT.md](mdc:DEPLOYMENT.md) - Detailed deployment instructions
+- [run-dev.sh](mdc:run-dev.sh) - Development startup script for Linux/macOS
+- [run-dev.bat](mdc:run-dev.bat) - Development startup script for Windows
 
 ## Configuration
 
@@ -22,7 +28,8 @@ The application is configured through environment variables:
 - `CA_KEY` - Direct CA key password (alternative to CA_KEY_FILE)
 - `ORGANIZATION` - Organization name for the CA
 - `COUNTRY` - Country code for the CA
-- `STORAGE_PATH` - Path where certificates are stored
+- `DATA_DIR` - Path where certificates are stored
+- `LISTEN_ADDR` - Address and port for the HTTP server
 - `EMAIL_NOTIFY` - Enable email notifications for expiring certificates
 - `SMTP_SERVER` - SMTP server for notifications
 - `SMTP_PORT` - SMTP port
@@ -32,6 +39,7 @@ The application is configured through environment variables:
 - `EMAIL_FROM` - From address for notification emails
 - `EMAIL_TO` - Default recipient for notification emails
 - `TLS_ENABLED` - Enable HTTPS for the web interface
+- `NEXT_PUBLIC_API_URL` - URL for the frontend to connect to the backend
 
 ## Security Considerations
 
