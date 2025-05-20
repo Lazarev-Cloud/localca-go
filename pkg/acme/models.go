@@ -2,6 +2,7 @@ package acme
 
 import (
 	"crypto"
+	"encoding/base64"
 	"time"
 )
 
