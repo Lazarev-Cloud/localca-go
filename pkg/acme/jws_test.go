@@ -1,6 +1,7 @@
 package acme
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -187,13 +188,13 @@ func TestCreateAndVerifyRSASignature(t *testing.T) {
 	hash := sha256.Sum256(data)
 
 	// Sign data
-	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, sha256.New(), hash[:])
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
 	if err != nil {
 		t.Fatalf("Failed to sign data: %v", err)
 	}
 
 	// Verify signature
-	err = rsa.VerifyPKCS1v15(&privateKey.PublicKey, sha256.New(), hash[:], signature)
+	err = rsa.VerifyPKCS1v15(&privateKey.PublicKey, crypto.SHA256, hash[:], signature)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}
