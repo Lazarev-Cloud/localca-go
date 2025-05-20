@@ -1,7 +1,10 @@
 package storage
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -309,4 +312,42 @@ func (s *Storage) GetEmailSettings() (string, string, string, string, string, st
 	}
 
 	return server, port, username, password, from, to, useTLS, useStartTLS, nil
+}
+
+// GetCertificateNameBySerial finds a certificate by its serial number
+func (s *Storage) GetCertificateNameBySerial(serialNumber string) (string, error) {
+	// List all certificates
+	certNames, err := s.ListCertificates()
+	if err != nil {
+		return "", fmt.Errorf("failed to list certificates: %w", err)
+	}
+
+	// Check each certificate for the matching serial number
+	for _, name := range certNames {
+		certPath := s.GetCertificatePath(name)
+
+		// Read and parse the certificate
+		certData, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			continue // Skip if can't read
+		}
+
+		block, _ := pem.Decode(certData)
+		if block == nil {
+			continue // Skip if not PEM format
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue // Skip if can't parse
+		}
+
+		// Check if serial number matches
+		certSerial := fmt.Sprintf("%X", cert.SerialNumber)
+		if certSerial == serialNumber {
+			return name, nil
+		}
+	}
+
+	return "", fmt.Errorf("certificate with serial number %s not found", serialNumber)
 }
