@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -23,17 +24,28 @@ type Config struct {
 	EmailFrom     string
 	EmailTo       string
 	TLSEnabled    bool
+	DataDir       string
+	ListenAddr    string
 }
 
-// LoadConfig loads configuration from environment variables
+// LoadConfig loads the configuration from environment variables or defaults
 func LoadConfig() (*Config, error) {
-	config := &Config{
-		StoragePath: getEnv("STORAGE_PATH", "/app/certs"),
+	cfg := &Config{
+		CAName:       getEnvOrDefault("CA_NAME", "LocalCA"),
+		Organization: getEnvOrDefault("ORGANIZATION", "LocalCA Organization"),
+		Country:      getEnvOrDefault("COUNTRY", "US"),
+		DataDir:      getEnvOrDefault("DATA_DIR", "./data"),
+		ListenAddr:   getEnvOrDefault("LISTEN_ADDR", ":8080"),
+		StoragePath:  getEnv("STORAGE_PATH", "/app/certs"),
 	}
 
-	// Load CA Name
-	config.CAName = getEnv("CA_NAME", "")
-	if config.CAName == "" {
+	// Create data directory if it doesn't exist
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		return nil, err
+	}
+
+	// Validate required fields
+	if cfg.CAName == "" {
 		return nil, errors.New("CA_NAME environment variable is required")
 	}
 
@@ -46,24 +58,20 @@ func LoadConfig() (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		config.CAKeyPassword = strings.TrimSpace(string(content))
+		cfg.CAKeyPassword = strings.TrimSpace(string(content))
 	} else if keyEnv != "" {
-		config.CAKeyPassword = keyEnv
+		cfg.CAKeyPassword = keyEnv
 	} else {
 		return nil, errors.New("either CA_KEY_FILE or CA_KEY environment variable is required")
 	}
 
-	// Load Organization and Country
-	config.Organization = getEnv("ORGANIZATION", "LocalCA")
-	config.Country = getEnv("COUNTRY", "US")
-
 	// Load Email settings
 	emailEnabled := getEnv("EMAIL_NOTIFY", "false")
-	config.EmailEnabled = strings.ToLower(emailEnabled) == "true"
+	cfg.EmailEnabled = strings.ToLower(emailEnabled) == "true"
 
-	if config.EmailEnabled {
-		config.SMTPServer = getEnv("SMTP_SERVER", "")
-		if config.SMTPServer == "" {
+	if cfg.EmailEnabled {
+		cfg.SMTPServer = getEnv("SMTP_SERVER", "")
+		if cfg.SMTPServer == "" {
 			return nil, errors.New("SMTP_SERVER is required when EMAIL_NOTIFY is true")
 		}
 
@@ -72,23 +80,23 @@ func LoadConfig() (*Config, error) {
 		if err != nil {
 			return nil, errors.New("invalid SMTP_PORT value")
 		}
-		config.SMTPPort = port
+		cfg.SMTPPort = port
 
-		config.SMTPUser = getEnv("SMTP_USER", "")
-		config.SMTPPassword = getEnv("SMTP_PASSWORD", "")
-		
+		cfg.SMTPUser = getEnv("SMTP_USER", "")
+		cfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
+
 		smtpTLS := getEnv("SMTP_USE_TLS", "false")
-		config.SMTPUseTLS = strings.ToLower(smtpTLS) == "true"
-		
-		config.EmailFrom = getEnv("EMAIL_FROM", "")
-		config.EmailTo = getEnv("EMAIL_TO", "")
+		cfg.SMTPUseTLS = strings.ToLower(smtpTLS) == "true"
+
+		cfg.EmailFrom = getEnv("EMAIL_FROM", "")
+		cfg.EmailTo = getEnv("EMAIL_TO", "")
 	}
 
 	// Load TLS settings
 	tlsEnabled := getEnv("TLS_ENABLED", "false")
-	config.TLSEnabled = strings.ToLower(tlsEnabled) == "true"
+	cfg.TLSEnabled = strings.ToLower(tlsEnabled) == "true"
 
-	return config, nil
+	return cfg, nil
 }
 
 // getEnv gets an environment variable or returns a default value
@@ -98,4 +106,23 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// getEnvOrDefault returns the environment variable value or a default if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return strings.TrimSpace(value)
+}
+
+// GetCADirectory returns the path to the CA directory
+func (c *Config) GetCADirectory() string {
+	return filepath.Join(c.DataDir, "ca")
+}
+
+// GetCertificatesDirectory returns the path to the certificates directory
+func (c *Config) GetCertificatesDirectory() string {
+	return c.DataDir
 }
