@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -56,10 +55,10 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 	// Generate or load server key
 	keyPath := filepath.Join(acmeDir, "server.key")
 	var keyPair *ecdsa.PrivateKey
-	var err error
 
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(keyPath); os.IsNotExist(statErr) {
 		// Generate new key
+		var err error
 		keyPair, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate ACME server key: %w", err)
@@ -132,31 +131,31 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 func (s *ACMEServer) SetupRoutes(router *http.ServeMux) {
 	// Directory endpoint
 	router.HandleFunc("/acme/directory", s.handleDirectory)
-	
+
 	// New nonce endpoint
 	router.HandleFunc("/acme/new-nonce", s.handleNewNonce)
-	
+
 	// New account endpoint
 	router.HandleFunc("/acme/new-account", s.handleNewAccount)
-	
+
 	// New order endpoint
 	router.HandleFunc("/acme/new-order", s.handleNewOrder)
-	
+
 	// Account endpoint
 	router.HandleFunc("/acme/account/", s.handleAccount)
-	
+
 	// Order endpoint
 	router.HandleFunc("/acme/order/", s.handleOrder)
-	
+
 	// Authorization endpoint
 	router.HandleFunc("/acme/authz/", s.handleAuthorization)
-	
+
 	// Challenge endpoint
 	router.HandleFunc("/acme/challenge/", s.handleChallenge)
-	
+
 	// Certificate endpoint
 	router.HandleFunc("/acme/certificate/", s.handleCertificate)
-	
+
 	// Revocation endpoint
 	router.HandleFunc("/acme/revoke-cert", s.handleRevocation)
 }
@@ -169,7 +168,7 @@ func (s *ACMEServer) handleDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := fmt.Sprintf("%s://%s", schemeFromRequest(r), r.Host)
-	
+
 	directory := map[string]interface{}{
 		"newNonce":   baseURL + "/acme/new-nonce",
 		"newAccount": baseURL + "/acme/new-account",
@@ -216,7 +215,7 @@ func (s *ACMEServer) handleNewAccount(w http.ResponseWriter, r *http.Request) {
 	// 1. Validating the JWS signature
 	// 2. Creating a new account
 	// 3. Storing the account information
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -238,12 +237,12 @@ func (s *ACMEServer) handleNewOrder(w http.ResponseWriter, r *http.Request) {
 	// 1. Validating the JWS signature
 	// 2. Creating a new order
 	// 3. Creating authorizations for each domain
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "pending",
+		"status":  "pending",
 		"expires": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 		"identifiers": []map[string]string{
 			{"type": "dns", "value": "example.com"},
@@ -267,13 +266,13 @@ func (s *ACMEServer) handleAccount(w http.ResponseWriter, r *http.Request) {
 	// 1. Validating the JWS signature
 	// 2. Retrieving the account
 	// 3. Updating the account if necessary
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "valid",
+		"status":  "valid",
 		"contact": []string{"mailto:admin@example.com"},
-		"orders": fmt.Sprintf("%s://%s/acme/orders", schemeFromRequest(r), r.Host),
+		"orders":  fmt.Sprintf("%s://%s/acme/orders", schemeFromRequest(r), r.Host),
 	})
 }
 
@@ -289,11 +288,11 @@ func (s *ACMEServer) handleOrder(w http.ResponseWriter, r *http.Request) {
 	// 1. Validating the JWS signature
 	// 2. Retrieving the order
 	// 3. Updating the order if necessary
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "pending",
+		"status":  "pending",
 		"expires": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 		"identifiers": []map[string]string{
 			{"type": "dns", "value": "example.com"},
@@ -317,25 +316,25 @@ func (s *ACMEServer) handleAuthorization(w http.ResponseWriter, r *http.Request)
 	// 1. Validating the JWS signature
 	// 2. Retrieving the authorization
 	// 3. Updating the authorization if necessary
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "pending",
+		"status":  "pending",
 		"expires": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 		"identifier": map[string]string{
-			"type": "dns",
+			"type":  "dns",
 			"value": "example.com",
 		},
 		"challenges": []map[string]interface{}{
 			{
-				"type": "http-01",
-				"url": fmt.Sprintf("%s://%s/acme/challenge/http01/example", schemeFromRequest(r), r.Host),
+				"type":  "http-01",
+				"url":   fmt.Sprintf("%s://%s/acme/challenge/http01/example", schemeFromRequest(r), r.Host),
 				"token": "token",
 			},
 			{
-				"type": "dns-01",
-				"url": fmt.Sprintf("%s://%s/acme/challenge/dns01/example", schemeFromRequest(r), r.Host),
+				"type":  "dns-01",
+				"url":   fmt.Sprintf("%s://%s/acme/challenge/dns01/example", schemeFromRequest(r), r.Host),
 				"token": "token",
 			},
 		},
@@ -355,14 +354,14 @@ func (s *ACMEServer) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	// 2. Retrieving the challenge
 	// 3. Validating the challenge
 	// 4. Updating the challenge status
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "valid",
-		"type": "http-01",
-		"url": fmt.Sprintf("%s://%s/acme/challenge/http01/example", schemeFromRequest(r), r.Host),
-		"token": "token",
+		"status":    "valid",
+		"type":      "http-01",
+		"url":       fmt.Sprintf("%s://%s/acme/challenge/http01/example", schemeFromRequest(r), r.Host),
+		"token":     "token",
 		"validated": time.Now().Format(time.RFC3339),
 	})
 }
@@ -380,7 +379,7 @@ func (s *ACMEServer) handleCertificate(w http.ResponseWriter, r *http.Request) {
 	// 2. Retrieving the order
 	// 3. Verifying that all authorizations are valid
 	// 4. Issuing the certificate
-	
+
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/pem-certificate-chain")
 	w.Write([]byte("-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUJlK7RCseiIHMJvTQRFNSGr11lPwwDQYJKoZIhvcNAQEL\n-----END CERTIFICATE-----"))
@@ -399,7 +398,7 @@ func (s *ACMEServer) handleRevocation(w http.ResponseWriter, r *http.Request) {
 	// 2. Retrieving the certificate
 	// 3. Verifying that the requester is authorized to revoke the certificate
 	// 4. Revoking the certificate
-	
+
 	// For now, return a success response
 	w.WriteHeader(http.StatusOK)
 }
@@ -463,4 +462,4 @@ func StartACMEServer(ctx context.Context, certSvc *certificates.CertificateServi
 	}
 
 	return nil
-} 
+}
