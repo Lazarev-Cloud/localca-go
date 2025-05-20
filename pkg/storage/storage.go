@@ -1,13 +1,6 @@
 package storage
 
-import (
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-)
+import (	"crypto/x509"	"encoding/pem"	"fmt"	"os"	"path/filepath")
 
 // Storage handles certificate storage
 type Storage struct {
