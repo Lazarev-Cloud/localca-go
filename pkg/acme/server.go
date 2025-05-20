@@ -29,11 +29,31 @@ type ACMEServer struct {
 	storage    *storage.Storage
 	domains    map[string]bool
 	challenges map[string]string
-	nonces     map[string]bool
+	nonces     map[string]time.Time // Changed to track nonce expiration time
 	accounts   map[string]*Account
 	mutex      sync.RWMutex
 	keyPair    *ecdsa.PrivateKey
+	// Rate limiting
+	ipRateLimits      map[string]*RateLimit
+	accountRateLimits map[string]*RateLimit
+	rateLimitMutex    sync.RWMutex
 }
+
+// RateLimit represents rate limiting information
+type RateLimit struct {
+	Count      int
+	ResetTime  time.Time
+	LastAccess time.Time
+}
+
+// NonceExpiration is the time after which a nonce expires
+const NonceExpiration = 1 * time.Hour
+
+// RateLimitWindow is the time window for rate limiting
+const RateLimitWindow = 1 * time.Hour
+
+// RateLimitMax is the maximum number of requests per window
+const RateLimitMax = 100
 
 // Account represents an ACME account
 type Account struct {
@@ -116,48 +136,202 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 		}
 	}
 
-	return &ACMEServer{
-		certSvc:    certSvc,
-		storage:    store,
-		domains:    make(map[string]bool),
-		challenges: make(map[string]string),
-		nonces:     make(map[string]bool),
-		accounts:   accounts,
-		keyPair:    keyPair,
-	}, nil
+	// Start a goroutine to clean up expired nonces periodically
+	server := &ACMEServer{
+		certSvc:           certSvc,
+		storage:           store,
+		domains:           make(map[string]bool),
+		challenges:        make(map[string]string),
+		nonces:            make(map[string]time.Time),
+		accounts:          accounts,
+		keyPair:           keyPair,
+		ipRateLimits:      make(map[string]*RateLimit),
+		accountRateLimits: make(map[string]*RateLimit),
+	}
+
+	// Start cleanup goroutine
+	go server.cleanupExpiredNonces()
+
+	return server, nil
+}
+
+// cleanupExpiredNonces periodically removes expired nonces
+func (s *ACMEServer) cleanupExpiredNonces() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.mutex.Lock()
+		now := time.Now()
+		for nonce, expiry := range s.nonces {
+			if now.After(expiry) {
+				delete(s.nonces, nonce)
+			}
+		}
+		s.mutex.Unlock()
+	}
+}
+
+// cleanupRateLimits periodically removes expired rate limits
+func (s *ACMEServer) cleanupRateLimits() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.rateLimitMutex.Lock()
+		now := time.Now()
+
+		// Clean up IP rate limits
+		for ip, limit := range s.ipRateLimits {
+			if now.After(limit.ResetTime) {
+				delete(s.ipRateLimits, ip)
+			}
+		}
+
+		// Clean up account rate limits
+		for account, limit := range s.accountRateLimits {
+			if now.After(limit.ResetTime) {
+				delete(s.accountRateLimits, account)
+			}
+		}
+
+		s.rateLimitMutex.Unlock()
+	}
+}
+
+// checkRateLimit checks if a request is within rate limits
+func (s *ACMEServer) checkRateLimit(r *http.Request, accountID string) bool {
+	ip := getClientIP(r)
+	now := time.Now()
+
+	// Check IP-based rate limit
+	s.rateLimitMutex.Lock()
+	defer s.rateLimitMutex.Unlock()
+
+	ipLimit, ok := s.ipRateLimits[ip]
+	if !ok {
+		ipLimit = &RateLimit{
+			Count:      1,
+			ResetTime:  now.Add(RateLimitWindow),
+			LastAccess: now,
+		}
+		s.ipRateLimits[ip] = ipLimit
+		return true
+	}
+
+	// Reset if window has expired
+	if now.After(ipLimit.ResetTime) {
+		ipLimit.Count = 1
+		ipLimit.ResetTime = now.Add(RateLimitWindow)
+		ipLimit.LastAccess = now
+		return true
+	}
+
+	// Check if limit exceeded
+	if ipLimit.Count >= RateLimitMax {
+		return false
+	}
+
+	// Increment counter and update time
+	ipLimit.Count++
+	ipLimit.LastAccess = now
+
+	// If we have an account ID, also check account-based rate limit
+	if accountID != "" {
+		acctLimit, ok := s.accountRateLimits[accountID]
+		if !ok {
+			acctLimit = &RateLimit{
+				Count:      1,
+				ResetTime:  now.Add(RateLimitWindow),
+				LastAccess: now,
+			}
+			s.accountRateLimits[accountID] = acctLimit
+			return true
+		}
+
+		// Reset if window has expired
+		if now.After(acctLimit.ResetTime) {
+			acctLimit.Count = 1
+			acctLimit.ResetTime = now.Add(RateLimitWindow)
+			acctLimit.LastAccess = now
+			return true
+		}
+
+		// Check if limit exceeded
+		if acctLimit.Count >= RateLimitMax {
+			return false
+		}
+
+		// Increment counter and update time
+		acctLimit.Count++
+		acctLimit.LastAccess = now
+	}
+
+	return true
+}
+
+// getClientIP gets the client IP address from a request
+func getClientIP(r *http.Request) string {
+	// Check for X-Forwarded-For header
+	forwardedFor := r.Header.Get("X-Forwarded-For")
+	if forwardedFor != "" {
+		return forwardedFor
+	}
+
+	// Otherwise use RemoteAddr
+	return r.RemoteAddr
 }
 
 // SetupRoutes configures the ACME server routes
 func (s *ACMEServer) SetupRoutes(router *http.ServeMux) {
 	// Directory endpoint
-	router.HandleFunc("/acme/directory", s.handleDirectory)
+	router.HandleFunc("/acme/directory", s.securityMiddleware(s.handleDirectory))
 
 	// New nonce endpoint
-	router.HandleFunc("/acme/new-nonce", s.handleNewNonce)
+	router.HandleFunc("/acme/new-nonce", s.securityMiddleware(s.handleNewNonce))
 
 	// New account endpoint
-	router.HandleFunc("/acme/new-account", s.handleNewAccount)
+	router.HandleFunc("/acme/new-account", s.securityMiddleware(s.handleNewAccount))
 
 	// New order endpoint
-	router.HandleFunc("/acme/new-order", s.handleNewOrder)
+	router.HandleFunc("/acme/new-order", s.securityMiddleware(s.handleNewOrder))
 
 	// Account endpoint
-	router.HandleFunc("/acme/account/", s.handleAccount)
+	router.HandleFunc("/acme/account/", s.securityMiddleware(s.handleAccount))
 
 	// Order endpoint
-	router.HandleFunc("/acme/order/", s.handleOrder)
+	router.HandleFunc("/acme/order/", s.securityMiddleware(s.handleOrder))
 
 	// Authorization endpoint
-	router.HandleFunc("/acme/authz/", s.handleAuthorization)
+	router.HandleFunc("/acme/authz/", s.securityMiddleware(s.handleAuthorization))
 
 	// Challenge endpoint
-	router.HandleFunc("/acme/challenge/", s.handleChallenge)
+	router.HandleFunc("/acme/challenge/", s.securityMiddleware(s.handleChallenge))
 
 	// Certificate endpoint
-	router.HandleFunc("/acme/certificate/", s.handleCertificate)
+	router.HandleFunc("/acme/certificate/", s.securityMiddleware(s.handleCertificate))
 
 	// Revocation endpoint
-	router.HandleFunc("/acme/revoke-cert", s.handleRevocation)
+	router.HandleFunc("/acme/revoke-cert", s.securityMiddleware(s.handleRevocation))
+}
+
+// securityMiddleware adds security headers and rate limiting
+func (s *ACMEServer) securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Add security headers
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+		// Check rate limit
+		if !s.checkRateLimit(r, "") {
+			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+
+		next(w, r)
+	}
 }
 
 // handleDirectory handles the ACME directory endpoint
@@ -195,12 +369,33 @@ func (s *ACMEServer) handleNewNonce(w http.ResponseWriter, r *http.Request) {
 
 	nonce := generateNonce()
 	s.mutex.Lock()
-	s.nonces[nonce] = true
+	s.nonces[nonce] = time.Now().Add(NonceExpiration) // Store with expiration time
 	s.mutex.Unlock()
 
 	w.Header().Set("Replay-Nonce", nonce)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// validateNonce validates a nonce and removes it if valid
+func (s *ACMEServer) validateNonce(nonce string) bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	expiry, exists := s.nonces[nonce]
+	if !exists {
+		return false
+	}
+
+	// Check if nonce has expired
+	if time.Now().After(expiry) {
+		delete(s.nonces, nonce)
+		return false
+	}
+
+	// Remove the nonce to prevent reuse
+	delete(s.nonces, nonce)
+	return true
 }
 
 // handleNewAccount handles the ACME new-account endpoint
@@ -437,6 +632,10 @@ func StartACMEServer(ctx context.Context, certSvc *certificates.CertificateServi
 		Addr:      addr,
 		Handler:   mux,
 		TLSConfig: tlsConfig,
+		// Set timeouts to prevent slow client attacks
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
