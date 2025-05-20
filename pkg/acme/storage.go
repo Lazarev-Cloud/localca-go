@@ -11,11 +11,11 @@ import (
 
 // ACMEStorage handles storage of ACME data
 type ACMEStorage struct {
-	basePath string
-	mutex    sync.RWMutex
-	accounts map[string]*Account
-	orders   map[string]*Order
-	authzs   map[string]*Authorization
+	basePath   string
+	mutex      sync.RWMutex
+	accounts   map[string]*Account
+	orders     map[string]*Order
+	authzs     map[string]*Authorization
 	challenges map[string]*Challenge
 }
 
@@ -198,7 +198,6 @@ func (s *ACMEStorage) FindAccountByKey(key []byte) (*Account, error) {
 
 	// This is a simplistic implementation
 	// In a real system, you would hash the key and use it as an index
-	keyStr := string(key)
 	for _, account := range s.accounts {
 		// Compare the key bytes
 		// This is just a placeholder - in a real implementation,
@@ -397,4 +396,4 @@ func (s *ACMEStorage) CleanupExpired() error {
 	}
 
 	return nil
-} 
+}
