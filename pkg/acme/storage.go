@@ -1,12 +1,18 @@
 package acme
 
 import (
+	"crypto/ecdsa"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"crypto/x509"
 )
 
 // ACMEStorage handles storage of ACME data
@@ -196,16 +202,35 @@ func (s *ACMEStorage) FindAccountByKey(key []byte) (*Account, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	// This is a simplistic implementation
-	// In a real system, you would hash the key and use it as an index
+	// Hash the key for comparison
+	keyHash := sha256.Sum256(key)
+	keyHashStr := base64.RawURLEncoding.EncodeToString(keyHash[:])
+
 	for _, account := range s.accounts {
-		// Compare the key bytes
-		// This is just a placeholder - in a real implementation,
-		// you would compare the actual public keys
 		if account.Key != nil {
-			// Compare the keys
-			// This is a placeholder
-			if true { // Replace with actual comparison
+			// Convert the account key to bytes for comparison
+			var keyBytes []byte
+			var err error
+
+			switch k := account.Key.(type) {
+			case *rsa.PublicKey:
+				keyBytes, err = x509.MarshalPKIXPublicKey(k)
+			case *ecdsa.PublicKey:
+				keyBytes, err = x509.MarshalPKIXPublicKey(k)
+			default:
+				continue // Skip unknown key types
+			}
+
+			if err != nil {
+				continue // Skip if we can't marshal the key
+			}
+
+			// Hash the account key
+			accountKeyHash := sha256.Sum256(keyBytes)
+			accountKeyHashStr := base64.RawURLEncoding.EncodeToString(accountKeyHash[:])
+
+			// Compare the key hashes
+			if keyHashStr == accountKeyHashStr {
 				return account, nil
 			}
 		}
