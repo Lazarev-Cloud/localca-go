@@ -90,6 +90,10 @@ func main() {
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: router,
+		// Add timeouts to prevent slow client attacks
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Create context for graceful shutdown
