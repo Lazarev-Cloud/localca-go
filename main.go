@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Initialize storage
-	store, err := storage.NewStorage(cfg.StoragePath)
+	store, err := storage.NewStorage(cfg.DataDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
@@ -88,7 +88,7 @@ func main() {
 
 	// Configure server
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    cfg.ListenAddr,
 		Handler: router,
 		// Add timeouts to prevent slow client attacks
 		ReadTimeout:  10 * time.Second,
@@ -190,7 +190,7 @@ func main() {
 	}
 
 	// Start HTTP server
-	log.Println("HTTP server starting on port 8080...")
+	log.Printf("HTTP server starting on %s...", cfg.ListenAddr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
