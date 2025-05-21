@@ -1,0 +1,80 @@
+name: Container Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+  schedule:
+    - cron: '0 8 * * 1' # Run every Monday at 8:00 AM UTC
+  workflow_dispatch:
+
+jobs:
+  scan:
+    name: Scan Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: ghcr.io/localca-go/backend:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: false
+          load: true
+          tags: ghcr.io/localca-go/frontend:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/localca-go/backend:scan
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Scan frontend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/localca-go/frontend:scan
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload backend scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+          category: container-backend
+
+      - name: Upload frontend scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-frontend-results.sarif'
+          category: container-frontend 
