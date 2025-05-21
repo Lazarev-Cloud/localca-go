@@ -37,7 +37,7 @@ jobs:
       - name: Merge coverage reports
         run: |
           echo "mode: set" > coverage-merged.out
-          grep -h -v "mode: set" coverage*.out >> coverage-merged.out
+          grep -h -v "mode: set" coverage.out coverage-main.out >> coverage-merged.out
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
