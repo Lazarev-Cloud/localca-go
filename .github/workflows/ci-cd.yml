@@ -9,6 +9,16 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run tests against'
+        type: choice
+        options:
+          - dev
+          - test
+        default: 'dev'
+        required: true
 
 jobs:
   test:
@@ -24,8 +34,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: true
 
-      - name: Install dependencies
+      - name: Install Go dependencies
         run: go mod download
 
       - name: Run package tests
@@ -40,6 +51,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      # Create temporary package.json with compatible testing libraries
+      - name: Update testing library versions in package.json
+        run: |
+          jq '.devDependencies."@testing-library/react" = "^14.0.0"' package.json > tmp.json && mv tmp.json package.json
+          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json && mv tmp.json package.json
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -48,7 +65,7 @@ jobs:
 
       - name: Run ESLint
         run: npx eslint -f checkstyle app components hooks lib -o eslint-report.xml || true
-
+        
       - name: Merge coverage reports
         run: |
           echo "mode: set" > coverage-merged.out
@@ -64,6 +81,60 @@ jobs:
             coverage-main.out
             coverage/lcov.info
             eslint-report.xml
+
+  build:
+    name: Test Build Process
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Go dependencies
+        run: go mod download
+
+      - name: Build Go application
+        run: go build -v -o localca-go
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Create temporary package.json with compatible testing libraries
+      - name: Update testing library versions in package.json
+        run: |
+          jq '.devDependencies."@testing-library/react" = "^14.0.0"' package.json > tmp.json && mv tmp.json package.json
+          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json && mv tmp.json package.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          if [ ! -f "localca-go" ]; then
+            echo "Go build failed - executable not found"
+            exit 1
+          fi
+          
+          if [ ! -d ".next" ]; then
+            echo "Next.js build failed - .next directory not found"
+            exit 1
+          fi
+          
+          echo "✅ Build verification successful"
+          ls -la localca-go
+          du -sh .next
 
   sonarqube:
     name: SonarQube Analysis
@@ -90,11 +161,17 @@ jobs:
             mv lcov.info coverage/lcov.info
           fi
 
-      # Run Go linters
+      # Install and run Go linters
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
       - name: Install Go linters
         run: |
           go install golang.org/x/lint/golint@latest
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57.0
 
       - name: Run Go Vet
         run: go vet ./... > govet-report.out || true
@@ -107,35 +184,32 @@ jobs:
 
       # Install SonarScanner
       - name: Set up SonarQube Scanner
-        uses: warchant/setup-sonar-scanner@v7
-        
-      - name: SonarQube Scan
+        uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          sonar-scanner \
-            -Dsonar.projectKey=Lazarev-Cloud_localca-go \
-            -Dsonar.organization=lazarev-cloud \
-            -Dsonar.sources=. \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
-            -Dsonar.go.coverage.reportPaths=coverage-merged.out \
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/** \
-            -Dsonar.tests=. \
-            -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx \
-            -Dsonar.go.govet.reportPaths=govet-report.out \
-            -Dsonar.go.golint.reportPaths=golint-report.out \
-            -Dsonar.go.golangci-lint.reportPaths=golangci-lint-report.xml \
-            -Dsonar.javascript.node.maxspace=4096 \
-            -Dsonar.sourceEncoding=UTF-8 \
-            -Dsonar.typescript.tsconfigPaths=tsconfig.json \
+        with:
+          args: >
+            -Dsonar.projectKey=Lazarev-Cloud_localca-go
+            -Dsonar.organization=lazarev-cloud
+            -Dsonar.sources=.
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.go.coverage.reportPaths=coverage-merged.out
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx
+            -Dsonar.go.govet.reportPaths=govet-report.out
+            -Dsonar.go.golint.reportPaths=golint-report.out
+            -Dsonar.go.golangci-lint.reportPaths=golangci-lint-report.xml
+            -Dsonar.javascript.node.maxspace=4096
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.typescript.tsconfigPaths=tsconfig.json
             -Dsonar.eslint.reportPaths=eslint-report.xml
 
   docker:
     name: Build and Push Docker Images
-    needs: [test, sonarqube]
+    needs: [test, sonarqube, build]
     runs-on: ubuntu-latest
     # Only run this job on main branch or tags, not on PRs
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))

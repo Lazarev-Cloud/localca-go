@@ -3,16 +3,16 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
+COPY package.json package-lock.json* ./
 
-# Install dependencies using pnpm
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# Install dependencies
+RUN npm ci
 
 # Copy the rest of the application
 COPY . .
 
 # Build the application
-RUN pnpm run build
+RUN npm run build
 
 # Production image
 FROM node:20-alpine AS runner

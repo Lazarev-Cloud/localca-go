@@ -7,12 +7,15 @@
 *.dll
 *.so
 *.dylib
+localca-go
 
 # Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage*.out
+coverage-merged.out
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -26,5 +29,32 @@ data/
 cakey.txt
 *.p12
 /data
+
+# Next.js
 /node_modules
 /.next
+/.pnp
+.pnp.js
+.swc/
+
+# Testing
+/coverage
+/eslint-report.xml
+/govet-report.out
+/golint-report.out
+/golangci-lint-report.xml
+
+# Production
+/build
+/dist
+
+# Misc
+.DS_Store
+*.pem
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
