@@ -183,12 +183,7 @@ func validateSetupToken(config *AuthConfig, token string) bool {
 		time.Now().Before(config.SetupTokenExpiry)
 }
 
-// validateSession validates a session token
-func validateSession(sessionToken string, store *storage.Storage) bool {
-	// TODO: Implement proper session validation
-	// For now, just check if the token exists
-	return sessionToken != ""
-}
+// validateSession validates a session tokenfunc validateSession(sessionToken string, store *storage.Storage) bool {	// Create a sessions directory if it doesn't exist	sessionsDir := filepath.Join(store.GetBasePath(), "sessions")	if err := os.MkdirAll(sessionsDir, 0700); err != nil {		log.Printf("Failed to create sessions directory: %v", err)		return false	}		// Check if session file exists	sessionFile := filepath.Join(sessionsDir, filepath.Base(sessionToken))	info, err := os.Stat(sessionFile)	if err != nil {		return false	}		// Check if session has expired (24 hours)	if time.Since(info.ModTime()) > 24*time.Hour {		// Remove expired session		os.Remove(sessionFile)		return false	}		return true}
 
 // generateSessionToken generates a new session token
 func generateSessionToken() string {
