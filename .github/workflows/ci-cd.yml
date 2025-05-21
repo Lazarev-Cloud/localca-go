@@ -249,7 +249,15 @@ jobs:
 
       - name: Create coverage files
         run: |
-          mkdir -p coverage
+          # Check if coverage directory exists first
+          if [ -d "coverage" ]; then
+            echo "Coverage directory exists, not creating it"
+          else
+            echo "Creating coverage directory"
+            mkdir -p coverage
+          fi
+          
+          # Create necessary files
           touch coverage/lcov.info
           echo "mode: set" > coverage-merged.out
 
