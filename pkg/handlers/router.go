@@ -46,8 +46,8 @@ func cleanupCSRFTokens() {
 	}
 }
 
-// SetupRoutes configures the routes for the application
-func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) {
+// SetupRoutes configures all routes for the application
+func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) {
 	// Add middleware
 	router.Use(gin.Recovery())
 

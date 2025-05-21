@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/email"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
+	"github.com/gin-gonic/gin"
 )
 
 // settingsHandler handles the settings page
-func settingsHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func settingsHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get email settings
 		smtpServer, smtpPort, smtpUser, smtpPass, emailFrom, emailTo, useTLS, useStartTLS, err := store.GetEmailSettings()
@@ -38,7 +38,7 @@ func settingsHandler(certSvc *certificates.CertificateService, store *storage.St
 }
 
 // saveSettingsHandler handles saving email settings
-func saveSettingsHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func saveSettingsHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		smtpServer := c.PostForm("smtp_server")
@@ -96,7 +96,7 @@ func saveSettingsHandler(certSvc *certificates.CertificateService, store *storag
 }
 
 // testEmailHandler tests email settings
-func testEmailHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func testEmailHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get test email address
 		testEmail := c.PostForm("test_email")

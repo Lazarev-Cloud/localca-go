@@ -13,7 +13,7 @@ import (
 )
 
 // setupAPIRoutes adds API routes for the Next.js frontend
-func SetupAPIRoutes(router *gin.Engine, certSvc *certificates.CertificateService, store *storage.Storage) {
+func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInterface, store *storage.Storage) {
 	api := router.Group("/api")
 	{
 		// CORS middleware for API routes
@@ -55,7 +55,7 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 // apiGetCertificatesHandler returns all certificates as JSON
-func apiGetCertificatesHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiGetCertificatesHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// List all certificates
 		certNames, err := store.ListCertificates()
@@ -90,7 +90,7 @@ func apiGetCertificatesHandler(certSvc *certificates.CertificateService, store *
 }
 
 // apiCreateCertificateHandler creates a new certificate via API
-func apiCreateCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiCreateCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		commonName := c.PostForm("common_name")
@@ -149,7 +149,7 @@ func apiCreateCertificateHandler(certSvc *certificates.CertificateService, store
 }
 
 // apiGetCAInfoHandler returns CA information as JSON
-func apiGetCAInfoHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiGetCAInfoHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get CA info
 		caInfo, err := getCAInfo(store)
@@ -171,7 +171,7 @@ func apiGetCAInfoHandler(certSvc *certificates.CertificateService, store *storag
 }
 
 // apiRevokeCertificateHandler revokes a certificate via API
-func apiRevokeCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiRevokeCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get serial number
 		serialNumber := c.PostForm("serial_number")
@@ -212,7 +212,7 @@ func apiRevokeCertificateHandler(certSvc *certificates.CertificateService, store
 }
 
 // apiRenewCertificateHandler renews a certificate via API
-func apiRenewCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiRenewCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get serial number
 		serialNumber := c.PostForm("serial_number")
@@ -266,7 +266,7 @@ func apiRenewCertificateHandler(certSvc *certificates.CertificateService, store 
 }
 
 // apiDeleteCertificateHandler deletes a certificate via API
-func apiDeleteCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiDeleteCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get serial number
 		serialNumber := c.PostForm("serial_number")

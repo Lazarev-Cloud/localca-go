@@ -63,15 +63,24 @@ jobs:
         with:
           name: coverage-reports
 
+      # Install SonarScanner
+      - name: Set up SonarQube Scanner
+        uses: warchant/setup-sonar-scanner@v7
+        
       - name: SonarQube Scan
-        uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.go.coverage.reportPaths=coverage-merged.out
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=Lazarev-Cloud_localca-go \
+            -Dsonar.organization=lazarev-cloud \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.go.coverage.reportPaths=coverage-merged.out \
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**
 
   docker:
     name: Build and Push Docker Images

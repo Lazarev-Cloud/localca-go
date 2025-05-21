@@ -19,7 +19,7 @@ import (
 )
 
 // indexHandler handles the home page
-func indexHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func indexHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get CA info
 		caName, _, organization, country, err := store.GetCAInfo()
@@ -75,7 +75,7 @@ func indexHandler(certSvc *certificates.CertificateService, store *storage.Stora
 }
 
 // createCertificateHandler handles certificate creation
-func createCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func createCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		commonName := c.PostForm("cn")
@@ -133,7 +133,7 @@ func createCertificateHandler(certSvc *certificates.CertificateService, store *s
 }
 
 // renewCertificateHandler handles certificate renewal
-func renewCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func renewCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get certificate name
 		name := c.PostForm("name")
@@ -176,7 +176,7 @@ func renewCertificateHandler(certSvc *certificates.CertificateService, store *st
 }
 
 // deleteCertificateHandler handles certificate deletion
-func deleteCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func deleteCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get certificate name
 		name := c.PostForm("name")
@@ -206,7 +206,7 @@ func deleteCertificateHandler(certSvc *certificates.CertificateService, store *s
 }
 
 // renewCAHandler handles CA certificate renewal
-func renewCAHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func renewCAHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Renew CA certificate
 		if err := certSvc.RenewCA(); err != nil {
@@ -226,7 +226,7 @@ func renewCAHandler(certSvc *certificates.CertificateService, store *storage.Sto
 }
 
 // revokeCertificateHandler handles certificate revocation
-func revokeCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func revokeCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get certificate name
 		name := c.PostForm("name")
@@ -256,7 +256,7 @@ func revokeCertificateHandler(certSvc *certificates.CertificateService, store *s
 }
 
 // downloadCAHandler handles CA certificate download
-func downloadCAHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func downloadCAHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		caPath := store.GetCAPublicCopyPath()
 		c.FileAttachment(caPath, "ca.pem")
@@ -264,7 +264,7 @@ func downloadCAHandler(certSvc *certificates.CertificateService, store *storage.
 }
 
 // downloadCRLHandler handles CRL download
-func downloadCRLHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func downloadCRLHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		crlPath := filepath.Join(store.GetBasePath(), "ca.crl")
 		if _, err := os.Stat(crlPath); os.IsNotExist(err) {
@@ -279,7 +279,7 @@ func downloadCRLHandler(certSvc *certificates.CertificateService, store *storage
 }
 
 // downloadCertificateHandler handles certificate download
-func downloadCertificateHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func downloadCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
 		fileType := c.Param("type")

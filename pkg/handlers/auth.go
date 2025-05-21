@@ -18,6 +18,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Default values
+const (
+	DefaultAdminUsername = "admin"
+)
+
 // AuthConfig stores authentication configuration
 type AuthConfig struct {
 	AdminUsername     string    `json:"admin_username"`
@@ -27,14 +32,13 @@ type AuthConfig struct {
 	SetupTokenExpiry  time.Time `json:"setup_token_expiry,omitempty"`
 }
 
-// Default admin username
-const DefaultAdminUsername = "admin"
-
-// authMiddleware checks if the user is authenticated
+// authMiddleware handles authentication
 func authMiddleware(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip authentication for certain paths
+		// Get path
 		path := c.Request.URL.Path
+
+		// Skip authentication for public paths
 		if isPublicPath(path) {
 			c.Next()
 			return
@@ -44,39 +48,12 @@ func authMiddleware(store *storage.Storage) gin.HandlerFunc {
 		authConfig, err := LoadAuthConfig(store)
 		if err != nil {
 			log.Printf("Failed to load auth config: %v", err)
-			c.JSON(http.StatusInternalServerError, APIResponse{
-				Success: false,
-				Message: "Internal server error",
-			})
-			c.Abort()
+			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
-		// If setup is not completed, check if this is a setup request
+		// If setup is not completed, redirect to setup page
 		if !authConfig.SetupCompleted {
-			// If this is the setup path, allow access
-			if path == "/api/setup" || path == "/setup" {
-				// Check setup token if it's a POST request
-				if c.Request.Method == "POST" {
-					token := c.PostForm("setup_token")
-					if token == "" {
-						token = c.GetHeader("X-Setup-Token")
-					}
-
-					// Validate setup token
-					if !validateSetupToken(authConfig, token) {
-						c.JSON(http.StatusUnauthorized, APIResponse{
-							Success: false,
-							Message: "Invalid or expired setup token",
-						})
-						c.Abort()
-						return
-					}
-				}
-				c.Next()
-				return
-			}
-
 			// Redirect to setup page
 			if strings.HasPrefix(path, "/api/") {
 				c.JSON(http.StatusUnauthorized, APIResponse{
@@ -265,4 +242,4 @@ func completeSetup(username, password string, store *storage.Storage) error {
 	}
 
 	return nil
-}
+} 

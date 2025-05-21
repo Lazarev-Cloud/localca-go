@@ -330,7 +330,7 @@ func TestAuthMiddleware(t *testing.T) {
 	req = httptest.NewRequest("GET", "/setup", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusSeeOther, w.Code) // Updated: setup path redirects to setup page
 
 	// Test 4: Complete setup and verify protected path requires session
 	err = completeSetup("admin", "password", store)

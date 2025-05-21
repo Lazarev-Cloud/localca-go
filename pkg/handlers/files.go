@@ -38,7 +38,7 @@ type CertificateDetails struct {
 }
 
 // filesHandler handles the certificate files page
-func filesHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func filesHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get certificate name
 		name := c.Query("name")

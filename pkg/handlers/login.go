@@ -12,7 +12,7 @@ import (
 )
 
 // loginHandler handles the login page
-func loginHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func loginHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if setup is completed
 		authConfig, err := LoadAuthConfig(store)
@@ -38,7 +38,7 @@ func loginHandler(certSvc *certificates.CertificateService, store *storage.Stora
 }
 
 // loginPostHandler handles login form submission
-func loginPostHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func loginPostHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		username := c.PostForm("username")
@@ -92,7 +92,7 @@ func loginPostHandler(certSvc *certificates.CertificateService, store *storage.S
 }
 
 // apiLoginHandler handles API login
-func apiLoginHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get JSON data
 		var loginData struct {
@@ -181,7 +181,7 @@ func logoutHandler() gin.HandlerFunc {
 }
 
 // setupHandler handles the initial setup page
-func setupHandler(certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
+func setupHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if setup is already completed
 		authConfig, err := LoadAuthConfig(store)
@@ -208,7 +208,7 @@ func setupHandler(certSvc *certificates.CertificateService, store *storage.Stora
 }
 
 // setupPostHandler handles setup form submission
-func setupPostHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func setupPostHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get form data
 		username := c.PostForm("username")
@@ -274,7 +274,7 @@ func setupPostHandler(certSvc *certificates.CertificateService, store *storage.S
 }
 
 // apiSetupHandler handles API setup
-func apiSetupHandler(certSvc *certificates.CertificateService, store *storage.Storage) gin.HandlerFunc {
+func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// GET request returns setup info
 		if c.Request.Method == "GET" {
