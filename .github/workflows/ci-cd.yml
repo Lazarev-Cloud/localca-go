@@ -58,13 +58,16 @@ jobs:
       - name: Set Docker tags
         id: tags
         run: |
+          # Convert repository name to lowercase
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
-            echo "BACKEND_TAGS=ghcr.io/${{ github.repository }}/backend:latest,ghcr.io/${{ github.repository }}/backend:${VERSION}" >> $GITHUB_ENV
-            echo "FRONTEND_TAGS=ghcr.io/${{ github.repository }}/frontend:latest,ghcr.io/${{ github.repository }}/frontend:${VERSION}" >> $GITHUB_ENV
+            echo "BACKEND_TAGS=ghcr.io/${REPO_LOWER}/backend:latest,ghcr.io/${REPO_LOWER}/backend:${VERSION}" >> $GITHUB_ENV
+            echo "FRONTEND_TAGS=ghcr.io/${REPO_LOWER}/frontend:latest,ghcr.io/${REPO_LOWER}/frontend:${VERSION}" >> $GITHUB_ENV
           else
-            echo "BACKEND_TAGS=ghcr.io/${{ github.repository }}/backend:unstable" >> $GITHUB_ENV
-            echo "FRONTEND_TAGS=ghcr.io/${{ github.repository }}/frontend:unstable" >> $GITHUB_ENV
+            echo "BACKEND_TAGS=ghcr.io/${REPO_LOWER}/backend:unstable" >> $GITHUB_ENV
+            echo "FRONTEND_TAGS=ghcr.io/${REPO_LOWER}/frontend:unstable" >> $GITHUB_ENV
           fi
 
       - name: Build and push backend image
