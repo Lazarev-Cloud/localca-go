@@ -352,3 +352,20 @@ func (s *Storage) GetCertificateNameBySerial(serialNumber string) (string, error
 
 	return "", fmt.Errorf("certificate with serial number %s not found", serialNumber)
 }
+
+// CreateCertificateDirectory creates a directory for a certificate
+func (s *Storage) CreateCertificateDirectory(name string) error {
+	certDir := filepath.Join(s.basePath, name)
+	return os.MkdirAll(certDir, 0755)
+}
+
+// SaveCertificateSerialMapping saves a mapping from serial number to certificate name
+func (s *Storage) SaveCertificateSerialMapping(serialNumber, certName string) error {
+	serialsDir := filepath.Join(s.basePath, "serials")
+	if err := os.MkdirAll(serialsDir, 0755); err != nil {
+		return err
+	}
+
+	serialFile := filepath.Join(serialsDir, serialNumber)
+	return os.WriteFile(serialFile, []byte(certName), 0644)
+}
