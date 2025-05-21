@@ -242,4 +242,4 @@ func completeSetup(username, password string, store *storage.Storage) error {
 	}
 
 	return nil
-} 
+}
