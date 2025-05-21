@@ -435,28 +435,13 @@ LocalCA-Go includes a Software Bill of Materials (SBOM) in [SPDX format](https:/
 
 - `SPDX.json`: The main SBOM file in SPDX 2.3 format
 - `merged-sbom.json`: Generated during CI/CD, combines backend and frontend component information
+- `examples/spdx-example.json`: Example SPDX document showing the structure and format
 
 ### Automated SBOM Generation
 
-The SBOM is automatically generated and updated through our CI/CD pipeline using the GitHub Actions workflow defined in `.github/workflows/spdx-sbom-generator.yml`. This ensures the SBOM stays current with the project's dependencies.
+The SBOM is automatically generated and updated through our CI/CD pipeline using the [anchore/sbom-action](https://github.com/anchore/sbom-action) GitHub Action. This ensures the SBOM stays current with the project's dependencies.
 
-### SBOM Tools Used
-
-- [SPDX SBOM Generator](https://github.com/spdx/spdx-sbom-generator) for Go backend components
-- [CycloneDX NPM](https://github.com/CycloneDX/cyclonedx-npm) for frontend JavaScript/TypeScript components
-
-### Manual SBOM Generation
-
-To generate the SBOM manually:
-
-```bash
-# For Go backend
-go install github.com/spdx/spdx-sbom-generator/cmd/sbom-generator@latest
-sbom-generator -o . --name "LocalCA-Go-Backend" --format json
-
-# For frontend
-npx @cyclonedx/cyclonedx-npm --output-format spdx-json --output-file frontend-sbom.json
-```
+For more information about SPDX and examples, see the [examples/README.md](examples/README.md) file.
 
 ---
 
