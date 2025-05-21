@@ -172,7 +172,7 @@ jobs:
           ls -la coverage/ || echo "Cannot list coverage directory"
 
       - name: Run ESLint
-        run: npx eslint -f checkstyle app components hooks lib -o eslint-report.xml || true
+        run: npx eslint -f json app components hooks lib -o eslint-report.json || true
 
       # Ensure coverage directory exists before uploading artifact
       - name: Prepare artifacts
@@ -198,9 +198,9 @@ jobs:
           fi
           
           # Check eslint report
-          if [ ! -f "eslint-report.xml" ]; then
-            echo "eslint-report.xml not found, creating empty file"
-            touch eslint-report.xml
+          if [ ! -f "eslint-report.json" ]; then
+            echo "eslint-report.json not found, creating empty file"
+            touch eslint-report.json
           fi
           
           # List files for debugging
@@ -213,7 +213,7 @@ jobs:
           name: frontend-coverage-reports
           path: |
             coverage/
-            eslint-report.xml
+            eslint-report.json
           retention-days: 1
 
       # Restore original package.json to avoid issues in later stages
@@ -402,14 +402,14 @@ jobs:
             
             # Copy files to coverage directory
             cp -r coverage-download/coverage/* coverage/ 2>/dev/null || echo "No frontend coverage files to copy"
-            cp coverage-download/eslint-report.xml . 2>/dev/null || echo "No eslint report found"
+            cp coverage-download/eslint-report.json . 2>/dev/null || echo "No eslint report found"
           else
             echo "No frontend coverage files found, using placeholder"
           fi
           
           # Ensure files exist
           touch coverage/lcov.info
-          touch eslint-report.xml
+          touch eslint-report.json
           
           # List all relevant files for debugging
           echo "Current directory contents:"
@@ -462,7 +462,7 @@ jobs:
             -Dsonar.javascript.node.maxspace=4096
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.typescript.tsconfigPaths=tsconfig.json
-            -Dsonar.eslint.reportPaths=eslint-report.xml
+            -Dsonar.eslint.reportPaths=eslint-report.json
 
   generate_sbom:
     name: Generate SBOM
