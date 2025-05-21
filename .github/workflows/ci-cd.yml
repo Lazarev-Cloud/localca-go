@@ -58,7 +58,7 @@ jobs:
           jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json && mv tmp.json package.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm i
 
       - name: Run frontend tests with coverage
         run: npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage
