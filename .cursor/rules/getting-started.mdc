@@ -3,3 +3,76 @@ description:
 globs:
 alwaysApply: false
 ---
+# Getting Started with LocalCA
+
+This guide walks you through setting up and running LocalCA in your local environment.
+
+## Prerequisites
+
+- Go 1.21 or higher
+- Node.js 18 or higher
+- npm or pnpm
+- Docker and Docker Compose (optional, for containerized deployment)
+
+## Local Development Setup
+
+1. Clone the repository
+2. Navigate to the project directory
+
+### Backend Setup
+
+1. Install Go dependencies:
+   ```bash
+   go mod download
+   ```
+
+2. Run the backend in development mode:
+   ```bash
+   go run main.go
+   ```
+
+   Or use the provided script:
+   ```bash
+   # On Windows
+   ./run-dev.bat
+   
+   # On Unix-based systems
+   ./run-dev.sh
+   ```
+
+### Frontend Setup
+
+1. Install JavaScript dependencies:
+   ```bash
+   npm install
+   # or
+   pnpm install
+   ```
+
+2. Run the frontend development server:
+   ```bash
+   npm run dev
+   # or
+   pnpm dev
+   ```
+
+## Docker Deployment
+
+1. Build and run using Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Access the web interface at `https://localhost`
+
+## Configuration
+
+LocalCA can be configured through environment variables or by editing the configuration files in [pkg/config/](mdc:pkg/config).
+
+See [DEPLOYMENT.md](mdc:DEPLOYMENT.md) for detailed configuration options.
+
+## Initial Access
+
+After starting LocalCA, you can access:
+- Web UI: `https://localhost` (or your configured domain)
+- ACME server: `https://localhost:8555`

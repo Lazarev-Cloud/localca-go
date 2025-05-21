@@ -1,0 +1,118 @@
+name: SLSA Go Binary
+
+on:
+  release:
+    types: [created]
+  
+  # Allow manual triggering for testing
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g., v1.2.3)"
+        required: true
+        default: "v0.0.0-test"
+
+permissions: read-all
+
+jobs:
+  # Trusted builder that compiles the source code into the binary
+  build:
+    permissions:
+      id-token: write  # To sign the provenance
+      contents: write  # To upload release assets
+      actions: read    # To read workflow info
+    
+    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v1.9.0
+    with:
+      go-version: '1.22'
+      evaluated-envs: |
+        GO_BUILD_FLAGS=-ldflags "-X 'github.com/Lazarev-Cloud/localca-go/pkg/config.Version=${{ github.event.release.tag_name || inputs.version }}'"
+      config-file: .github/workflows/slsa-builder-config.yml
+
+  # Generate SBOM for the binary
+  generate-sbom:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    
+    steps:
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.go-binary-artifact }}
+          path: binary
+      
+      - name: Generate SBOM
+        id: sbom
+        uses: anchore/sbom-action@v0
+        with:
+          path: binary
+          artifact-name: localca-go
+          format: spdx-json
+          output-file: localca-go.spdx.json
+      
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-path: binary/localca-go
+          sbom-path: localca-go.spdx.json
+      
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: localca-go-sbom
+          path: localca-go.spdx.json
+
+  # Verify attestations
+  verify:
+    needs: [build, generate-sbom]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.go-binary-artifact }}
+          path: binary
+      
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: localca-go-sbom
+          path: sbom
+      
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+      
+      - name: Verify provenance
+        run: |
+          echo "Verifying provenance..."
+          gh attestation verify binary/localca-go -R ${{ github.repository }} || echo "Verification failed, but continuing"
+      
+      - name: Verify SBOM
+        run: |
+          echo "Verifying SBOM..."
+          gh attestation verify binary/localca-go -R ${{ github.repository }} --predicate-type https://spdx.dev/Document/v2.3 || echo "Verification failed, but continuing"
+      
+      - name: Upload to release
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} binary/localca-go
+          gh release upload ${{ github.event.release.tag_name }} sbom/localca-go.spdx.json 

@@ -3,3 +3,62 @@ description:
 globs:
 alwaysApply: false
 ---
+# Code Standards and Best Practices
+
+This guide outlines coding standards and best practices for the LocalCA-Go project.
+
+## Go Code Standards
+
+- Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments) guidelines
+- Use meaningful variable and function names
+- Implement proper error handling
+- Write comprehensive unit tests
+- Document public functions and types with comments
+- Keep functions small and focused on a single responsibility
+- Use interfaces for dependency injection and mocking
+
+## Frontend Code Standards
+
+- Follow ESLint and Prettier configurations
+- Use TypeScript for type safety
+- Implement responsive design for all components
+- Follow the component structure in [components/](mdc:components)
+- Use React hooks for state management
+- Implement proper error handling and loading states
+- Make components accessible (ARIA attributes, keyboard navigation)
+
+## Security Best Practices
+
+- Never hardcode secrets or credentials
+- Use secure coding practices
+- Implement proper input validation
+- Use HTTPS for all communication
+- Follow secure certificate management practices
+- Validate all user inputs
+- Implement proper access controls
+
+## Testing Standards
+
+- Write unit tests for all critical functionality
+- Implement integration tests for API endpoints
+- Use mocks and stubs for external dependencies
+- Ensure test coverage for error cases
+- Run tests before submitting pull requests
+
+## Code Organization
+
+- Keep related code together in packages
+- Maintain clear separation of concerns
+- Follow the project's architectural patterns
+- Avoid circular dependencies
+- Use consistent naming conventions
+
+## Git Workflow
+
+- Use feature branches for development
+- Write descriptive commit messages
+- Keep pull requests focused on single features/fixes
+- Request code reviews before merging
+- Maintain a clean Git history
+
+See [BestPractice.md](mdc:BestPractice.md) for more detailed guidelines.

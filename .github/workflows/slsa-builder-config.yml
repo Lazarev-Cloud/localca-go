@@ -1,0 +1,17 @@
+version: 1
+
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=0
+
+go:
+  binary: localca-go
+  main: main.go
+  flags: ${{ env.GO_BUILD_FLAGS }}
+  ldflags: "-s -w -X 'github.com/Lazarev-Cloud/localca-go/pkg/config.CommitSHA=${{ github.sha }}'"
+  env:
+    - GOOS=linux
+    - GOARCH=amd64
+
+goos: linux
+goarch: amd64 
