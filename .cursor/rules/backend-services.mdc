@@ -3,3 +3,77 @@ description:
 globs:
 alwaysApply: false
 ---
+# Backend Services
+
+This guide provides an overview of the backend services in the LocalCA application.
+
+## Service Architecture
+
+LocalCA's backend is built with Go and follows a service-oriented architecture:
+
+- Services are organized by domain
+- Each service has a well-defined responsibility
+- Services interact through clean interfaces
+- Configuration is centralized
+
+## Core Services
+
+### Certificate Service
+
+- [pkg/certificates/](mdc:pkg/certificates) - Certificate operations
+  - [ca.go](mdc:pkg/certificates/ca.go) - CA certificate management
+  - [server.go](mdc:pkg/certificates/server.go) - Server certificate operations
+  - [client.go](mdc:pkg/certificates/client.go) - Client certificate operations
+  - [revocation.go](mdc:pkg/certificates/revocation.go) - Certificate revocation
+  - [validation.go](mdc:pkg/certificates/validation.go) - Certificate validation
+
+### Storage Service
+
+- [pkg/storage/](mdc:pkg/storage) - Certificate storage
+  - [storage.go](mdc:pkg/storage/storage.go) - Storage operations
+  - [filesystem.go](mdc:pkg/storage/filesystem.go) - File system operations
+  - [metadata.go](mdc:pkg/storage/metadata.go) - Certificate metadata
+  - [backup.go](mdc:pkg/storage/backup.go) - Backup operations
+
+### Configuration Service
+
+- [pkg/config/](mdc:pkg/config) - Configuration management
+  - [config.go](mdc:pkg/config/config.go) - Configuration loading
+  - [environment.go](mdc:pkg/config/environment.go) - Environment variables
+  - [defaults.go](mdc:pkg/config/defaults.go) - Default configuration
+
+### Email Service
+
+- [pkg/email/](mdc:pkg/email) - Email notifications
+  - [notifications.go](mdc:pkg/email/notifications.go) - Email notifications
+  - [templates.go](mdc:pkg/email/templates.go) - Email templates
+  - [smtp.go](mdc:pkg/email/smtp.go) - SMTP client
+
+### ACME Service
+
+- [pkg/acme/](mdc:pkg/acme) - ACME protocol implementation
+  - [server.go](mdc:pkg/acme/server.go) - ACME server
+  - [jws.go](mdc:pkg/acme/jws.go) - JWS implementation
+  - [storage.go](mdc:pkg/acme/storage.go) - ACME data storage
+  - [models.go](mdc:pkg/acme/models.go) - ACME data models
+  - [challenges.go](mdc:pkg/acme/challenges.go) - Challenge validation
+
+## HTTP Handlers
+
+- [pkg/handlers/](mdc:pkg/handlers) - HTTP request handlers
+  - [api.go](mdc:pkg/handlers/api.go) - API handlers
+  - [web.go](mdc:pkg/handlers/web.go) - Web UI handlers
+  - [middleware.go](mdc:pkg/handlers/middleware.go) - HTTP middleware
+  - [auth.go](mdc:pkg/handlers/auth.go) - Authentication
+
+## Service Initialization
+
+Services are initialized in [main.go](mdc:main.go):
+
+1. Configuration is loaded
+2. Storage service is initialized
+3. Certificate service is created
+4. Email service is configured
+5. HTTP handlers are registered
+6. ACME server is started
+7. HTTP/HTTPS servers are started

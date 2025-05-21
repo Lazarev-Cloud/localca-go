@@ -3,3 +3,92 @@ description:
 globs:
 alwaysApply: false
 ---
+# Next.js Routing
+
+This guide explains the routing structure in the LocalCA frontend application built with Next.js App Router.
+
+## App Router Structure
+
+LocalCA uses Next.js App Router for page routing:
+
+- [app/](mdc:app) - Root app directory
+  - [layout.tsx](mdc:app/layout.tsx) - Root layout component
+  - [page.tsx](mdc:app/page.tsx) - Main dashboard page
+
+## Page Routes
+
+### Certificate Management
+
+- [app/certificates/](mdc:app/certificates) - Certificate management
+  - [page.tsx](mdc:app/certificates/page.tsx) - Certificate list page
+  - [layout.tsx](mdc:app/certificates/layout.tsx) - Certificate pages layout
+  - [[id]/](mdc:app/certificates/[id]) - Dynamic route for certificate details
+    - [page.tsx](mdc:app/certificates/[id]/page.tsx) - Certificate details page
+
+### Certificate Creation
+
+- [app/create/](mdc:app/create) - Certificate creation
+  - [page.tsx](mdc:app/create/page.tsx) - Create certificate page
+  - [server/page.tsx](mdc:app/create/server/page.tsx) - Server certificate creation
+  - [client/page.tsx](mdc:app/create/client/page.tsx) - Client certificate creation
+
+### Settings
+
+- [app/settings/](mdc:app/settings) - Settings pages
+  - [page.tsx](mdc:app/settings/page.tsx) - Main settings page
+  - [general/page.tsx](mdc:app/settings/general/page.tsx) - General settings
+  - [email/page.tsx](mdc:app/settings/email/page.tsx) - Email settings
+  - [acme/page.tsx](mdc:app/settings/acme/page.tsx) - ACME settings
+
+## API Routes
+
+- [app/api/](mdc:app/api) - API routes
+  - [ca-info/](mdc:app/api/ca-info) - CA information endpoints
+    - [route.ts](mdc:app/api/ca-info/route.ts) - CA info handler
+  - [certificates/](mdc:app/api/certificates) - Certificate management endpoints
+    - [route.ts](mdc:app/api/certificates/route.ts) - List certificates
+    - [[id]/route.ts](mdc:app/api/certificates/[id]/route.ts) - Certificate details
+  - [delete/](mdc:app/api/delete) - Certificate deletion endpoint
+    - [[id]/route.ts](mdc:app/api/delete/[id]/route.ts) - Delete certificate
+  - [renew/](mdc:app/api/renew) - Certificate renewal endpoint
+    - [[id]/route.ts](mdc:app/api/renew/[id]/route.ts) - Renew certificate
+  - [revoke/](mdc:app/api/revoke) - Certificate revocation endpoint
+    - [[id]/route.ts](mdc:app/api/revoke/[id]/route.ts) - Revoke certificate
+
+## Navigation
+
+The application uses Next.js Link component for client-side navigation:
+
+```tsx
+import Link from 'next/link';
+
+<Link href="/certificates">Certificates</Link>
+<Link href={`/certificates/${id}`}>View Certificate</Link>
+```
+
+## Route Handlers
+
+API routes use Next.js route handlers:
+
+```tsx
+// app/api/certificates/route.ts
+export async function GET() {
+  // Handle GET request
+}
+
+export async function POST(request: Request) {
+  // Handle POST request
+}
+```
+
+## Dynamic Routes
+
+Dynamic routes use Next.js params:
+
+```tsx
+// app/certificates/[id]/page.tsx
+export default function CertificateDetailsPage({ params }: { params: { id: string } }) {
+  const { id } = params;
+  // Use certificate ID
+}
+```

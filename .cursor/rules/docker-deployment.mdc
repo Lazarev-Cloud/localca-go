@@ -3,3 +3,87 @@ description:
 globs:
 alwaysApply: false
 ---
+# Docker Deployment
+
+This guide explains how to deploy LocalCA using Docker and Docker Compose.
+
+## Docker Configuration
+
+LocalCA provides Docker configuration files for easy deployment:
+
+- [docker-compose.yml](mdc:docker-compose.yml) - Docker Compose configuration
+- [Dockerfile](mdc:Dockerfile) - Backend Docker build instructions
+- [Dockerfile.frontend](mdc:Dockerfile.frontend) - Frontend Docker build instructions
+
+## Basic Deployment
+
+1. Create a CA key password file:
+   ```bash
+   echo "your-secure-password" > cakey.txt
+   ```
+
+2. Start the application with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Access the web interface at http://localhost:3000
+
+## Docker Compose Configuration
+
+The [docker-compose.yml](mdc:docker-compose.yml) file defines two services:
+
+1. **backend** - Go backend service
+   - Builds from [Dockerfile](mdc:Dockerfile)
+   - Exposes ports 8080 (HTTP) and 8443 (HTTPS)
+   - Mounts data volume for certificate persistence
+   - Configurable via environment variables
+
+2. **frontend** - Next.js frontend service
+   - Builds from [Dockerfile.frontend](mdc:Dockerfile.frontend)
+   - Exposes port 3000
+   - Connects to backend service
+
+## Volume Mounts
+
+Docker Compose configures the following volume mounts:
+
+- `./data:/app/data` - Certificate storage
+- `./cakey.txt:/app/cakey.txt` - CA key password file
+
+## Environment Variables
+
+Configure the application using environment variables in docker-compose.yml:
+
+```yaml
+environment:
+  - CA_NAME=Local CA
+  - ORGANIZATION=Your Organization
+  - COUNTRY=US
+  - DATA_DIR=/app/data
+  - LISTEN_ADDR=:8080
+  - TLS_ENABLED=true
+  - EMAIL_NOTIFY=false
+```
+
+## Production Deployment
+
+For production deployment:
+
+1. Modify [docker-compose.yml](mdc:docker-compose.yml) with appropriate settings
+2. Use a secure password for the CA key
+3. Configure email notifications
+4. Enable TLS for the web interface
+5. Set up a reverse proxy (like Nginx or Traefik) for HTTPS
+6. Implement regular backups of the data directory
+
+## Docker Network Configuration
+
+By default, Docker Compose creates a private network for the services. To expose the services to your local network, modify the port mappings in [docker-compose.yml](mdc:docker-compose.yml).
+
+## Resource Requirements
+
+Minimum resource requirements:
+- 1 CPU core
+- 512MB RAM
+- 1GB disk space

@@ -3,3 +3,51 @@ description:
 globs:
 alwaysApply: false
 ---
+# Security Best Practices
+
+LocalCA implements security best practices for certificate management and secure operations.
+
+## CA Security
+
+- Private key protection with password encryption
+- Key stored in secure location with restricted access
+- Certificate Revocation List (CRL) management
+- Regular key rotation recommendations
+
+## Application Security
+
+- HTTPS for web interface with TLS
+- Authentication for administrative access
+- Input validation for all certificate parameters
+- Protection against common web vulnerabilities
+- Secure default configurations
+
+## Certificate Security
+
+- Strong default key sizes (RSA 2048, ECDSA P-256)
+- Modern signature algorithms (SHA-256)
+- Appropriate validity periods
+- Proper Subject Alternative Name (SAN) handling
+- Extended Key Usage constraints
+
+## Operational Security
+
+- Secure deployment recommendations in [DEPLOYMENT.md](mdc:DEPLOYMENT.md)
+- Network isolation guidance
+- Regular backup procedures
+- Monitoring and logging
+- Certificate expiration notifications
+
+## Development Security
+
+- Dependency scanning
+- Code review process
+- Security testing
+- Secure coding practices
+
+## Secure Configuration
+
+- Environment variable validation
+- Secure defaults
+- Configuration validation
+- Secrets management

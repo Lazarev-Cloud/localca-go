@@ -3,3 +3,80 @@ description:
 globs:
 alwaysApply: false
 ---
+# Certificate Lifecycle
+
+This document explains the certificate lifecycle in LocalCA from creation to expiration.
+
+## Certificate States
+
+Certificates in LocalCA go through the following states:
+
+1. **Created** - Certificate is newly created and valid
+2. **Active** - Certificate is in use and valid
+3. **Expiring Soon** - Certificate is approaching expiration date
+4. **Expired** - Certificate has passed its expiration date
+5. **Revoked** - Certificate has been explicitly revoked
+6. **Deleted** - Certificate has been removed from the system
+
+## Lifecycle Management
+
+### Creation
+
+- Manual creation through the web interface
+- API-based creation
+- ACME protocol automated issuance
+- Implementation: [pkg/certificates/server.go](mdc:pkg/certificates/server.go)
+
+### Validation
+
+- Certificate validity checking
+- Trust chain verification
+- Implementation: [pkg/certificates/validation.go](mdc:pkg/certificates/validation.go)
+
+### Renewal
+
+- Manual renewal through the web interface
+- Automated renewal via API
+- ACME protocol renewal
+- Implementation: [pkg/certificates/renewal.go](mdc:pkg/certificates/renewal.go)
+
+### Revocation
+
+- Manual revocation through the web interface
+- API-based revocation
+- CRL (Certificate Revocation List) generation
+- Implementation: [pkg/certificates/revocation.go](mdc:pkg/certificates/revocation.go)
+
+### Expiration
+
+- Expiration monitoring
+- Email notifications for expiring certificates
+- Implementation: [pkg/email/notifications.go](mdc:pkg/email/notifications.go)
+
+### Deletion
+
+- Manual deletion through the web interface
+- API-based deletion
+- Implementation: [pkg/storage/storage.go](mdc:pkg/storage/storage.go)
+
+## Certificate Metadata
+
+Each certificate includes metadata:
+
+- Certificate ID
+- Common Name
+- Subject Alternative Names
+- Issuance date
+- Expiration date
+- Serial number
+- Certificate type
+- Revocation status
+- Custom fields
+
+## Lifecycle Automation
+
+LocalCA provides automation for certificate lifecycle:
+
+- Email notifications for expiring certificates
+- Automated renewal via ACME
+- Batch operations for certificate management

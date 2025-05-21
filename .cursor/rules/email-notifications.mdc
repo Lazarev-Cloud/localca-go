@@ -3,3 +3,56 @@ description:
 globs:
 alwaysApply: false
 ---
+# Email Notifications
+
+LocalCA includes an email notification system to alert administrators about certificate events and expiration.
+
+## Email Components
+
+- [pkg/email/](mdc:pkg/email) - Email notification package
+  - SMTP configuration
+  - Email templates
+  - Notification scheduling
+  - Certificate expiration alerts
+
+## Email Features
+
+- **Expiration Notifications**: Alerts for certificates nearing expiration
+- **Revocation Notifications**: Alerts when certificates are revoked
+- **CA Events**: Notifications for CA creation or updates
+- **Error Alerts**: System error notifications
+- **Custom Templates**: Customizable email templates
+
+## Configuration
+
+Email notifications are configured through environment variables:
+
+- `EMAIL_NOTIFY` - Enable/disable email notifications
+- `SMTP_SERVER` - SMTP server address
+- `SMTP_PORT` - SMTP server port
+- `SMTP_USER` - SMTP username
+- `SMTP_PASSWORD` - SMTP password
+- `SMTP_USE_TLS` - Enable TLS for SMTP connections
+- `EMAIL_FROM` - Sender email address
+- `EMAIL_TO` - Default recipient email address(es)
+
+## Email Implementation
+
+- [pkg/email/notifications.go](mdc:pkg/email/notifications.go) - Email notification implementation
+  - Template rendering
+  - SMTP client configuration
+  - Scheduled notifications
+
+## Email Implementation
+
+- [pkg/email/notifications.go](mdc:pkg/email/notifications.go) - Email notification implementation
+  - Template rendering
+  - SMTP client configuration
+  - Scheduled notifications
+
+## Notification Schedule
+
+- Configurable notification schedule
+- Default schedule: 30, 14, and 7 days before expiration
+- Daily notifications for certificates expired but still in use
+- Immediate notifications for critical events

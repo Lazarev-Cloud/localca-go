@@ -3,3 +3,87 @@ description:
 globs:
 alwaysApply: false
 ---
+# Frontend Components
+
+This guide provides an overview of the frontend components in the LocalCA application.
+
+## Component Architecture
+
+LocalCA uses a component-based architecture with Next.js and React:
+
+- Pages are built from reusable components
+- Components follow a consistent design system
+- ShadcnUI provides base UI components
+- Tailwind CSS for styling
+
+## Core Components
+
+### Certificate Management
+
+- [components/certificate-details.tsx](mdc:components/certificate-details.tsx) - Displays detailed certificate information
+  - Certificate properties
+  - Validity information
+  - Download options
+  - Action buttons
+
+- [components/certificate-table.tsx](mdc:components/certificate-table.tsx) - Table view of certificates
+  - Sortable columns
+  - Filtering options
+  - Status indicators
+  - Action buttons
+
+- [components/create-certificate-form.tsx](mdc:components/create-certificate-form.tsx) - Form for creating certificates
+  - Common name input
+  - SAN input
+  - Certificate type selection
+  - Validity period selection
+
+### Dashboard Components
+
+- [components/dashboard-header.tsx](mdc:components/dashboard-header.tsx) - Main dashboard header
+  - Navigation links
+  - User information
+  - Action buttons
+
+- [components/ca-info-card.tsx](mdc:components/ca-info-card.tsx) - CA information display
+  - CA certificate details
+  - Validity period
+  - Download options
+
+- [components/system-status.tsx](mdc:components/system-status.tsx) - System status information
+  - Certificate counts
+  - Expiring certificates
+  - System health
+
+### Settings Components
+
+- [components/settings-tabs.tsx](mdc:components/settings-tabs.tsx) - Settings page tabs
+  - General settings
+  - Email settings
+  - ACME settings
+  - API settings
+
+## UI Component Library
+
+The project uses ShadcnUI, a component library based on Tailwind CSS:
+
+- [components/ui/button.tsx](mdc:components/ui/button.tsx) - Button component
+- [components/ui/card.tsx](mdc:components/ui/card.tsx) - Card component
+- [components/ui/dialog.tsx](mdc:components/ui/dialog.tsx) - Dialog component
+- [components/ui/form.tsx](mdc:components/ui/form.tsx) - Form components
+- [components/ui/table.tsx](mdc:components/ui/table.tsx) - Table component
+- [components/ui/tabs.tsx](mdc:components/ui/tabs.tsx) - Tabs component
+
+## Data Fetching
+
+- [data/ca/](mdc:data/ca) - CA data fetching
+- [data/service/](mdc:data/service) - Service API clients
+- [data/acme/](mdc:data/acme) - ACME client operations
+
+## Page Structure
+
+- [app/page.tsx](mdc:app/page.tsx) - Main dashboard page
+- [app/certificates/page.tsx](mdc:app/certificates/page.tsx) - Certificates list page
+- [app/certificates/[id]/page.tsx](mdc:app/certificates/[id]/page.tsx) - Certificate details page
+- [app/create/page.tsx](mdc:app/create/page.tsx) - Create certificate page
+- [app/settings/page.tsx](mdc:app/settings/page.tsx) - Settings page
