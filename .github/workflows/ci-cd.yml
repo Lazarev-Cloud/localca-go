@@ -20,6 +20,11 @@ on:
         default: 'dev'
         required: true
 
+# Add global permissions for security events
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   backend_test:
     name: Backend Tests
@@ -69,10 +74,7 @@ jobs:
   security_scan_backend:
     name: Security Scan Backend
     runs-on: ubuntu-latest
-    # Add permissions for security events
-    permissions:
-      security-events: write
-      contents: read
+    # Job-level permissions are no longer needed as we have global permissions
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
