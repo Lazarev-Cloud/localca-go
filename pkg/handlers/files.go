@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
+	"github.com/gin-gonic/gin"
 )
 
 // FileInfo represents information about a certificate file
@@ -43,7 +43,16 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 		// Get certificate name
 		name := c.Query("name")
 		if name == "" {
+			// Use a fixed, internal URL to prevent open redirect vulnerabilities
 			c.Redirect(http.StatusSeeOther, "/")
+			return
+		}
+
+		// Validate certificate name to prevent path traversal
+		if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+			c.HTML(http.StatusBadRequest, "files.html", gin.H{
+				"Error": "Invalid certificate name",
+			})
 			return
 		}
 
@@ -86,13 +95,13 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 				log.Printf("Failed to get file info: %v", err)
 				continue
 			}
-			
+
 			// Check file size
 			fileSize := fmt.Sprintf("%.1f KB", float64(info.Size())/1024.0)
-			
+
 			// Check if p12 file
 			isP12 := strings.HasSuffix(file.Name(), ".p12")
-			
+
 			// Read file content for non-p12 files
 			content := ""
 			if !isP12 {
@@ -104,7 +113,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 					content = string(contentBytes)
 				}
 			}
-			
+
 			fileInfos = append(fileInfos, FileInfo{
 				Name:     file.Name(),
 				Path:     filePath,

@@ -55,6 +55,12 @@ const RateLimitWindow = 1 * time.Hour
 // RateLimitMax is the maximum number of requests per window
 const RateLimitMax = 100
 
+// RateLimitBurst is the maximum number of requests in a short time period
+const RateLimitBurst = 20
+
+// RateLimitBurstWindow is the time window for burst rate limiting
+const RateLimitBurstWindow = 1 * time.Minute
+
 // Account represents an ACME account
 type Account struct {
 	ID        string
@@ -233,6 +239,11 @@ func (s *ACMEServer) checkRateLimit(r *http.Request, accountID string) bool {
 		return false
 	}
 
+	// Check for burst rate limiting - if too many requests in a short time
+	if now.Sub(ipLimit.LastAccess) < RateLimitBurstWindow && ipLimit.Count > RateLimitBurst {
+		return false
+	}
+
 	// Increment counter and update time
 	ipLimit.Count++
 	ipLimit.LastAccess = now
@@ -260,6 +271,11 @@ func (s *ACMEServer) checkRateLimit(r *http.Request, accountID string) bool {
 
 		// Check if limit exceeded
 		if acctLimit.Count >= RateLimitMax {
+			return false
+		}
+
+		// Check for burst rate limiting for account
+		if now.Sub(acctLimit.LastAccess) < RateLimitBurstWindow && acctLimit.Count > RateLimitBurst {
 			return false
 		}
 

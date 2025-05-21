@@ -59,5 +59,19 @@ if %ERRORLEVEL% EQU 0 (
     echo Docker not available, skipping Docker tests.
 )
 
+echo Running tests...
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+echo.
+echo Coverage report:
+go tool cover -func=coverage.out
+
+echo.
+echo Generating HTML coverage report...
+go tool cover -html=coverage.out -o coverage.html
+
+echo.
+echo Tests completed. Coverage report available in coverage.html
+
 echo All tests passed!
 exit /b 0 

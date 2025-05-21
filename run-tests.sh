@@ -72,5 +72,19 @@ else
     echo -e "${YELLOW}Docker not available, skipping Docker tests.${NC}"
 fi
 
+# Run tests with coverage
+echo "Running tests with coverage..."
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+# Display coverage report
+echo "Coverage report:"
+go tool cover -func=coverage.out
+
+# Generate HTML coverage report
+echo "Generating HTML coverage report..."
+go tool cover -html=coverage.out -o coverage.html
+
+echo "Tests completed. Coverage report available in coverage.html"
+
 echo -e "${GREEN}All tests passed!${NC}"
 exit 0 

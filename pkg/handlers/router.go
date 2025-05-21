@@ -4,12 +4,47 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
+
+// CSRFTokenStore stores valid CSRF tokens with expiration
+type CSRFTokenStore struct {
+	tokens map[string]time.Time
+	mutex  sync.RWMutex
+}
+
+// Global CSRF token store
+var csrfStore = &CSRFTokenStore{
+	tokens: make(map[string]time.Time),
+}
+
+// Initialize CSRF token cleaner
+func init() {
+	go cleanupCSRFTokens()
+}
+
+// cleanupCSRFTokens periodically removes expired CSRF tokens
+func cleanupCSRFTokens() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		csrfStore.mutex.Lock()
+		now := time.Now()
+		for token, expiry := range csrfStore.tokens {
+			if now.After(expiry) {
+				delete(csrfStore.tokens, token)
+			}
+		}
+		csrfStore.mutex.Unlock()
+	}
+}
 
 // SetupRoutes configures the routes for the application
 func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, store *storage.Storage, cfg *config.Config) {
@@ -56,6 +91,12 @@ func csrfMiddleware() gin.HandlerFunc {
 		if c.Request.Method == "GET" {
 			// Generate a new token for the response
 			token := generateCSRFToken()
+
+			// Store token with expiration (24 hours)
+			csrfStore.mutex.Lock()
+			csrfStore.tokens[token] = time.Now().Add(24 * time.Hour)
+			csrfStore.mutex.Unlock()
+
 			c.Set("csrf_token", token)
 			c.Next()
 			return
@@ -67,12 +108,11 @@ func csrfMiddleware() gin.HandlerFunc {
 			token = c.GetHeader("X-CSRF-Token")
 		}
 
-		// In a real implementation, we would validate the token against a session
-		// For now, just ensure a token was provided
-		if token == "" {
+		// Check if token exists and is valid
+		if token == "" || !validateCSRFToken(token) {
 			c.JSON(http.StatusForbidden, APIResponse{
 				Success: false,
-				Message: "CSRF token missing",
+				Message: "Invalid or missing CSRF token",
 			})
 			c.Abort()
 			return
@@ -80,6 +120,12 @@ func csrfMiddleware() gin.HandlerFunc {
 
 		// Generate a new token for the response
 		newToken := generateCSRFToken()
+
+		// Store new token with expiration
+		csrfStore.mutex.Lock()
+		csrfStore.tokens[newToken] = time.Now().Add(24 * time.Hour)
+		csrfStore.mutex.Unlock()
+
 		c.Set("csrf_token", newToken)
 		c.Next()
 	}
@@ -88,8 +134,31 @@ func csrfMiddleware() gin.HandlerFunc {
 // generateCSRFToken generates a random token for CSRF protection
 func generateCSRFToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	_, err := rand.Read(b)
+	if err != nil {
+		// If we can't generate random bytes, use timestamp as fallback
+		// This is not ideal but better than nothing
+		return base64.StdEncoding.EncodeToString([]byte(time.Now().String()))
+	}
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+// validateCSRFToken validates a CSRF token
+func validateCSRFToken(token string) bool {
+	csrfStore.mutex.RLock()
+	defer csrfStore.mutex.RUnlock()
+
+	expiry, exists := csrfStore.tokens[token]
+	if !exists {
+		return false
+	}
+
+	// Check if token has expired
+	if time.Now().After(expiry) {
+		return false
+	}
+
+	return true
 }
 
 // sessionMiddleware adds session management
