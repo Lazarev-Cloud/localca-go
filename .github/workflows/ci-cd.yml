@@ -104,7 +104,15 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Create coverage directory
-        run: mkdir -p coverage
+        run: |
+          # Check if coverage exists and is a file (not a directory)
+          if [ -f "coverage" ]; then
+            echo "Found 'coverage' as a file, removing it"
+            rm coverage
+          fi
+          
+          # Create coverage directory
+          mkdir -p coverage
 
       - name: Run frontend tests with coverage
         run: |
@@ -129,6 +137,12 @@ jobs:
       - name: Prepare artifacts
         run: |
           echo "Checking coverage directory and files..."
+          
+          # Check if coverage exists and is a file (not a directory)
+          if [ -f "coverage" ]; then
+            echo "Found 'coverage' as a file, removing it"
+            rm coverage
+          fi
           
           # Check if coverage directory exists
           if [ ! -d "coverage" ]; then
@@ -241,6 +255,12 @@ jobs:
       - name: Verify coverage reports
         run: |
           echo "Verifying coverage reports..."
+          
+          # Check if coverage exists and is a file (not a directory)
+          if [ -f "coverage" ]; then
+            echo "Found 'coverage' as a file, removing it"
+            rm coverage
+          fi
           
           # Check if directory exists first
           if [ -d "coverage" ]; then
