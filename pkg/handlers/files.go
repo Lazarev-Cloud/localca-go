@@ -163,6 +163,11 @@ func getCertificateDetails(certPath string) (CertificateDetails, error) {
 		return details, fmt.Errorf("certificate path must be absolute")
 	}
 
+	// Ensure the path only contains allowed characters
+	if !isValidFilePath(certPath) {
+		return details, fmt.Errorf("invalid certificate path")
+	}
+
 	// Check if the file exists
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		return details, fmt.Errorf("certificate file does not exist: %w", err)
@@ -291,4 +296,19 @@ func getCertificateDetails(certPath string) (CertificateDetails, error) {
 	}
 
 	return details, nil
+}
+
+// isValidFilePath checks if a file path contains only allowed characters
+func isValidFilePath(path string) bool {
+	// Only allow alphanumeric characters, dots, slashes, hyphens, and underscores
+	for _, char := range path {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '/' || char == '\\' || char == '.' ||
+			char == '-' || char == '_' || char == ':') {
+			return false
+		}
+	}
+	return true
 }

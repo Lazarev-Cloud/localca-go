@@ -14,6 +14,7 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 - **Email Notifications**: Get alerts before certificates expire
 - **HTTPS Support**: Secure access to the management interface itself
 - **Docker Deployment**: Easy deployment with Docker and Docker Compose
+- **ACME Protocol Support**: Automated certificate issuance compatible with standard ACME clients
 
 ## License
 
@@ -45,8 +46,8 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/localca.git
-   cd localca
+   git clone https://github.com/Lazarev-Cloud/localca-go.git
+   cd localca-go
    ```
 
 2. Create a password file for the CA:
@@ -59,42 +60,28 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
    docker-compose up -d
    ```
 
-4. Access the web interface at https://localhost:8443
+4. Access the web interface at http://localhost:3000
 
 ### Option 2: Building from Source
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/localca.git
-   cd localca
+   git clone https://github.com/Lazarev-Cloud/localca-go.git
+   cd localca-go
    ```
 
-2. Update the module name in go.mod:
-   ```
-   module localca-go
-
-   go 1.22
-
-   require (
-       github.com/gin-contrib/cors v1.5.0
-       github.com/gin-gonic/gin v1.9.1
-   )
-   ```
-
-3. Update import paths in all Go files (replace `github.com/yourusername/localca-go` with `localca-go`)
-
-4. Download dependencies and build:
+2. Download dependencies and build:
    ```bash
    go mod tidy
    go build -o localca-go
    ```
 
-5. Create a password file:
+3. Create a password file:
    ```bash
    echo "your-secure-password" > cakey.txt
    ```
 
-6. Run the application using the provided scripts:
+4. Run the application using the provided scripts:
    
    Windows:
    ```bash
@@ -107,12 +94,13 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
    ./run-dev.sh
    ```
 
-7. In a separate terminal, start the frontend:
+5. In a separate terminal, start the frontend:
    ```bash
-   pnpm dev
+   npm install --legacy-peer-deps
+   npm run dev
    ```
 
-8. Access the web interface at http://localhost:3000
+6. Access the web interface at http://localhost:3000
 
 ## Configuration
 
@@ -142,7 +130,7 @@ LocalCA is configured through environment variables:
 
 ### Initial Setup
 
-1. **First Access**: Navigate to the web interface at https://localhost:8443
+1. **First Access**: Navigate to the web interface at http://localhost:3000
 2. **Trust the CA**: Download the CA certificate and install it in your browser/OS trust store
 
 ### Creating Certificates
@@ -226,20 +214,25 @@ server {
 ### Project Structure
 
 ```
-localca/
+localca-go/
 ├── main.go                    # Application entry point
-├── Dockerfile                 # Docker build instructions
-├── docker-compose.yml         # Docker Compose configuration
-├── pkg/
+├── pkg/                       # Core Go packages
 │   ├── certificates/          # Certificate operations
-│   ├── config/                # Configuration handling
+│   ├── config/                # Configuration management
 │   ├── email/                 # Email notification system
 │   ├── handlers/              # HTTP request handlers
-│   └── storage/               # Certificate storage
-├── static/                    # Static assets
-│   ├── css/                   # Stylesheets
-│   └── img/                   # Images
-└── templates/                 # HTML templates
+│   ├── storage/               # Certificate storage
+│   └── acme/                  # ACME protocol implementation
+├── app/                       # Next.js frontend
+│   ├── page.tsx               # Main dashboard
+│   ├── create/                # Certificate creation
+│   ├── certificates/          # Certificate management
+│   ├── settings/              # Application settings
+│   └── api/                   # API routes
+├── components/                # React components
+├── Dockerfile                 # Docker build instructions
+├── Dockerfile.frontend        # Frontend Docker build
+└── docker-compose.yml         # Docker Compose configuration
 ```
 
 ### Local Development
@@ -269,16 +262,70 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - [Go](https://golang.org/) - The Go Programming Language
 - [Gin](https://gin-gonic.com/) - Web framework for Go
+- [Next.js](https://nextjs.org/) - React framework
+- [Tailwind CSS](https://tailwindcss.com/) - CSS framework
+- [ShadcnUI](https://ui.shadcn.com/) - UI component library
 - [OpenSSL](https://www.openssl.org/) - Cryptography and SSL/TLS toolkit
-- [Bootstrap](https://getbootstrap.com/) - Frontend framework
 
 ## Roadmap
 
-- [ ] Automated certificate renewal
-- [ ] ACME protocol support
-- [ ] API for programmatic certificate management
-- [ ] Improved audit logging
+- [x] ACME protocol support
+- [x] Automated certificate renewal
+- [x] API for programmatic certificate management
 - [ ] OCSP responder
+- [ ] Advanced audit logging
+- [ ] Certificate transparency log
+- [ ] Hardware security module (HSM) support
+
+## Future Development
+
+The following features and improvements are planned for future versions of LocalCA:
+
+### Core Functionality Enhancements
+- [ ] OCSP responder for real-time certificate validation
+- [ ] Certificate transparency log for enhanced security
+- [ ] Hardware security module (HSM) support for key protection
+- [ ] ECC certificate support (currently only RSA)
+- [ ] Wildcard certificate support
+- [ ] Certificate templates for common use cases
+- [ ] Support for external CSRs (Certificate Signing Requests)
+
+### Security Improvements
+- [ ] Advanced audit logging with searchable history
+- [ ] Certificate usage analytics and reporting
+- [ ] Role-based access control for multi-user environments
+- [ ] Two-factor authentication for administrative access
+- [ ] Enhanced key management with rotation policies
+
+### User Experience
+- [ ] Improved dashboard with visualization enhancements
+- [ ] Batch operations for certificate management
+- [ ] Dark mode support
+- [ ] Mobile-responsive design
+- [ ] Drag-and-drop certificate import
+- [ ] Guided wizards for complex operations
+
+### Operational Features
+- [ ] Automated backup and restore functionality
+- [ ] High availability deployment options
+- [ ] Performance optimizations for large certificate stores
+- [ ] Metrics and monitoring integration
+- [ ] Centralized logging
+
+### Integration Capabilities
+- [ ] OpenAPI/Swagger documentation for REST API
+- [ ] Webhook notifications for certificate events
+- [ ] Integration with popular deployment tools (Ansible, Terraform)
+- [ ] Support for cloud provider certificate services
+- [ ] LDAP/Active Directory integration
+
+### Email and Notifications
+- [ ] Enhanced email templates with HTML formatting
+- [ ] Configurable notification thresholds
+- [ ] Additional notification channels (Slack, MS Teams, etc.)
+- [ ] Calendar integration for expiration events
+
+We welcome contributions to any of these areas. If you're interested in working on a feature, please open an issue to discuss implementation details before submitting a pull request.
 
 ## Running Tests
 
@@ -342,6 +389,42 @@ environment:
 
 For a complete list of configuration options, see the Configuration section above.
 
+## Supply Chain Security
+
+This project implements SLSA (Supply chain Levels for Software Artifacts) Level 3 build security. The artifacts have cryptographically signed attestations that provide provenance and integrity guarantees.
+
+### Verifying Binary Attestations
+
+To verify the binary attestations, you can use the GitHub CLI:
+
+```bash
+# Install GitHub CLI if not already installed
+# https://cli.github.com/manual/installation
+
+# Verify the binary
+gh attestation verify localca-go -R lazarev-cloud/localca-go
+  
+# Verify the SBOM
+gh attestation verify localca-go -R lazarev-cloud/localca-go --predicate-type https://spdx.dev/Document/v2.3
+```
+
+### Verifying Container Attestations
+
+To verify the container attestations:
+
+```bash
+# Login to GitHub Container Registry
+docker login ghcr.io
+  
+# Verify backend container
+gh attestation verify oci://ghcr.io/lazarev-cloud/localca-go/backend:latest -R lazarev-cloud/localca-go
+  
+# Verify frontend container
+gh attestation verify oci://ghcr.io/lazarev-cloud/localca-go/frontend:latest -R lazarev-cloud/localca-go
+```
+
+These verifications ensure the software you're using was built from the source code in this repository using GitHub Actions secure builder workflows.
+
 ---
 
-Created by @lazarevtill - feel free to contact me!
+Created by [@lazarevtill](https://github.com/lazarevtill) - feel free to contact me!

@@ -51,6 +51,9 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 	// Add middleware
 	router.Use(gin.Recovery())
 
+	// Add security headers
+	router.Use(securityHeadersMiddleware())
+
 	// Configure CSRF protection
 	router.Use(csrfMiddleware())
 
@@ -92,6 +95,26 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 
 	// Setup API routes for the Next.js frontend
 	SetupAPIRoutes(router, certSvc, store)
+}
+
+// securityHeadersMiddleware adds security headers to prevent XSS and other attacks
+func securityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Set security headers
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
+		// Add strict transport security header if using HTTPS
+		if c.Request.TLS != nil {
+			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+
+		c.Next()
+	}
 }
 
 // csrfMiddleware adds CSRF protection

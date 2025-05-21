@@ -65,6 +65,42 @@ jobs:
             coverage-main.out
           retention-days: 1
 
+  security_scan_backend:
+    name: Security Scan Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: -no-fail -fmt sarif -out gosec-results.sarif ./...
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: gosec-results.sarif
+          category: gosec
+
+      - name: Run Nancy for Dependency Scanning
+        run: |
+          go install github.com/sonatype-nexus-community/nancy@latest
+          go list -json -deps | nancy sleuth --output json > nancy-results.json || true
+
+      - name: Upload Nancy results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nancy-results
+          path: nancy-results.json
+          retention-days: 5
+
   frontend_test:
     name: Frontend Tests
     runs-on: ubuntu-latest
@@ -188,6 +224,32 @@ jobs:
             echo "Original package.json restored"
           fi
 
+  security_scan_frontend:
+    name: Security Scan Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run npm audit
+        run: npm audit --json > npm-audit.json || true
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit.json
+          retention-days: 5
+
   build:
     name: Build Verification
     runs-on: ubuntu-latest
@@ -258,6 +320,16 @@ jobs:
           echo "✅ Build verification successful"
           ls -la localca-go
           du -sh .next
+          
+      # Upload build artifacts for SLSA provenance
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            localca-go
+            .next/**/*
+          retention-days: 1
 
   sonarqube:
     name: SonarQube Analysis
@@ -386,15 +458,47 @@ jobs:
             -Dsonar.typescript.tsconfigPaths=tsconfig.json
             -Dsonar.eslint.reportPaths=eslint-report.xml
 
+  generate_sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM for Go dependencies
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          output-file: sbom-go.spdx.json
+          path: .
+
+      - name: Generate SBOM for npm dependencies
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          output-file: sbom-npm.spdx.json
+          path: package.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-files
+          path: |
+            sbom-go.spdx.json
+            sbom-npm.spdx.json
+          retention-days: 90
+
   docker:
     name: Build and Push Docker Images
-    needs: [build]
+    needs: [build, security_scan_backend, security_scan_frontend]
     runs-on: ubuntu-latest
     # Only run this job on main branch or tags, not on PRs
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
+      id-token: write # Required for SLSA provenance
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -409,12 +513,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Set up proper versioning
+      - name: Set version variables
+        id: version
+        run: |
+          # Set default version to commit SHA
+          VERSION=${GITHUB_SHA::8}
+          
+          # If this is a tag, use the tag name as version
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          
+          # Set output variables
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/lazarev-cloud/localca-go/backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=LocalCA Backend
+            org.opencontainers.image.description=LocalCA Go backend service
+            org.opencontainers.image.vendor=Lazarev Cloud
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.created=${{ steps.version.outputs.build_date }}
+
+      - name: Extract metadata for Frontend Docker
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: |
             ghcr.io/lazarev-cloud/localca-go/frontend
           tags: |
             type=ref,event=branch
@@ -422,7 +560,20 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=LocalCA Frontend
+            org.opencontainers.image.description=LocalCA Next.js frontend service
+            org.opencontainers.image.vendor=Lazarev Cloud
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.created=${{ steps.version.outputs.build_date }}
 
+      # Download SBOM files
+      - name: Download SBOM files
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-files
+
+      # Build and push backend image with provenance
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
@@ -433,17 +584,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+          attestations: |
+            sbom-go.spdx.json
 
+      # Build and push frontend image with provenance
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+          attestations: |
+            sbom-npm.spdx.json
 
   update_readme:
     name: Update README with Attestation Information
@@ -514,17 +674,90 @@ jobs:
           message: 'docs: add supply chain security information to README [skip ci]'
           default_author: github_actions
 
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: artifacts
+
+      - name: Download SBOM files
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-files
+          path: sbom
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          cp artifacts/localca-go release-assets/
+          cp sbom/sbom-go.spdx.json release-assets/
+          cp sbom/sbom-npm.spdx.json release-assets/
+          
+          # Create checksums
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+
+      # Generate SLSA provenance
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator@v1
+        with:
+          base64-subjects-as-input: ${{ hashFiles('release-assets/**/*') }}
+          upload-assets: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-assets/*
+          body: |
+            ## LocalCA-Go ${{ github.ref_name }}
+            
+            ### Release Notes
+            
+            This release includes:
+            - Backend and frontend improvements
+            - Security fixes
+            - Performance optimizations
+            
+            ### Artifacts
+            - Binary executable
+            - SBOM files
+            - SHA256 checksums
+            
+            ### Container Images
+            - `ghcr.io/lazarev-cloud/localca-go/backend:${{ github.ref_name }}`
+            - `ghcr.io/lazarev-cloud/localca-go/frontend:${{ github.ref_name }}`
+            
+            ### Verification
+            All artifacts include SLSA Level 3 attestations and can be verified using GitHub CLI.
+
   clean_up:
     name: Clean Up Artifacts
-    needs: [sonarqube, docker, update_readme]
+    needs: [sonarqube, docker, update_readme, release]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Delete artifacts
+      - name: Delete temporary artifacts
         uses: geekyeggo/delete-artifact@v2
         with:
           name: |
             go-coverage-reports
             frontend-coverage-reports
+            build-artifacts
           failOnError: false
             

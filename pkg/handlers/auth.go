@@ -183,7 +183,50 @@ func validateSetupToken(config *AuthConfig, token string) bool {
 		time.Now().Before(config.SetupTokenExpiry)
 }
 
-// validateSession validates a session tokenfunc validateSession(sessionToken string, store *storage.Storage) bool {	// Create a sessions directory if it doesn't exist	sessionsDir := filepath.Join(store.GetBasePath(), "sessions")	if err := os.MkdirAll(sessionsDir, 0700); err != nil {		log.Printf("Failed to create sessions directory: %v", err)		return false	}		// Check if session file exists	sessionFile := filepath.Join(sessionsDir, filepath.Base(sessionToken))	info, err := os.Stat(sessionFile)	if err != nil {		return false	}		// Check if session has expired (24 hours)	if time.Since(info.ModTime()) > 24*time.Hour {		// Remove expired session		os.Remove(sessionFile)		return false	}		return true}
+// validateSession validates a session token
+func validateSession(sessionToken string, store *storage.Storage) bool {
+	if sessionToken == "" {
+		return false
+	}
+
+	// Create a sessions directory if it doesn't exist
+	sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+	if err := os.MkdirAll(sessionsDir, 0700); err != nil {
+		log.Printf("Failed to create sessions directory: %v", err)
+		return false
+	}
+
+	// Create or update session file
+	sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
+
+	// Check if session file exists
+	info, err := os.Stat(sessionFile)
+	if err != nil {
+		// If this is a new session, create the file
+		if os.IsNotExist(err) {
+			// For login we would create the file, but for validation we require it exists
+			return false
+		}
+		log.Printf("Failed to check session file: %v", err)
+		return false
+	}
+
+	// Check if session has expired (24 hours)
+	if time.Since(info.ModTime()) > 24*time.Hour {
+		// Remove expired session
+		os.Remove(sessionFile)
+		return false
+	}
+
+	// Touch the file to update last access time
+	currentTime := time.Now().Local()
+	err = os.Chtimes(sessionFile, currentTime, currentTime)
+	if err != nil {
+		log.Printf("Failed to update session file time: %v", err)
+	}
+
+	return true
+}
 
 // generateSessionToken generates a new session token
 func generateSessionToken() string {

@@ -3,7 +3,11 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
+
+	"encoding/base64"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
@@ -82,9 +86,20 @@ func loginPostHandler(certSvc certificates.CertificateServiceInterface, store *s
 			int(time.Hour.Seconds()*24), // 24 hours
 			"/",
 			"",
-			false, // secure
-			true,  // httpOnly
+			c.Request.TLS != nil, // secure if using HTTPS
+			true,                 // httpOnly
 		)
+
+		// Create session file
+		sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+		if err := os.MkdirAll(sessionsDir, 0700); err != nil {
+			log.Printf("Failed to create sessions directory: %v", err)
+		} else {
+			sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
+			if err := os.WriteFile(sessionFile, []byte(authConfig.AdminUsername), 0600); err != nil {
+				log.Printf("Failed to create session file: %v", err)
+			}
+		}
 
 		// Redirect to home page
 		c.Redirect(http.StatusSeeOther, "/")
@@ -146,9 +161,20 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 			int(time.Hour.Seconds()*24), // 24 hours
 			"/",
 			"",
-			false, // secure
-			true,  // httpOnly
+			c.Request.TLS != nil, // secure if using HTTPS
+			true,                 // httpOnly
 		)
+
+		// Create session file
+		sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+		if err := os.MkdirAll(sessionsDir, 0700); err != nil {
+			log.Printf("Failed to create sessions directory: %v", err)
+		} else {
+			sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
+			if err := os.WriteFile(sessionFile, []byte(authConfig.AdminUsername), 0600); err != nil {
+				log.Printf("Failed to create session file: %v", err)
+			}
+		}
 
 		// Return success with token
 		c.JSON(http.StatusOK, APIResponse{
