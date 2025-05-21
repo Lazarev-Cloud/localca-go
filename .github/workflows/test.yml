@@ -1,59 +1,11 @@
-name: Tests
-
+name: Deprecated
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test:
-    name: Run Tests
+  dummy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Run package tests
-        run: go test -v -cover ./pkg/...
-
-      - name: Run main tests
-        run: go test -v -cover .
-
-  docker:
-    name: Test Docker Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: localca-backend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: false
-          tags: localca-frontend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max 
+      - name: Deprecated workflow
+        run: echo "This workflow is deprecated and has been replaced by ci-cd.yml"
+# This file is deprecated and has been replaced by ci-cd.yml 
