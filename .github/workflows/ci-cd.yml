@@ -35,6 +35,7 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Install Go dependencies
         run: go mod download
@@ -77,6 +78,7 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Run Gosec Security Scanner
         uses: securego/gosec@master
@@ -263,6 +265,7 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Install Go dependencies
         run: go mod download
@@ -424,6 +427,7 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Install Go linters
         run: |
