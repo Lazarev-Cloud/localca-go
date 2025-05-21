@@ -1,17 +1,29 @@
+# SLSA builder configuration
+# This is a configuration file for the SLSA builder, not a GitHub Actions workflow
+# Reference: https://github.com/slsa-framework/slsa-github-generator/blob/main/internal/builders/go/README.md
+
 version: 1
 
+# These are environment variables for the build
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
 
+# Go build configuration
 go:
+  # The binary to build
   binary: localca-go
+  # The main.go file path
   main: main.go
-  flags: ${{ env.GO_BUILD_FLAGS }}
-  ldflags: "-s -w -X 'github.com/Lazarev-Cloud/localca-go/pkg/config.CommitSHA=${{ github.sha }}'"
+  # Build flags - these will be set by the workflow
+  flags: "{{ .Env.GO_BUILD_FLAGS }}"
+  # Static flags to make binaries smaller and set version info
+  ldflags: "-s -w -X 'github.com/Lazarev-Cloud/localca-go/pkg/config.CommitSHA={{ .Env.GITHUB_SHA }}'"
+  # Environment variables for the Go compiler
   env:
     - GOOS=linux
     - GOARCH=amd64
 
+# Target platform
 goos: linux
 goarch: amd64 

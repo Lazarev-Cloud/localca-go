@@ -1,8 +1,14 @@
 name: SLSA Go Binary
 
 on:
+  # Run on release creation
   release:
     types: [created]
+  
+  # Run on specific tags
+  push:
+    tags:
+      - 'v*'
   
   # Allow manual triggering for testing
   workflow_dispatch:
@@ -25,8 +31,9 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v1.9.0
     with:
       go-version: '1.22'
+      # Use shell-style variable expansion compatible with SLSA builder
       evaluated-envs: |
-        GO_BUILD_FLAGS=-ldflags "-X 'github.com/Lazarev-Cloud/localca-go/pkg/config.Version=${{ github.event.release.tag_name || inputs.version }}'"
+        GO_BUILD_FLAGS=-ldflags "-X 'github.com/Lazarev-Cloud/localca-go/pkg/config.Version=${{ github.event.release.tag_name || inputs.version || github.ref_name }}'"
       config-file: .github/workflows/slsa-builder-config.yml
 
   # Generate SBOM for the binary

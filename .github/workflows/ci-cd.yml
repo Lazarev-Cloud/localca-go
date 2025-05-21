@@ -103,11 +103,33 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --legacy-peer-deps
 
+      # Create coverage directory before running tests
+      - name: Create coverage directory
+        run: mkdir -p coverage
+
       - name: Run frontend tests with coverage
         run: npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage
 
       - name: Run ESLint
         run: npx eslint -f checkstyle app components hooks lib -o eslint-report.xml || true
+
+      # Ensure coverage directory exists before uploading artifact
+      - name: Prepare artifacts
+        run: |
+          if [ ! -d "coverage" ]; then
+            mkdir -p coverage
+            echo "Created missing coverage directory"
+          fi
+          
+          if [ ! -f "coverage/lcov.info" ]; then
+            echo "lcov.info not found, creating empty file to prevent artifact upload failure"
+            touch coverage/lcov.info
+          fi
+          
+          if [ ! -f "eslint-report.xml" ]; then
+            echo "eslint-report.xml not found, creating empty file"
+            touch eslint-report.xml
+          fi
 
       - name: Upload frontend coverage reports
         uses: actions/upload-artifact@v4
@@ -193,6 +215,25 @@ jobs:
         with:
           name: frontend-coverage-reports
           path: coverage
+
+      # Ensure downloaded reports exist to prevent analysis errors
+      - name: Verify coverage reports
+        run: |
+          ls -la .
+          ls -la coverage || echo "coverage directory not found"
+          
+          # Ensure go-coverage-reports exist
+          if [ ! -f "coverage-merged.out" ]; then
+            echo "coverage-merged.out not found, creating empty file"
+            echo "mode: set" > coverage-merged.out
+          fi
+          
+          # Ensure lcov.info exists
+          if [ ! -f "coverage/lcov.info" ]; then
+            mkdir -p coverage
+            echo "coverage/lcov.info not found, creating empty file"
+            touch coverage/lcov.info
+          fi
 
       # Install and run Go linters
       - name: Set up Go
