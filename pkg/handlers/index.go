@@ -188,6 +188,15 @@ func deleteCertificateHandler(certSvc certificates.CertificateServiceInterface, 
 			return
 		}
 
+		// Validate certificate name
+		if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid certificate name",
+			})
+			return
+		}
+
 		// Delete certificate
 		if err := store.DeleteCertificate(name); err != nil {
 			log.Printf("Failed to delete certificate: %v", err)
