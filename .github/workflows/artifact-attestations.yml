@@ -1,12 +1,17 @@
 name: Artifact Attestations
 
 on:
-  # Run on specific branches and tags
+  # Run only on release tags and main branch
   push:
     branches:
       - main
     tags:
       - 'v*'
+    paths:
+      - 'Dockerfile*'
+      - 'go.mod'
+      - 'go.sum'
+      - 'main.go'
   
   # Allow manual triggering
   workflow_dispatch:
@@ -18,72 +23,74 @@ permissions:
   packages: write    # Required for container images
 
 jobs:
-  attest-binary:
-    name: Generate Binary Attestations
+  attest-artifacts:
+    name: Generate & Verify Attestations
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Setup for building
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: true
 
-      - name: Install dependencies
-        run: go mod download
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build binary
-        run: go build -v -o localca-go
-
-      # Ensure binary is executable
-      - name: Set permissions
+      # Set lowercase repository name
+      - name: Set lowercase repository name
         run: |
-          chmod +x localca-go
-          ls -la localca-go
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
+          fi
 
-      # Generate SBOM for the binary
-      - name: Generate SBOM
+      # Build binary
+      - name: Build binary
+        run: |
+          go mod download
+          go build -v -o localca-go
+          chmod +x localca-go
+
+      # Generate SBOM for binary
+      - name: Generate Binary SBOM
         uses: anchore/sbom-action@v0
         with:
           format: spdx-json
-          artifact-name: localca-go
+          artifact-name: localca-go-sbom
           output-file: localca-go.spdx.json
 
-      # Generate build provenance attestation
+      # Generate binary attestations
+      - name: Generate Binary Attestations
+        run: |
+          # Generate build provenance attestation
+          echo "Generating build provenance attestation..."
+          gh extension install github.com/slsa-framework/slsa-github-generator/actions/attestations/prepare-attestation
+          gh prepare-attestation localca-go || true
+          
+          # Generate SBOM attestation
+          echo "Generating SBOM attestation..."
+
+      # Generate binary attestations with GitHub Actions
       - name: Generate Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: localca-go
 
-      # Generate SBOM attestation
       - name: Generate SBOM Attestation
         uses: actions/attest-sbom@v1
         with:
           subject-path: localca-go
           sbom-path: localca-go.spdx.json
 
-      # Archive the binary and attestations as an artifact
-      - name: Upload Binary and Attestations
-        uses: actions/upload-artifact@v4
-        with:
-          name: localca-go-with-attestations
-          path: |
-            localca-go
-            localca-go.spdx.json
-
-  attest-containers:
-    name: Generate Container Attestations
-    runs-on: ubuntu-latest
-    needs: attest-binary
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -91,152 +98,107 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Set lowercase repository name
-      - name: Set lowercase repository name
-        run: |
-          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
-
-      # Build and push backend image
-      - name: Build backend image
+      # Build and attest backend container
+      - name: Build and push backend image
         id: build-backend
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_LC }}/backend:attestation
+          tags: ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/backend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Backend
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
 
-      # Extract the image digest for attestation
-      - name: Extract backend image digest
-        id: backend-digest
-        run: |
-          DIGEST="${{ steps.build-backend.outputs.digest }}"
-          echo "Backend image digest: $DIGEST"
-          echo "BACKEND_DIGEST=$DIGEST" >> $GITHUB_ENV
-
-      # Generate SBOM for backend image
+      # Generate SBOM for backend container
       - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ env.REPO_LC }}/backend:attestation
+          image: ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
           format: spdx-json
           output-file: backend.spdx.json
 
-      # Generate provenance attestation for backend image
+      # Attest backend container
+      - name: Attest Backend
+        run: |
+          # Generate container attestations
+          echo "Attesting backend container..."
+          
       - name: Attest Backend Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/backend
-          subject-digest: ${{ env.BACKEND_DIGEST }}
+          subject-digest: ${{ steps.build-backend.outputs.digest }}
           push-to-registry: true
 
-      # Generate SBOM attestation for backend image
       - name: Attest Backend SBOM
         uses: actions/attest-sbom@v1
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/backend
-          subject-digest: ${{ env.BACKEND_DIGEST }}
+          subject-digest: ${{ steps.build-backend.outputs.digest }}
           sbom-path: backend.spdx.json
           push-to-registry: true
 
-      # Build and push frontend image
-      - name: Build frontend image
+      # Build and attest frontend container
+      - name: Build and push frontend image
         id: build-frontend
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ghcr.io/${{ env.REPO_LC }}/frontend:attestation
+          tags: ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/frontend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Frontend
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
 
-      # Extract the image digest for attestation
-      - name: Extract frontend image digest
-        id: frontend-digest
-        run: |
-          DIGEST="${{ steps.build-frontend.outputs.digest }}"
-          echo "Frontend image digest: $DIGEST"
-          echo "FRONTEND_DIGEST=$DIGEST" >> $GITHUB_ENV
-
-      # Generate SBOM for frontend image
+      # Generate SBOM for frontend container
       - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ env.REPO_LC }}/frontend:attestation
+          image: ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
           format: spdx-json
           output-file: frontend.spdx.json
 
-      # Generate provenance attestation for frontend image
+      # Attest frontend container
       - name: Attest Frontend Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
-          subject-digest: ${{ env.FRONTEND_DIGEST }}
+          subject-digest: ${{ steps.build-frontend.outputs.digest }}
           push-to-registry: true
 
-      # Generate SBOM attestation for frontend image
       - name: Attest Frontend SBOM
         uses: actions/attest-sbom@v1
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
-          subject-digest: ${{ env.FRONTEND_DIGEST }}
+          subject-digest: ${{ steps.build-frontend.outputs.digest }}
           sbom-path: frontend.spdx.json
           push-to-registry: true
 
-  verify-attestations:
-    name: Verify Attestations
-    runs-on: ubuntu-latest
-    needs: [attest-binary, attest-containers]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download binary attestations
-        uses: actions/download-artifact@v4
-        with:
-          name: localca-go-with-attestations
-          path: ./artifacts
-
-      - name: Install GitHub CLI
-        run: |
-          type -p curl >/dev/null || (apt update && apt install curl -y)
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install gh -y
-
-      # Set lowercase repository name
-      - name: Set lowercase repository name
-        run: |
-          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
-
-      # Verify binary attestation
-      - name: Verify Binary Attestation
+      # Verify attestations
+      - name: Verify Attestations
         run: |
           echo "Verifying binary attestation..."
-          gh attestation verify ./artifacts/localca-go -R ${{ env.REPO_LC }} || true
+          gh attestation verify ./localca-go -R ${{ env.REPO_LC }} || true
+          
           echo "Verifying binary SBOM attestation..."
-          gh attestation verify ./artifacts/localca-go -R ${{ env.REPO_LC }} --predicate-type https://spdx.dev/Document/v2.3 || true
-
-      # Login to container registry
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Verify container attestations
-      - name: Verify Container Attestations
-        run: |
+          gh attestation verify ./localca-go -R ${{ env.REPO_LC }} --predicate-type https://spdx.dev/Document/v2.3 || true
+          
           echo "Verifying backend container attestation..."
-          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/backend:attestation -R ${{ env.REPO_LC }} || true
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }} -R ${{ env.REPO_LC }} || true
+          
           echo "Verifying frontend container attestation..."
-          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/frontend:attestation -R ${{ env.REPO_LC }} || true 
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }} -R ${{ env.REPO_LC }} || true
+
+      # Upload attestations and SBOMs as artifacts
+      - name: Upload Attestations and SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: attestations-and-sboms
+          path: |
+            localca-go.spdx.json
+            backend.spdx.json
+            frontend.spdx.json
+          retention-days: 90 

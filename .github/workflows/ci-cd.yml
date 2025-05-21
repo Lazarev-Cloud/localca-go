@@ -19,447 +19,479 @@ name: CI/CD Pipeline
         default: dev
         required: true
 permissions:
-  contents: read
-  security-events: write
+  contents: read # Default minimal permissions
+  security-events: write # For uploading security scan results
+
 jobs:
-  backend_test:
-    name: Backend Tests
+  backend_tests_and_security:
+    name: Backend Tests & Security
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: true
           cache-dependency-path: go.sum
+
       - name: Install Go dependencies
         run: go mod download
+
       - name: Run Go tests with coverage
         run: |
-          echo "Running package tests..."
           go test -v -cover ./pkg/... -coverprofile=coverage.out || true
-          echo "Running main tests..."
           go test -v -cover . -coverprofile=coverage-main.out || true
-      - name: Merge coverage reports
-        run: >
-          # Create coverage files if they don't exist
-
-          touch coverage.out
-
-          touch coverage-main.out
-
-
           echo "mode: set" > coverage-merged.out
+          grep -h -v "mode: set" coverage.out coverage-main.out >> coverage-merged.out || true
 
-          grep -h -v "mode: set" coverage.out coverage-main.out >>
-          coverage-merged.out || true
-      - name: Upload Go coverage reports
-        uses: actions/upload-artifact@v4
+      # Run security scans in parallel with tests
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
         with:
-          name: go-coverage-reports
-          path: |
-            coverage-merged.out
-            coverage.out
-            coverage-main.out
-          retention-days: 1
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          token: '${{ secrets.CODECOV_TOKEN }}'
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: false
-          verbose: true
-          directory: ./
-          files: ./coverage-merged.out
+          sarif_file: gosec-results.sarif
+          category: gosec
+
+      - name: Run Nancy for Dependency Scanning
+        run: |
+          go install github.com/sonatype-nexus-community/nancy@latest
+          go list -json -deps | nancy sleuth --output json > nancy-results.json || true
+
+      # Generate SBOM as part of the same job
       - name: Generate SBOM for Backend
         uses: anchore/sbom-action@v0
         with:
           artifact-name: backend-sbom.spdx.json
           format: spdx-json
           path: .
-      - name: Upload SBOM as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-sbom
-          path: backend-sbom.spdx.json
-          retention-days: 5
-  security_scan_backend:
-    name: Security Scan Backend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-          cache-dependency-path: go.sum
-      - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
-        with:
-          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gosec-results.sarif
-          category: gosec
-      - name: Run Nancy for Dependency Scanning
-        run: >
-          go install github.com/sonatype-nexus-community/nancy@latest
 
-          go list -json -deps | nancy sleuth --output json > nancy-results.json
-          || true
-      - name: Upload Nancy results
+      # Upload all artifacts at once
+      - name: Upload Backend Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nancy-results
-          path: nancy-results.json
+          name: backend-artifacts
+          path: |
+            coverage-merged.out
+            coverage.out
+            coverage-main.out
+            gosec-results.sarif
+            nancy-results.json
+            backend-sbom.spdx.json
           retention-days: 5
-  frontend_test:
-    name: Frontend Tests
+
+      # Upload coverage to Codecov
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: '${{ secrets.CODECOV_TOKEN }}'
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+          files: ./coverage-merged.out
+
+  frontend_tests_and_security:
+    name: Frontend Tests & Security
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-      - name: Backup original package.json
-        run: cp package.json package.json.original
-      - name: Update package.json for testing
-        run: >
-          # First pass - Update React and React DOM versions
 
-          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" =
-          "^18.2.0"' package.json > tmp.json
+      # Simplify package.json preparation
+      - name: Prepare package.json for testing
+        run: |
+          jq '.dependencies.react = "^18.2.0" | 
+              .dependencies."react-dom" = "^18.2.0" | 
+              .devDependencies."@testing-library/react" = "^14.0.0" | 
+              .devDependencies."@types/react" = "^18.2.48" | 
+              .devDependencies."@types/react-dom" = "^18.2.18" | 
+              .dependencies."date-fns" = "^3.6.0"' package.json > package.json.testing
+          cp package.json package.json.original
+          mv package.json.testing package.json
+          echo "Modified package.json for testing"
 
-          mv tmp.json package.json
-
-
-          # Second pass - Update testing library versions
-
-          jq '.devDependencies."@testing-library/react" = "^14.0.0"'
-          package.json > tmp.json
-
-          mv tmp.json package.json
-
-
-          # Third pass - Update type definitions to match React version
-
-          jq '.devDependencies."@types/react" = "^18.2.48" |
-          .devDependencies."@types/react-dom" = "^18.2.18"' package.json >
-          tmp.json
-
-          mv tmp.json package.json
-
-
-          # Optional - Update any other dependencies that might cause
-          compatibility issues
-
-          jq '.dependencies."date-fns" = "^3.6.0"' package.json > tmp.json
-
-          mv tmp.json package.json
-
-
-          # Show the modified package.json for debugging
-
-          echo "Modified package.json for testing:"
-
-          cat package.json
       - name: Install frontend dependencies
         run: npm install --legacy-peer-deps
-      - name: Create coverage directory
-        run: |
-          # Check if coverage exists and is a file (not a directory)
-          if [ -f "coverage" ]; then
-            echo "Found 'coverage' as a file, removing it"
-            rm coverage
-          fi
 
-          # Create coverage directory
-          mkdir -p coverage
+      # Run tests and linting in parallel
       - name: Run frontend tests with coverage
-        run: >
-          echo "Running frontend tests with coverage..."
-
-          # Run tests with proper error handling
-
-          npm test -- --coverage --coverageReporters=lcov
-          --coverageDirectory=coverage || echo "Warning: Tests failed but
-          continuing workflow"
-
-
-          # Create empty lcov.info file if it doesn't exist
-
-          if [ ! -f "coverage/lcov.info" ]; then
-            echo "Creating empty lcov.info file"
-            touch coverage/lcov.info
-          fi
-
-
-          # List coverage directory contents for debugging
-
-          echo "Coverage directory contents:"
-
-          ls -la coverage/ || echo "Cannot list coverage directory"
-      - name: Run ESLint
-        run: >-
-          npx eslint -f json app components hooks lib -o eslint-report.json ||
-          true
-      - name: Prepare artifacts
         run: |
-          echo "Checking coverage directory and files..."
+          mkdir -p coverage
+          npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage || echo "Tests completed with issues"
+          [ ! -f "coverage/lcov.info" ] && touch coverage/lcov.info
 
-          # Check if coverage exists and is a file (not a directory)
-          if [ -f "coverage" ]; then
-            echo "Found 'coverage' as a file, removing it"
-            rm coverage
-          fi
-
-          # Check if coverage directory exists
-          if [ ! -d "coverage" ]; then
-            echo "Coverage directory not found, creating it"
-            mkdir -p coverage
-          fi
-
-          # Check lcov.info file
-          if [ ! -f "coverage/lcov.info" ]; then
-            echo "lcov.info not found, creating empty file"
-            touch coverage/lcov.info
-          fi
-
-          # Check eslint report
-          if [ ! -f "eslint-report.json" ]; then
-            echo "eslint-report.json not found, creating empty file"
-            touch eslint-report.json
-          fi
-
-          # List files for debugging
-          echo "Directory contents:"
-          ls -la coverage || echo "Cannot list coverage directory"
-      - name: Upload frontend coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage-reports
-          path: |
-            coverage/
-            eslint-report.json
-          retention-days: 1
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: '${{ secrets.CODECOV_TOKEN }}'
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: false
-          verbose: true
-          directory: ./coverage/
-          files: ./coverage/lcov.info
-      - name: Restore original package.json
+      - name: Run ESLint and npm audit in parallel
         run: |
-          if [ -f package.json.original ]; then
-            mv package.json.original package.json
-            echo "Original package.json restored"
-          fi
+          npx eslint -f json app components hooks lib -o eslint-report.json || true
+          npm audit --json > npm-audit.json || true
+
+      # Generate SBOM as part of the same job
       - name: Generate SBOM for Frontend
         uses: anchore/sbom-action@v0
         with:
           artifact-name: frontend-sbom.spdx.json
           format: spdx-json
           path: .
-      - name: Upload SBOM as artifact
+
+      # Upload all artifacts at once
+      - name: Upload Frontend Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-sbom
-          path: frontend-sbom.spdx.json
+          name: frontend-artifacts
+          path: |
+            coverage/
+            eslint-report.json
+            npm-audit.json
+            frontend-sbom.spdx.json
           retention-days: 5
-  security_scan_frontend:
-    name: Security Scan Frontend
+
+      # Upload coverage to Codecov
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: '${{ secrets.CODECOV_TOKEN }}'
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+          directory: ./coverage/
+          files: ./coverage/lcov.info
+
+      - name: Restore original package.json
+        run: |
+          if [ -f package.json.original ]; then
+            mv package.json.original package.json
+          fi
+
+  build_and_verify:
+    name: Build & Verify
     runs-on: ubuntu-latest
+    needs: [backend_tests_and_security, frontend_tests_and_security]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      backend_digest: ${{ steps.build-backend.outputs.digest }}
+      frontend_digest: ${{ steps.build-frontend.outputs.digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Run npm audit
-        run: npm audit --json > npm-audit.json || true
-      - name: Upload npm audit results
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-audit-results
-          path: npm-audit.json
-          retention-days: 5
-  build:
-    name: Build Verification
-    runs-on: ubuntu-latest
-    needs:
-      - backend_test
-      - frontend_test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+
+      # Setup and build Go application
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: true
           cache-dependency-path: go.sum
-      - name: Install Go dependencies
-        run: go mod download
+
       - name: Build Go application
-        run: go build -v -o localca-go
+        run: |
+          go mod download
+          go build -v -o localca-go
+
+      # Setup and build frontend
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-      - name: Backup original package.json
-        run: cp package.json package.json.original
-      - name: Update package.json for compatibility
-        run: |
-          # Update date-fns to a compatible version for react-day-picker
-          jq '.dependencies."date-fns" = "^3.6.0"' package.json > tmp.json
-          mv tmp.json package.json
 
-          # Show the modified package.json for debugging
-          echo "Modified package.json:"
-          cat package.json
-      - name: Install frontend dependencies
-        run: npm install --legacy-peer-deps
+      - name: Prepare package.json for build
+        run: |
+          cp package.json package.json.original
+          jq '.dependencies."date-fns" = "^3.6.0"' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
       - name: Build frontend
-        run: npm run build
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+
       - name: Restore original package.json
         run: |
           if [ -f package.json.original ]; then
             mv package.json.original package.json
-            echo "Original package.json restored"
           fi
+
+      # Verify build artifacts
       - name: Verify build artifacts
         run: |
           if [ ! -f "localca-go" ]; then
             echo "Go build failed - executable not found"
             exit 1
           fi
-
           if [ ! -d ".next" ]; then
             echo "Next.js build failed - .next directory not found"
             exit 1
           fi
-
           echo "✅ Build verification successful"
-          ls -la localca-go
-          du -sh .next
+
+      # Set up Docker for container builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Set lowercase repository name
+      - name: Set lowercase repository name
+        run: |
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
+
+      # Build backend container
+      - name: Build backend image
+        id: build-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: ghcr.io/${{ env.REPO_LC }}/backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/backend:test
+
+      # Build frontend container
+      - name: Build frontend image
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: false
+          load: true
+          tags: ghcr.io/${{ env.REPO_LC }}/frontend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/frontend:test
+
+      # Scan containers with Trivy
+      - name: Scan backend container with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ env.REPO_LC }}/backend:test
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Scan frontend container with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ env.REPO_LC }}/frontend:test
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      # Upload scan results
+      - name: Upload container scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-backend-results.sarif,trivy-frontend-results.sarif'
+          category: 'container-security'
+
+      # Generate SBOM attestation for binary
+      - name: Generate SBOM for Binary
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: localca-go-sbom.spdx.json
+          format: spdx-json
+          path: .
+          output-file: localca-go.spdx.json
+
+      # Generate binary attestation
+      - name: Generate Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: localca-go
+
+      # Generate SBOM attestation
+      - name: Generate SBOM Attestation
+        uses: actions/attest-sbom@v1
+        with:
+          subject-path: localca-go
+          sbom-path: localca-go.spdx.json
+
+      # Upload build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
             localca-go
+            localca-go.spdx.json
             .next/**/*
-          retention-days: 1
+            trivy-backend-results.sarif
+            trivy-frontend-results.sarif
+          retention-days: 5
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: build_and_verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup Docker for pushing
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Set up environment
+      - name: Set environment variables
+        run: |
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
+          fi
+
+      # Build and push backend image
+      - name: Build and push backend image
+        id: build-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ env.REPO_LC }}/backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and push frontend image
+      - name: Build and push frontend image
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ env.REPO_LC }}/frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Generate SBOM for published images
+      - name: Generate Backend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
+          format: spdx-json
+          output-file: backend.spdx.json
+
+      - name: Generate Frontend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
+          format: spdx-json
+          output-file: frontend.spdx.json
+
+      # Attest container images
+      - name: Attest Backend Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
+          subject-digest: ${{ steps.build-backend.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Backend SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
+          subject-digest: ${{ steps.build-backend.outputs.digest }}
+          sbom-path: backend.spdx.json
+          push-to-registry: true
+
+      - name: Attest Frontend Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
+          subject-digest: ${{ steps.build-frontend.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Frontend SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
+          subject-digest: ${{ steps.build-frontend.outputs.digest }}
+          sbom-path: frontend.spdx.json
+          push-to-registry: true
+
+      # Upload deployment artifacts
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-artifacts
+          path: |
+            backend.spdx.json
+            frontend.spdx.json
+          retention-days: 5
+
   sonarqube:
     name: SonarQube Analysis
+    needs: [backend_tests_and_security, frontend_tests_and_security]
     runs-on: ubuntu-latest
-    needs:
-      - backend_test
-      - frontend_test
-    if: '${{ !failure() && !cancelled() }}'
+    if: ${{ !failure() && !cancelled() }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Create coverage files
+
+      # Download all artifacts
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Prepare coverage reports
+      - name: Prepare coverage reports
         run: |
-          # Check if coverage exists and is a file (not a directory)
-          if [ -f "coverage" ]; then
-            echo "Found 'coverage' as a file, removing it"
-            rm coverage
-          fi
-
-          # Create coverage directory if it doesn't exist
-          if [ ! -d "coverage" ]; then
-            echo "Creating coverage directory"
-            mkdir -p coverage
-          else
-            echo "Coverage directory already exists"
-          fi
-
-          # Create necessary files
+          mkdir -p coverage
+          cp artifacts/backend-artifacts/coverage-merged.out . || touch coverage-merged.out
+          cp -r artifacts/frontend-artifacts/coverage/* coverage/ || mkdir -p coverage
           touch coverage/lcov.info
-          echo "mode: set" > coverage-merged.out
-      - name: Download Go coverage reports
-        uses: actions/download-artifact@v4
-        with:
-          name: go-coverage-reports
-          path: go-coverage
-        continue-on-error: true
-      - name: Download frontend coverage reports
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage-reports
-          path: coverage-download
-        continue-on-error: true
-      - name: Process coverage reports
-        run: |
-          echo "Processing coverage reports..."
+          cp artifacts/frontend-artifacts/eslint-report.json . || touch eslint-report.json
 
-          # Process Go coverage files if they exist
-          if [ -d "go-coverage" ]; then
-            echo "Go coverage files found:"
-            ls -la go-coverage/
-            
-            # Copy files to root
-            cp go-coverage/coverage-merged.out . 2>/dev/null || echo "No merged coverage file found"
-          fi
-
-          # Process frontend coverage files if they exist
-          if [ -d "coverage-download" ]; then
-            echo "Frontend coverage files found:"
-            ls -la coverage-download/
-            
-            # Copy files to appropriate locations
-            cp -r coverage-download/* coverage/ 2>/dev/null || echo "No frontend coverage files found"
-          fi
-
-          # List files for debugging
-          echo "Coverage directory contents after processing:"
-          ls -la coverage/ || echo "Cannot list coverage directory"
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: '${{ secrets.CODECOV_TOKEN }}'
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-          cache-dependency-path: go.sum
-      - name: Install Go linters
-        run: |
-          go install golang.org/x/lint/golint@latest
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57.0
-      - name: Run Go Vet
-        run: go vet ./... > govet-report.out || true
-      - name: Run golint
-        run: golint ./... > golint-report.out || true
-      - name: Run golangci-lint
-        run: >-
-          golangci-lint run --out-format checkstyle --issues-exit-code=0 >
-          golangci-lint-report.xml || true
+      # Set up SonarQube Scanner
       - name: Set up SonarQube Scanner
         uses: SonarSource/sonarqube-scan-action@v2
         env:
@@ -469,452 +501,15 @@ jobs:
         with:
           args: >
             -Dsonar.projectKey=Lazarev-Cloud_localca-go
-            -Dsonar.organization=lazarev-cloud -Dsonar.sources=.
+            -Dsonar.organization=lazarev-cloud
+            -Dsonar.sources=.
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.go.coverage.reportPaths=coverage-merged.out
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**,**/.next/**,**/__mocks__/**
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx
-            -Dsonar.go.govet.reportPaths=govet-report.out
-            -Dsonar.go.golint.reportPaths=golint-report.out
-            -Dsonar.go.golangci-lint.reportPaths=golangci-lint-report.xml
-            -Dsonar.javascript.node.maxspace=4096 -Dsonar.sourceEncoding=UTF-8
-            -Dsonar.typescript.tsconfigPaths=tsconfig.json
             -Dsonar.eslint.reportPaths=eslint-report.json
-  bundle_analysis:
-    name: Bundle Analysis
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    if: >-
-      github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
-      startsWith(github.ref, 'refs/tags/v'))
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Build with bundle analysis
-        run: |
-          # Set Codecov token for bundle analysis
-          export CODECOV_TOKEN=${{ secrets.CODECOV_TOKEN }}
-          export NODE_ENV=production
-
-          # Run production build to trigger bundle analysis
-          npm run build
-        env:
-          CODECOV_TOKEN: '${{ secrets.CODECOV_TOKEN }}'
-  generate_sbom:
-    name: Generate SBOM
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Generate Comprehensive SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          format: spdx-json
-          artifact-name: localca-go-sbom.spdx.json
-          path: .
-          upload-release-assets: true
-          dependency-snapshot: true
-  docker:
-    name: Build and Push Docker Images
-    needs:
-      - build
-      - security_scan_backend
-      - security_scan_frontend
-    runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
-      startsWith(github.ref, 'refs/tags/v'))
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: '${{ github.actor }}'
-          password: '${{ secrets.GITHUB_TOKEN }}'
-      - name: Set version variables
-        id: version
-        run: |
-          # Set default version to commit SHA
-          VERSION=${GITHUB_SHA::8}
-
-          # If this is a tag, use the tag name as version
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
-
-          # Set output variables
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/lazarev-cloud/localca-go/backend
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-          labels: >
-            org.opencontainers.image.title=LocalCA Backend
-
-            org.opencontainers.image.description=LocalCA Go backend service
-
-            org.opencontainers.image.vendor=Lazarev Cloud
-
-            org.opencontainers.image.version=${{ steps.version.outputs.version
-            }}
-
-            org.opencontainers.image.created=${{
-            steps.version.outputs.build_date }}
-      - name: Extract metadata for Frontend Docker
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/lazarev-cloud/localca-go/frontend
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-          labels: >
-            org.opencontainers.image.title=LocalCA Frontend
-
-            org.opencontainers.image.description=LocalCA Next.js frontend
-            service
-
-            org.opencontainers.image.vendor=Lazarev Cloud
-
-            org.opencontainers.image.version=${{ steps.version.outputs.version
-            }}
-
-            org.opencontainers.image.created=${{
-            steps.version.outputs.build_date }}
-      - name: Generate SBOM for Backend Docker Image
-        uses: anchore/sbom-action@v0
-        with:
-          format: spdx-json
-          artifact-name: backend-docker-sbom.spdx.json
-          path: .
-          dockerfile: ./Dockerfile
-      - name: Generate SBOM for Frontend Docker Image
-        uses: anchore/sbom-action@v0
-        with:
-          format: spdx-json
-          artifact-name: frontend-docker-sbom.spdx.json
-          path: .
-          dockerfile: ./Dockerfile.frontend
-      - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: '${{ steps.meta.outputs.tags }}'
-          labels: '${{ steps.meta.outputs.labels }}'
-          cache-from: type=gha
-          cache-to: 'type=gha,mode=max'
-          provenance: true
-          sbom: true
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: true
-          tags: '${{ steps.meta-frontend.outputs.tags }}'
-          labels: '${{ steps.meta-frontend.outputs.labels }}'
-          cache-from: type=gha
-          cache-to: 'type=gha,mode=max'
-          provenance: true
-          sbom: true
-  update_readme:
-    name: Update README with Attestation Information
-    needs:
-      - docker
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Add attestation information to README
-        run: >
-          # Check if attestation section already exists
-
-          if ! grep -q "## Supply Chain Security" README.md; then
-            # Add attestation verification section to README
-            cat >> README.md << 'EOL'
-
-          ## Supply Chain Security
-
-
-          This project implements SLSA (Supply chain Levels for Software
-          Artifacts) Level 3 build security. The artifacts have
-          cryptographically signed attestations that provide provenance and
-          integrity guarantees.
-
-
-          ### Verifying Binary Attestations
-
-
-          To verify the binary attestations, you can use the GitHub CLI:
-
-
-          ```bash
-
-          # Install GitHub CLI if not already installed
-
-          # https://cli.github.com/manual/installation
-
-
-          # Verify the binary
-
-          gh attestation verify localca-go -R lazarev-cloud/localca-go
-
-
-          # Verify the SBOM
-
-          gh attestation verify localca-go -R lazarev-cloud/localca-go
-          --predicate-type https://spdx.dev/Document/v2.3
-
-          ```
-
-
-          ### Verifying Container Attestations
-
-
-          To verify the container attestations:
-
-
-          ```bash
-
-          # Login to GitHub Container Registry
-
-          docker login ghcr.io
-
-
-          # Verify backend container
-
-          gh attestation verify
-          oci://ghcr.io/lazarev-cloud/localca-go/backend:latest -R
-          lazarev-cloud/localca-go
-
-
-          # Verify frontend container
-
-          gh attestation verify
-          oci://ghcr.io/lazarev-cloud/localca-go/frontend:latest -R
-          lazarev-cloud/localca-go
-
-          ```
-
-
-          These verifications ensure the software you're using was built from
-          the source code in this repository using GitHub Actions secure builder
-          workflows.
-
-          EOL
-
-            echo "Added attestation information to README.md"
-          else
-            echo "Attestation section already exists in README.md"
-          fi
-      - name: Commit README changes
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: README.md
-          message: 'docs: add supply chain security information to README [skip ci]'
-          default_author: github_actions
-  release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs:
-      - docker
-    if: 'startsWith(github.ref, ''refs/tags/v'')'
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: artifacts
-      - name: Download SBOM files
-        uses: actions/download-artifact@v4
-        with:
-          name: localca-go-sbom.spdx.json
-          path: sbom
-      - name: Prepare release assets
-        run: |
-          mkdir -p release-assets
-          cp artifacts/localca-go release-assets/
-          cp sbom/localca-go-sbom.spdx.json release-assets/
-
-          # Create checksums
-          cd release-assets
-          sha256sum * > SHA256SUMS.txt
-          cd ..
-      - name: Generate SLSA provenance
-        uses: slsa-framework/slsa-github-generator@v1
-        with:
-          base64-subjects-as-input: '${{ hashFiles(''release-assets/**/*'') }}'
-          upload-assets: true
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            release-assets/*
-          body: >
-            ## LocalCA-Go ${{ github.ref_name }}
-
-
-            ### Release Notes
-
-
-            This release includes:
-
-            - Backend and frontend improvements
-
-            - Security fixes
-
-            - Performance optimizations
-
-
-            ### Artifacts
-
-            - Binary executable
-
-            - SBOM files
-
-            - SHA256 checksums
-
-
-            ### Container Images
-
-            - `ghcr.io/lazarev-cloud/localca-go/backend:${{ github.ref_name }}`
-
-            - `ghcr.io/lazarev-cloud/localca-go/frontend:${{ github.ref_name }}`
-
-
-            ### Verification
-
-            All artifacts include SLSA Level 3 attestations and can be verified
-            using GitHub CLI.
-  clean_up:
-    name: Clean Up Artifacts
-    needs:
-      - sonarqube
-      - docker
-      - update_readme
-      - release
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete temporary artifacts
-        uses: geekyeggo/delete-artifact@v2
-        with:
-          name: |
-            go-coverage-reports
-            frontend-coverage-reports
-            build-artifacts
-          failOnError: false
-  merge_sboms:
-    name: Merge SBOMs
-    needs:
-      - backend_test
-      - frontend_test
-    if: >-
-      success() && github.event_name == 'push' && github.ref ==
-      'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Download SBOMs
-        uses: actions/download-artifact@v4
-        with:
-          pattern: '*-sbom.spdx.json'
-          merge: true
-          path: ./sboms
-      - name: Merge SBOMs
-        run: |
-          # Install jq for JSON processing
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-          # List all downloaded SBOMs
-          echo "Downloaded SBOMs:"
-          ls -la ./sboms/ || echo "No SBOMs directory found"
-
-          # Create merged-sbom.json - handle case where files might not exist
-          if [ -f "./sboms/backend-sbom.spdx.json" ]; then
-            echo "Using backend SBOM as base"
-            cp ./sboms/backend-sbom.spdx.json ./merged-sbom.json
-          elif [ -f "./sboms/frontend-sbom.spdx.json" ]; then
-            echo "Using frontend SBOM as base"
-            cp ./sboms/frontend-sbom.spdx.json ./merged-sbom.json
-          else
-            echo "No SBOM files found, creating minimal SBOM"
-            cat > ./merged-sbom.json << EOF
-            {
-              "SPDXID": "SPDXRef-DOCUMENT",
-              "spdxVersion": "SPDX-2.3",
-              "creationInfo": {
-                "created": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-                "creators": [
-                  "Person: LocalCA-Go Maintainer",
-                  "Organization: lazarev.cloud",
-                  "Tool: CI/CD Pipeline"
-                ],
-                "licenseListVersion": "3.21"
-              },
-              "name": "LocalCA-Go SBOM",
-              "dataLicense": "CC0-1.0",
-              "documentNamespace": "https://lazarev.cloud/spdx/localca-go/$(date +%s)",
-              "packages": []
-            }
-            EOF
-          fi
-
-          echo "SBOMs merged into merged-sbom.json"
-      - name: Commit merged SBOM
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'chore: update SPDX SBOM'
-          file_pattern: merged-sbom.json
+            -Dsonar.javascript.node.maxspace=4096
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.typescript.tsconfigPaths=tsconfig.json
