@@ -71,6 +71,15 @@ jobs:
             coverage-main.out
           retention-days: 1
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-merged.out
+          flags: backend
+          fail_ci_if_error: false
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   security_scan_backend:
     name: Security Scan Backend
     runs-on: ubuntu-latest
@@ -223,6 +232,15 @@ jobs:
             coverage/
             eslint-report.json
           retention-days: 1
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       # Restore original package.json to avoid issues in later stages
       - name: Restore original package.json
@@ -397,35 +415,29 @@ jobs:
             
             # Copy files to root
             cp go-coverage/coverage-merged.out . 2>/dev/null || echo "No merged coverage file found"
-            cp go-coverage/coverage.out . 2>/dev/null || echo "No coverage.out file found"
-            cp go-coverage/coverage-main.out . 2>/dev/null || echo "No coverage-main.out file found"
-          else
-            echo "No Go coverage files found, creating placeholder"
-            echo "mode: set" > coverage-merged.out
           fi
           
           # Process frontend coverage files if they exist
-          if [ -d "coverage-download" ] && [ -d "coverage-download/coverage" ]; then
+          if [ -d "coverage-download" ]; then
             echo "Frontend coverage files found:"
-            ls -la coverage-download/coverage/
+            ls -la coverage-download/
             
-            # Copy files to coverage directory
-            cp -r coverage-download/coverage/* coverage/ 2>/dev/null || echo "No frontend coverage files to copy"
-            cp coverage-download/eslint-report.json . 2>/dev/null || echo "No eslint report found"
-          else
-            echo "No frontend coverage files found, using placeholder"
+            # Copy files to appropriate locations
+            cp -r coverage-download/* coverage/ 2>/dev/null || echo "No frontend coverage files found"
           fi
           
-          # Ensure files exist
-          touch coverage/lcov.info
-          touch eslint-report.json
-          
-          # List all relevant files for debugging
-          echo "Current directory contents:"
-          ls -la *.out || echo "No .out files found"
-          
-          echo "Coverage directory contents:"
+          # List files for debugging
+          echo "Coverage directory contents after processing:"
           ls -la coverage/ || echo "Cannot list coverage directory"
+          
+      - name: Upload combined coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage-merged.out,./coverage/lcov.info
+          flags: combined
+          fail_ci_if_error: false
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       # Install and run Go linters
       - name: Set up Go
