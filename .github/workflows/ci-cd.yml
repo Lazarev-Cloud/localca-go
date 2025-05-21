@@ -71,13 +71,9 @@ jobs:
             coverage-main.out
           retention-days: 1
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage-merged.out
-          flags: backend
-          fail_ci_if_error: false
-          verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   security_scan_backend:
@@ -233,13 +229,9 @@ jobs:
             eslint-report.json
           retention-days: 1
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage/lcov.info
-          flags: frontend
-          fail_ci_if_error: false
-          verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
       # Restore original package.json to avoid issues in later stages
@@ -430,13 +422,9 @@ jobs:
           echo "Coverage directory contents after processing:"
           ls -la coverage/ || echo "Cannot list coverage directory"
           
-      - name: Upload combined coverage to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage-merged.out,./coverage/lcov.info
-          flags: combined
-          fail_ci_if_error: false
-          verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
       # Install and run Go linters
