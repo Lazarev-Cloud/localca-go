@@ -441,7 +441,7 @@ jobs:
 
       # Run SonarQube Analysis
       - name: Set up SonarQube Scanner
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
