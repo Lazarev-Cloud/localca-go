@@ -1,6 +1,12 @@
-# SLSA builder configuration
-# This is a configuration file for the SLSA builder, not a GitHub Actions workflow
+# ===================================================================
+# IMPORTANT: THIS IS NOT A GITHUB ACTIONS WORKFLOW FILE
+# ===================================================================
+# This is a configuration file for the SLSA builder, which is used by the SLSA GitHub generator
+# This file follows a different schema than GitHub Actions workflows
+# It is used by the SLSA GitHub generator to build the Go binary with SLSA Level 3 attestations
+# 
 # Reference: https://github.com/slsa-framework/slsa-github-generator/blob/main/internal/builders/go/README.md
+# ===================================================================
 
 version: 1
 
