@@ -344,12 +344,18 @@ jobs:
 
       - name: Create coverage files
         run: |
-          # Check if coverage directory exists first
-          if [ -d "coverage" ]; then
-            echo "Coverage directory exists, not creating it"
-          else
+          # Check if coverage exists and is a file (not a directory)
+          if [ -f "coverage" ]; then
+            echo "Found 'coverage' as a file, removing it"
+            rm coverage
+          fi
+          
+          # Create coverage directory if it doesn't exist
+          if [ ! -d "coverage" ]; then
             echo "Creating coverage directory"
             mkdir -p coverage
+          else
+            echo "Coverage directory already exists"
           fi
           
           # Create necessary files
@@ -478,7 +484,7 @@ jobs:
         with:
           format: spdx-json
           output-file: sbom-npm.spdx.json
-          path: package.json
+          path: .
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
