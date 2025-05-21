@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 )
 
@@ -99,7 +100,23 @@ func VerifyJWS(jws *JWS, expectedNonce string, expectedURL string) ([]byte, cryp
 
 	// Verify signature based on algorithm
 	switch header.Alg {
-	case "RS256":
+	case "PS256": // RSA-PSS with SHA-256 (more secure)
+		rsaKey, ok := pubKey.(*rsa.PublicKey)
+		if !ok {
+			return nil, nil, fmt.Errorf("key is not an RSA key")
+		}
+		// Use PSS padding for better security
+		pssOptions := &rsa.PSSOptions{
+			SaltLength: rsa.PSSSaltLengthAuto,
+			Hash:       crypto.SHA256,
+		}
+		if err := rsa.VerifyPSS(rsaKey, crypto.SHA256, hash[:], signatureBytes, pssOptions); err != nil {
+			return nil, nil, fmt.Errorf("invalid signature: %w", err)
+		}
+	case "RS256": // RSA-PKCS1v1.5 with SHA-256 (less secure, but supported for backward compatibility)
+		// WARNING: RS256 uses PKCS1v1.5 padding which is vulnerable to padding oracle attacks
+		// This is supported for backward compatibility, but PS256 is recommended
+		log.Printf("WARNING: RS256 algorithm uses PKCS1v1.5 padding which is less secure. Consider using PS256 instead.")
 		rsaKey, ok := pubKey.(*rsa.PublicKey)
 		if !ok {
 			return nil, nil, fmt.Errorf("key is not an RSA key")
@@ -142,59 +159,59 @@ func jwkToPublicKey(jwk *JWK) (crypto.PublicKey, error) {
 		if jwk.N == "" || jwk.E == "" {
 			return nil, fmt.Errorf("incomplete RSA key")
 		}
-		
+
 		// Decode modulus
 		n, err := base64.RawURLEncoding.DecodeString(jwk.N)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode RSA modulus: %w", err)
 		}
-		
+
 		// Decode exponent
 		e, err := base64.RawURLEncoding.DecodeString(jwk.E)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode RSA exponent: %w", err)
 		}
-		
+
 		// Convert exponent to int
 		var exponent int
 		for i := 0; i < len(e); i++ {
 			exponent = exponent<<8 + int(e[i])
 		}
-		
+
 		return &rsa.PublicKey{
 			N: new(big.Int).SetBytes(n),
 			E: exponent,
 		}, nil
-		
+
 	case "EC":
 		// Parse EC key
 		if jwk.Crv == "" || jwk.X == "" || jwk.Y == "" {
 			return nil, fmt.Errorf("incomplete EC key")
 		}
-		
+
 		// Only P-256 is supported for now
 		if jwk.Crv != "P-256" {
 			return nil, fmt.Errorf("unsupported curve: %s", jwk.Crv)
 		}
-		
+
 		// Decode X and Y coordinates
 		x, err := base64.RawURLEncoding.DecodeString(jwk.X)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode EC X coordinate: %w", err)
 		}
-		
+
 		y, err := base64.RawURLEncoding.DecodeString(jwk.Y)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode EC Y coordinate: %w", err)
 		}
-		
+
 		return &ecdsa.PublicKey{
 			Curve: elliptic.P256(),
 			X:     new(big.Int).SetBytes(x),
 			Y:     new(big.Int).SetBytes(y),
 		}, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported key type: %s", jwk.Kty)
 	}
-} 
+}

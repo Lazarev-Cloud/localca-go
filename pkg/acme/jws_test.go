@@ -187,14 +187,18 @@ func TestCreateAndVerifyRSASignature(t *testing.T) {
 	data := []byte("test data")
 	hash := sha256.Sum256(data)
 
-	// Sign data
-	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
+	// Sign data using PSS padding
+	pssOptions := &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthAuto,
+		Hash:       crypto.SHA256,
+	}
+	signature, err := rsa.SignPSS(rand.Reader, privateKey, crypto.SHA256, hash[:], pssOptions)
 	if err != nil {
 		t.Fatalf("Failed to sign data: %v", err)
 	}
 
 	// Verify signature
-	err = rsa.VerifyPKCS1v15(&privateKey.PublicKey, crypto.SHA256, hash[:], signature)
+	err = rsa.VerifyPSS(&privateKey.PublicKey, crypto.SHA256, hash[:], signature, pssOptions)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}
