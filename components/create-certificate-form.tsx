@@ -18,14 +18,66 @@ export function CreateCertificateForm() {
   const [isClientCert, setIsClientCert] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [errors, setErrors] = useState<{
+    commonName?: string;
+    password?: string;
+    altNames?: string;
+  }>({})
   const { createCertificate } = useCertificates()
   const { toast } = useToast()
+
+  const validateForm = (formData: FormData): boolean => {
+    const newErrors: {
+      commonName?: string;
+      password?: string;
+      altNames?: string;
+    } = {}
+    
+    // Validate common name
+    const commonName = formData.get('common_name') as string
+    if (!commonName || commonName.trim() === '') {
+      newErrors.commonName = 'Common name is required'
+    } else if (!/^[a-zA-Z0-9.-]+$/.test(commonName)) {
+      newErrors.commonName = 'Common name can only contain letters, numbers, dots, and hyphens'
+    }
+    
+    // Validate password for client certificates
+    if (isClientCert) {
+      const password = formData.get('p12_password') as string
+      if (!password || password.length < 8) {
+        newErrors.password = 'Password must be at least 8 characters long'
+      }
+    }
+    
+    // Validate alternative names for server certificates
+    if (!isClientCert) {
+      const altNames = formData.get('alt_names') as string
+      if (altNames) {
+        const domains = altNames.split(',').map(domain => domain.trim())
+        for (const domain of domains) {
+          if (domain && !/^[a-zA-Z0-9.-]+$/.test(domain)) {
+            newErrors.altNames = 'Domain names can only contain letters, numbers, dots, and hyphens'
+            break
+          }
+        }
+      }
+    }
+    
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSubmitting(true)
 
     const formData = new FormData(e.currentTarget)
+    
+    // Validate form before submission
+    if (!validateForm(formData)) {
+      setSubmitting(false)
+      return
+    }
     
     try {
       const result = await createCertificate(formData)
@@ -39,6 +91,7 @@ export function CreateCertificateForm() {
         e.currentTarget.reset()
         setIsClientCert(false)
         setShowAdvanced(false)
+        setErrors({})
       } else {
         toast({
           variant: "destructive",
@@ -71,26 +124,36 @@ export function CreateCertificateForm() {
             <CardContent className="pt-6">
               <div className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="commonName">Common Name</Label>
+                  <Label htmlFor="commonName" className={errors.commonName ? "text-destructive" : ""}>Common Name</Label>
                   <Input 
                     id="commonName" 
                     name="common_name"
                     placeholder="e.g., server.local or john.doe" 
                     required 
+                    className={errors.commonName ? "border-destructive" : ""}
+                    onChange={() => errors.commonName && setErrors({...errors, commonName: undefined})}
                   />
+                  {errors.commonName && (
+                    <p className="text-sm text-destructive">{errors.commonName}</p>
+                  )}
                   <p className="text-sm text-muted-foreground">
                     For server certificates, use the server's hostname. For client certificates, use the user's name.
                   </p>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="alternativeNames">Subject Alternative Names (SAN)</Label>
+                  <Label htmlFor="alternativeNames" className={errors.altNames ? "text-destructive" : ""}>Subject Alternative Names (SAN)</Label>
                   <Textarea
                     id="alternativeNames"
                     name="alt_names"
                     placeholder="e.g., www.server.local, api.server.local"
                     disabled={isClientCert}
+                    className={errors.altNames ? "border-destructive" : ""}
+                    onChange={() => errors.altNames && setErrors({...errors, altNames: undefined})}
                   />
+                  {errors.altNames && (
+                    <p className="text-sm text-destructive">{errors.altNames}</p>
+                  )}
                   <p className="text-sm text-muted-foreground">
                     Additional domain names for this certificate, separated by commas. Only applicable for server
                     certificates.
@@ -102,20 +165,29 @@ export function CreateCertificateForm() {
                     id="isClientCert" 
                     name="is_client"
                     checked={isClientCert} 
-                    onCheckedChange={setIsClientCert} 
+                    onCheckedChange={(checked) => {
+                      setIsClientCert(checked);
+                      setErrors({});
+                    }} 
                   />
                   <Label htmlFor="isClientCert">Create client certificate</Label>
                 </div>
 
                 {isClientCert && (
                   <div className="grid gap-2">
-                    <Label htmlFor="p12Password">P12 Password</Label>
+                    <Label htmlFor="p12Password" className={errors.password ? "text-destructive" : ""}>P12 Password</Label>
                     <Input 
                       id="p12Password" 
                       name="p12_password"
                       type="password" 
-                      placeholder="Enter a secure password" 
+                      placeholder="Enter a secure password"
+                      required={isClientCert}
+                      className={errors.password ? "border-destructive" : ""}
+                      onChange={() => errors.password && setErrors({...errors, password: undefined})}
                     />
+                    {errors.password && (
+                      <p className="text-sm text-destructive">{errors.password}</p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       This password will be required when importing the certificate into browsers or devices.
                     </p>

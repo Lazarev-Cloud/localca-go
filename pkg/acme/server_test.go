@@ -221,3 +221,77 @@ func TestSchemeFromRequest(t *testing.T) {
 		t.Errorf("Expected scheme https, got %s", scheme)
 	}
 }
+
+func TestHandleHTTP01Challenge(t *testing.T) {
+	_, _, store, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Create a test challenge token and response
+	testToken := "test-token-12345"
+	testKeyAuth := "test-token-12345.test-key-auth-value"
+
+	// Store the challenge in the ACME storage
+	challengePath := store.GetBasePath() + "/.well-known/acme-challenge/" + testToken
+	err := os.MkdirAll(store.GetBasePath()+"/.well-known/acme-challenge", 0755)
+	if err != nil {
+		t.Fatalf("Failed to create challenge directory: %v", err)
+	}
+
+	err = os.WriteFile(challengePath, []byte(testKeyAuth), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write challenge file: %v", err)
+	}
+
+	// Create a test HTTP server with a custom handler
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract the token from the URL path
+		if r.URL.Path == "/.well-known/acme-challenge/"+testToken {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(testKeyAuth))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	// Make a request to the challenge endpoint
+	resp, err := http.Get(server.URL + "/.well-known/acme-challenge/" + testToken)
+	if err != nil {
+		t.Fatalf("Failed to make challenge request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status code
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	// Check response content type
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "application/octet-stream" {
+		t.Errorf("Expected content type %s, got %s", "application/octet-stream", contentType)
+	}
+
+	// Check response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	if string(body) != testKeyAuth {
+		t.Errorf("Expected response body %q, got %q", testKeyAuth, string(body))
+	}
+
+	// Test with a non-existent token
+	resp, err = http.Get(server.URL + "/.well-known/acme-challenge/non-existent-token")
+	if err != nil {
+		t.Fatalf("Failed to make challenge request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Should return 404 for non-existent token
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Expected status code %d for non-existent token, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}

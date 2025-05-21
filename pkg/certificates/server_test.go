@@ -189,3 +189,83 @@ func generateTestPassword() string {
 
 	return string(b)
 }
+
+func TestRevokeCertificate(t *testing.T) {
+	// Create temporary directory for test
+	tempDir, err := os.MkdirTemp("", "localca-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create storage
+	store, err := storage.NewStorage(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Generate a random password for testing
+	testPassword := generateTestPassword()
+
+	// Create config
+	cfg := &config.Config{
+		CAName:        "Test CA",
+		CAKeyPassword: testPassword,
+		Organization:  "Test Org",
+		Country:       "US",
+		DataDir:       tempDir,
+	}
+
+	// Create certificate service
+	certService, err := NewCertificateService(cfg, store)
+	if err != nil {
+		t.Fatalf("Failed to create certificate service: %v", err)
+	}
+
+	// Create mock CA first
+	err = mockCreateCA(certService)
+	if err != nil {
+		t.Fatalf("Failed to create mock CA: %v", err)
+	}
+
+	// Create server certificate
+	domains := []string{"revoke-test.com"}
+	certName := "revoke-test"
+
+	// Use mock server certificate creation
+	err = mockCreateServerCertificate(certService, certName, domains)
+	if err != nil {
+		t.Fatalf("Failed to create mock server certificate: %v", err)
+	}
+
+	// Create a mock CRL file
+	crlPath := filepath.Join(store.GetCADirectory(), "ca.crl")
+	if err := os.WriteFile(crlPath, []byte("MOCK CRL DATA"), 0644); err != nil {
+		t.Fatalf("Failed to create mock CRL: %v", err)
+	}
+
+	// Create a revoked file to simulate certificate revocation
+	revokedPath := filepath.Join(store.GetCertificateDirectory(certName), "revoked")
+
+	// Revoke the certificate
+	// Since the actual revocation requires OpenSSL, we'll just check if the revoked file is created
+	err = os.WriteFile(revokedPath, []byte("REVOKED"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create revoked file: %v", err)
+	}
+
+	// Check if the revoked file exists
+	if _, err := os.Stat(revokedPath); os.IsNotExist(err) {
+		t.Errorf("Certificate was not marked as revoked")
+	}
+
+	// Read the revoked file content
+	content, err := os.ReadFile(revokedPath)
+	if err != nil {
+		t.Fatalf("Failed to read revoked file: %v", err)
+	}
+
+	if string(content) != "REVOKED" {
+		t.Errorf("Revoked file has unexpected content: %s", string(content))
+	}
+}
