@@ -1,0 +1,55 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# ACME Protocol Support
+
+LocalCA implements the ACME (Automated Certificate Management Environment) protocol to support automated certificate issuance and renewal.
+
+## What is ACME?
+
+ACME is the protocol behind popular services like Let's Encrypt. It allows for automated certificate issuance, validation, and renewal without manual intervention.
+
+## Implementation Details
+
+The ACME implementation in LocalCA is found in [pkg/acme](mdc:pkg/acme), which includes:
+
+- Directory endpoints
+- Account management
+- Order creation and processing
+- Domain validation
+- Certificate issuance
+
+## ACME Server
+
+The ACME server is started in [main.go](mdc:main.go) and listens on port 8555 by default:
+
+```go
+// Start ACME server
+go func() {
+    log.Println("Starting ACME server on port 8555...")
+    if err := acme.StartACMEServer(ctx, certSvc, store, ":8555", getSecureTLSConfig()); err != nil {
+        if err != http.ErrServerClosed {
+            log.Printf("ACME server error: %v", err)
+        }
+    }
+}()
+```
+
+## Compatible Clients
+
+The ACME implementation is compatible with standard ACME clients like:
+
+- Certbot
+- acme.sh
+- Caddy
+- Traefik
+
+## Usage with Clients
+
+To use LocalCA with an ACME client:
+
+1. Configure the client to use the LocalCA ACME endpoint (e.g., `http://localca:8555/acme/directory`)
+2. Ensure the client trusts the LocalCA root certificate
+3. Request certificates as usual with the ACME client

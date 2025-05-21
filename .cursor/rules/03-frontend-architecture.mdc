@@ -1,0 +1,45 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Frontend Architecture
+
+The LocalCA frontend is built with Next.js and React, providing a modern, responsive user interface for certificate management.
+
+## Application Structure
+
+The Next.js app is organized in the App Router pattern:
+
+- [app/page.tsx](mdc:app/page.tsx): Main dashboard page
+- [app/create](mdc:app/create): Certificate creation interface
+- [app/certificates/[id]](mdc:app/certificates/[id]): Certificate details view
+- [app/settings](mdc:app/settings): Application settings interface
+
+## API Routes
+
+API routes in the frontend serve as proxies to the backend:
+
+- [app/api/ca-info](mdc:app/api/ca-info): CA information endpoints
+- [app/api/certificates](mdc:app/api/certificates): Certificate management
+- [app/api/delete](mdc:app/api/delete): Certificate deletion
+- [app/api/renew](mdc:app/api/renew): Certificate renewal
+- [app/api/revoke](mdc:app/api/revoke): Certificate revocation
+
+## Core Components
+
+The reusable UI components are organized in the [components](mdc:components) directory:
+
+- [components/certificate-list.tsx](mdc:components/certificate-list.tsx): Displays list of certificates
+- [components/ca-info-card.tsx](mdc:components/ca-info-card.tsx): Shows CA information
+- [components/quick-actions.tsx](mdc:components/quick-actions.tsx): Provides quick action buttons
+- [components/dashboard-header.tsx](mdc:components/dashboard-header.tsx): Header for the dashboard
+- [components/ui](mdc:components/ui): Shared UI components like buttons, cards, etc.
+
+## Data Fetching
+
+The frontend uses React's fetch API to communicate with the backend API endpoints. Data fetching logic is encapsulated in custom hooks within the [hooks](mdc:hooks) directory.
+
+## Styling
+
+The application uses Tailwind CSS for styling, with configuration in [tailwind.config.ts](mdc:tailwind.config.ts).

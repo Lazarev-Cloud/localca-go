@@ -1,0 +1,53 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Backend Architecture
+
+The LocalCA backend is built in Go and follows a modular architecture with clear separation of concerns. The backend handles certificate generation, storage, and provides a REST API for the frontend.
+
+## Core Packages
+
+### Configuration
+The [pkg/config](mdc:pkg/config) package handles loading and managing application configuration from environment variables.
+
+### Certificate Management
+The [pkg/certificates](mdc:pkg/certificates) package is responsible for all certificate operations:
+- [interface.go](mdc:pkg/certificates/interface.go): Defines the service interface
+- [ca.go](mdc:pkg/certificates/ca.go): CA certificate operations including creation and renewal
+- [server.go](mdc:pkg/certificates/server.go): Server certificate operations
+- [client.go](mdc:pkg/certificates/client.go): Client certificate generation and PKCS#12 export
+
+### Storage
+The [pkg/storage](mdc:pkg/storage) package provides filesystem-based storage for certificates and configuration.
+
+### HTTP Handlers
+The [pkg/handlers](mdc:pkg/handlers) package contains the HTTP handlers for the REST API endpoints.
+
+### ACME Protocol Support
+The [pkg/acme](mdc:pkg/acme) package implements the ACME protocol for automated certificate issuance.
+
+### Email Notifications
+The [pkg/email](mdc:pkg/email) package handles email notifications for certificate expiry.
+
+## Main Application Flow
+
+1. The application starts in [main.go](mdc:main.go)
+2. Configuration is loaded from environment variables
+3. Storage is initialized for certificate and configuration data
+4. The certificate service is created
+5. If no CA exists, a new one is created
+6. HTTP routes are configured
+7. The server starts listening for requests
+8. The ACME server is started if enabled
+9. HTTPS server is started if TLS is enabled
+
+## API Endpoints
+
+The API routes are defined in the [app/api](mdc:app/api) directory:
+- `/api/ca-info`: CA information endpoints
+- `/api/certificates`: Certificate management endpoints
+- `/api/delete`: Certificate deletion endpoints
+- `/api/renew`: Certificate renewal endpoints
+- `/api/revoke`: Certificate revocation endpoints

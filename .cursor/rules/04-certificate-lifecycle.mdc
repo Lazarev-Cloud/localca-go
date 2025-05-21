@@ -1,0 +1,52 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Certificate Lifecycle
+
+LocalCA manages the full lifecycle of certificates, from creation through renewal to revocation.
+
+## Certificate Creation
+
+The certificate creation process is handled by the [pkg/certificates](mdc:pkg/certificates) package:
+
+1. For server certificates: [pkg/certificates/server.go](mdc:pkg/certificates/server.go)
+2. For client certificates: [pkg/certificates/client.go](mdc:pkg/certificates/client.go)
+
+The frontend interface for creating certificates is in [app/create/page.tsx](mdc:app/create/page.tsx).
+
+## Certificate Renewal
+
+Certificate renewal is handled by:
+
+1. Backend renewal logic: [pkg/certificates/server.go](mdc:pkg/certificates/server.go) and [pkg/certificates/client.go](mdc:pkg/certificates/client.go)
+2. API endpoints: [app/api/renew](mdc:app/api/renew)
+
+## Certificate Revocation
+
+When a certificate is revoked:
+
+1. It is added to the Certificate Revocation List (CRL)
+2. The CRL is regenerated and signed by the CA
+3. The revoked certificate is marked as revoked in the storage
+
+This is handled in the backend by the certificate service.
+
+## Certificate Expiry and Notifications
+
+The application tracks certificate expiry dates and can send notifications:
+
+1. The email notification system is in [pkg/email](mdc:pkg/email)
+2. Notifications are sent based on configurable thresholds before expiry
+
+## Storage and Persistence
+
+Certificates and their metadata are stored on the filesystem:
+
+1. CA certificate and private key
+2. Issued certificates (public and private keys)
+3. Certificate metadata (JSON format)
+4. Certificate Revocation List (CRL)
+
+The storage implementation is in [pkg/storage](mdc:pkg/storage).

@@ -1,0 +1,48 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Deployment and Configuration
+
+LocalCA can be deployed in various ways, with Docker being the recommended approach.
+
+## Docker Deployment
+
+The project includes Docker configuration files:
+
+- [Dockerfile](mdc:Dockerfile): Main application container
+- [Dockerfile.frontend](mdc:Dockerfile.frontend): Frontend container
+- [docker-compose.yml](mdc:docker-compose.yml): Docker Compose setup
+
+For detailed deployment instructions, see [DEPLOYMENT.md](mdc:DEPLOYMENT.md).
+
+## Configuration Options
+
+LocalCA is configured through environment variables defined in [pkg/config](mdc:pkg/config):
+
+- `CA_NAME`: Name of the Certificate Authority
+- `CA_KEY_FILE`: Path to the file containing the CA key password
+- `DATA_DIR`: Path where certificates are stored
+- `LISTEN_ADDR`: Address and port for the HTTP server
+- `EMAIL_NOTIFY`: Enable email notifications
+- `TLS_ENABLED`: Enable HTTPS for the web interface
+
+For a complete list of configuration options, see the README.
+
+## Development Setup
+
+For development, the project includes scripts:
+
+- [run-dev.sh](mdc:run-dev.sh) / [run-dev.bat](mdc:run-dev.bat): Start the development server
+- [run-tests.sh](mdc:run-tests.sh) / [run-tests.bat](mdc:run-tests.bat): Run tests
+
+## Security Considerations
+
+Security recommendations:
+
+1. Keep CA private key secure
+2. Run behind a reverse proxy/firewall
+3. Limit access to authorized users
+4. Enable HTTPS for the web interface
+5. Never expose to the public internet
