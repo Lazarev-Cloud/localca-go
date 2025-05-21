@@ -1,50 +1,62 @@
 # Add 'backend' label to any changes in Go files or backend-related directories
 backend:
-  - '**/*.go'
-  - 'pkg/**/*'
-  - 'main.go'
-  - 'go.mod'
-  - 'go.sum'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.go'
+      - 'pkg/**/*'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
 
 # Add 'frontend' label to any changes in frontend files
 frontend:
-  - '**/*.ts'
-  - '**/*.tsx'
-  - '**/*.js'
-  - '**/*.jsx'
-  - 'app/**/*'
-  - 'components/**/*'
-  - 'hooks/**/*'
-  - 'styles/**/*'
-  - 'public/**/*'
-  - 'package.json'
-  - 'tsconfig.json'
-  - 'next.config.mjs'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.jsx'
+      - 'app/**/*'
+      - 'components/**/*'
+      - 'hooks/**/*'
+      - 'styles/**/*'
+      - 'public/**/*'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'next.config.mjs'
 
 # Add 'documentation' label to any changes in documentation files
 documentation:
-  - '**/*.md'
-  - 'LICENSE'
-  - 'README*'
-  - 'DEPLOYMENT.md'
-  - 'BestPractice.md'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'README*'
+      - 'DEPLOYMENT.md'
+      - 'BestPractice.md'
 
 # Add 'ci' label to any changes in GitHub Actions workflows
 ci:
-  - '.github/workflows/**/*'
-  - 'docker-compose*.yml'
-  - 'Dockerfile*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - 'docker-compose*.yml'
+      - 'Dockerfile*'
 
 # Add 'security' label to any changes in security-related files
 security:
-  - 'pkg/certificates/**/*'
-  - 'pkg/config/**/*'
-  - 'pkg/acme/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pkg/certificates/**/*'
+      - 'pkg/config/**/*'
+      - 'pkg/acme/**/*'
 
 # Add 'dependencies' label to any changes in dependency files
 dependencies:
-  - 'go.mod'
-  - 'go.sum'
-  - 'package.json'
-  - 'package-lock.json'
-  - 'pnpm-lock.yaml' 
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pnpm-lock.yaml' 
