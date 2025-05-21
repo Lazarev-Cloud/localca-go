@@ -879,24 +879,24 @@ jobs:
           else
             echo "No SBOM files found, creating minimal SBOM"
             cat > ./merged-sbom.json << EOF
-            {
-              "SPDXID": "SPDXRef-DOCUMENT",
-              "spdxVersion": "SPDX-2.3",
-              "creationInfo": {
-                "created": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-                "creators": [
-                  "Person: LocalCA-Go Maintainer",
-                  "Organization: lazarev.cloud",
-                  "Tool: CI/CD Pipeline"
-                ],
-                "licenseListVersion": "3.21"
-              },
-              "name": "LocalCA-Go SBOM",
-              "dataLicense": "CC0-1.0",
-              "documentNamespace": "https://lazarev.cloud/spdx/localca-go/$(date +%s)",
-              "packages": []
-            }
-            EOF
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "creators": [
+      "Person: LocalCA-Go Maintainer",
+      "Organization: lazarev.cloud",
+      "Tool: CI/CD Pipeline"
+    ],
+    "licenseListVersion": "3.21"
+  },
+  "name": "LocalCA-Go SBOM",
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://lazarev.cloud/spdx/localca-go/$(date +%s)",
+  "packages": []
+}
+EOF
           fi
           
           echo "SBOMs merged into merged-sbom.json"
