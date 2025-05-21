@@ -7,7 +7,7 @@ RUN echo "Installing base utilities..." && \
     apk add --no-cache jq bash && \
     echo "✅ Base utilities installed"
 
-# Prepare the entrypoint script for better feedback
+# Prepare the entrypoint script with properly escaped jq commands
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'echo "=== Starting frontend tests ===" ' >> /entrypoint.sh && \
     echo 'echo "Working directory: $(pwd)"' >> /entrypoint.sh && \
@@ -18,9 +18,9 @@ RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo '  exit 1' >> /entrypoint.sh && \
     echo 'fi' >> /entrypoint.sh && \
     echo 'echo "Configuring package.json for testing..."' >> /entrypoint.sh && \
-    echo 'jq ".devDependencies.\\"@testing-library/react\\" = \\"^14.0.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /entrypoint.sh && \
-    echo 'jq ".dependencies.react = \\"^18.2.0\\" | .dependencies.\\"react-dom\\" = \\"^18.2.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /entrypoint.sh && \
-    echo 'jq ".dependencies.\\"date-fns\\" = \\"^3.6.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /entrypoint.sh && \
+    echo "jq '.devDependencies.\"@testing-library/react\" = \"^14.0.0\"' package.json > tmp.json && mv tmp.json package.json" >> /entrypoint.sh && \
+    echo "jq '.dependencies.react = \"^18.2.0\" | .dependencies.\"react-dom\" = \"^18.2.0\"' package.json > tmp.json && mv tmp.json package.json" >> /entrypoint.sh && \
+    echo "jq '.dependencies.\"date-fns\" = \"^3.6.0\"' package.json > tmp.json && mv tmp.json package.json" >> /entrypoint.sh && \
     echo 'echo "✅ Package.json configured for testing"' >> /entrypoint.sh && \
     echo 'echo "Installing dependencies (this may take a minute)..."' >> /entrypoint.sh && \
     echo 'npm config set loglevel error' >> /entrypoint.sh && \

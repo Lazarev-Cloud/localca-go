@@ -27,8 +27,7 @@ services:
     environment:
       - NODE_ENV=test
       - NODE_OPTIONS=--no-warnings
-    # Use a simpler command that reports success
-    command: npm test --no-warnings || echo "Frontend tests completed with some issues. Check logs for details."
+    # The entrypoint script now handles the configuration and testing
 
   # Build the application to verify it works
   build-check:
@@ -39,7 +38,7 @@ services:
       - ./:/app
       - go-mod-cache:/go/pkg/mod
       - node-modules:/app/node_modules
-    command: /app/scripts/verify-build.sh
+    # The embedded script now handles verification steps
 
 volumes:
   go-mod-cache:
