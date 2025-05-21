@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -83,12 +84,21 @@ func TestLoadConfig(t *testing.T) {
 		t.Errorf("Expected CAKeyPassword 'testpassword', got '%s'", cfg.CAKeyPassword)
 	}
 
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "localca-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	customDataDir := filepath.Join(tempDir, "custom-data")
+
 	// Test custom configuration
 	os.Setenv("CA_NAME", "Custom CA")
 	os.Setenv("CA_KEY", "custompassword")
 	os.Setenv("ORGANIZATION", "Custom Organization")
 	os.Setenv("COUNTRY", "DE")
-	os.Setenv("DATA_DIR", "/custom/data")
+	os.Setenv("DATA_DIR", customDataDir)
 	os.Setenv("LISTEN_ADDR", ":9090")
 	os.Setenv("EMAIL_NOTIFY", "true")
 	os.Setenv("SMTP_SERVER", "smtp.example.com")
@@ -115,8 +125,8 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.Country != "DE" {
 		t.Errorf("Expected custom Country 'DE', got '%s'", cfg.Country)
 	}
-	if cfg.DataDir != "/custom/data" {
-		t.Errorf("Expected custom DataDir '/custom/data', got '%s'", cfg.DataDir)
+	if cfg.DataDir != customDataDir {
+		t.Errorf("Expected custom DataDir '%s', got '%s'", customDataDir, cfg.DataDir)
 	}
 	if cfg.ListenAddr != ":9090" {
 		t.Errorf("Expected custom ListenAddr ':9090', got '%s'", cfg.ListenAddr)
