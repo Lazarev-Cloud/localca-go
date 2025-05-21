@@ -21,14 +21,14 @@ on:
         required: true
 
 jobs:
-  test:
-    name: Run Tests
+  backend_test:
+    name: Backend Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for better SonarQube analysis
+          fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -39,53 +39,96 @@ jobs:
       - name: Install Go dependencies
         run: go mod download
 
-      - name: Run package tests
-        run: go test -v -cover ./pkg/... -coverprofile=coverage.out
+      - name: Run Go tests with coverage
+        run: |
+          echo "Running package tests..."
+          go test -v -cover ./pkg/... -coverprofile=coverage.out
+          echo "Running main tests..."
+          go test -v -cover . -coverprofile=coverage-main.out
 
-      - name: Run main tests
-        run: go test -v -cover . -coverprofile=coverage-main.out
+      - name: Merge coverage reports
+        run: |
+          echo "mode: set" > coverage-merged.out
+          grep -h -v "mode: set" coverage.out coverage-main.out >> coverage-merged.out
 
-      - name: Setup Node.js for frontend tests
+      - name: Upload Go coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-reports
+          path: |
+            coverage-merged.out
+            coverage.out
+            coverage-main.out
+
+  frontend_test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      # Create temporary package.json with compatible testing libraries
-      - name: Update testing library versions in package.json
+      # Create a copy of the original package.json for later restoration
+      - name: Backup original package.json
+        run: cp package.json package.json.original
+
+      # Modify package.json to use React 18 for testing compatibility
+      - name: Update package.json for testing
         run: |
-          jq '.devDependencies."@testing-library/react" = "^14.0.0"' package.json > tmp.json && mv tmp.json package.json
-          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json && mv tmp.json package.json
+          # First pass - Update React and React DOM versions
+          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json
+          mv tmp.json package.json
+          
+          # Second pass - Update testing library versions
+          jq '.devDependencies."@testing-library/react" = "^14.0.0"' package.json > tmp.json
+          mv tmp.json package.json
+          
+          # Third pass - Update type definitions to match React version
+          jq '.devDependencies."@types/react" = "^18.2.48" | .devDependencies."@types/react-dom" = "^18.2.18"' package.json > tmp.json
+          mv tmp.json package.json
+          
+          # Optional - Update any other dependencies that might cause compatibility issues
+          jq '.dependencies."date-fns" = "^3.6.0"' package.json > tmp.json
+          mv tmp.json package.json
+          
+          # Show the modified package.json for debugging
+          echo "Modified package.json for testing:"
+          cat package.json
 
       - name: Install frontend dependencies
-        run: npm i
+        run: npm install --legacy-peer-deps
 
       - name: Run frontend tests with coverage
         run: npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage
 
       - name: Run ESLint
         run: npx eslint -f checkstyle app components hooks lib -o eslint-report.xml || true
-        
-      - name: Merge coverage reports
-        run: |
-          echo "mode: set" > coverage-merged.out
-          grep -h -v "mode: set" coverage.out coverage-main.out >> coverage-merged.out
 
-      - name: Upload coverage reports
+      - name: Upload frontend coverage reports
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-reports
+          name: frontend-coverage-reports
           path: |
-            coverage-merged.out
-            coverage.out
-            coverage-main.out
             coverage/lcov.info
             eslint-report.xml
 
+      # Restore original package.json to avoid issues in later stages
+      - name: Restore original package.json
+        run: |
+          if [ -f package.json.original ]; then
+            mv package.json.original package.json
+            echo "Original package.json restored"
+          fi
+
   build:
-    name: Test Build Process
+    name: Build Verification
     runs-on: ubuntu-latest
-    needs: test
+    needs: [backend_test, frontend_test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,14 +151,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Create temporary package.json with compatible testing libraries
-      - name: Update testing library versions in package.json
-        run: |
-          jq '.devDependencies."@testing-library/react" = "^14.0.0"' package.json > tmp.json && mv tmp.json package.json
-          jq '.dependencies.react = "^18.2.0" | .dependencies."react-dom" = "^18.2.0"' package.json > tmp.json && mv tmp.json package.json
-
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build frontend
         run: npm run build
@@ -138,7 +175,7 @@ jobs:
 
   sonarqube:
     name: SonarQube Analysis
-    needs: test
+    needs: [backend_test, frontend_test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -146,20 +183,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download coverage reports
+      - name: Download Go coverage reports
         uses: actions/download-artifact@v4
         with:
-          name: coverage-reports
+          name: go-coverage-reports
 
-      # Ensure correct directory structure for coverage reports
-      - name: Create coverage directory
-        run: mkdir -p coverage
-
-      - name: Move LCOV file to correct location if needed
-        run: |
-          if [ -f "lcov.info" ]; then
-            mv lcov.info coverage/lcov.info
-          fi
+      - name: Download frontend coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage-reports
+          path: coverage
 
       # Install and run Go linters
       - name: Set up Go
@@ -182,7 +215,7 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run --out-format checkstyle --issues-exit-code=0 > golangci-lint-report.xml || true
 
-      # Install SonarScanner
+      # Run SonarQube Analysis
       - name: Set up SonarQube Scanner
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -196,7 +229,7 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.go.coverage.reportPaths=coverage-merged.out
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**,**/.next/**,**/__mocks__/**
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx
             -Dsonar.go.govet.reportPaths=govet-report.out
@@ -209,7 +242,7 @@ jobs:
 
   docker:
     name: Build and Push Docker Images
-    needs: [test, sonarqube, build]
+    needs: [build, sonarqube]
     runs-on: ubuntu-latest
     # Only run this job on main branch or tags, not on PRs
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -230,20 +263,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set Docker tags
-        id: tags
-        run: |
-          # Convert repository name to lowercase
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "BACKEND_TAGS=ghcr.io/${REPO_LOWER}/backend:latest,ghcr.io/${REPO_LOWER}/backend:${VERSION}" >> $GITHUB_ENV
-            echo "FRONTEND_TAGS=ghcr.io/${REPO_LOWER}/frontend:latest,ghcr.io/${REPO_LOWER}/frontend:${VERSION}" >> $GITHUB_ENV
-          else
-            echo "BACKEND_TAGS=ghcr.io/${REPO_LOWER}/backend:unstable" >> $GITHUB_ENV
-            echo "FRONTEND_TAGS=ghcr.io/${REPO_LOWER}/frontend:unstable" >> $GITHUB_ENV
-          fi
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}/backend
+            ghcr.io/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -251,17 +283,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ env.BACKEND_TAGS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.description=LocalCA Backend - Certificate Authority Management Tool
-            org.opencontainers.image.licenses=Dual License: Free for Self-Hosting / Commercial License Required
-            org.opencontainers.image.vendor=lazarev.cloud
-            org.opencontainers.image.authors=lazarevtill
-            org.opencontainers.image.title=LocalCA Backend
-            org.opencontainers.image.url=https://lazarev.cloud
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
@@ -269,15 +294,22 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ${{ env.FRONTEND_TAGS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.description=LocalCA Frontend - Certificate Authority Management UI
-            org.opencontainers.image.licenses=Dual License: Free for Self-Hosting / Commercial License Required
-            org.opencontainers.image.vendor=lazarev.cloud
-            org.opencontainers.image.authors=lazarevtill
-            org.opencontainers.image.title=LocalCA Frontend
-            org.opencontainers.image.url=https://lazarev.cloud
+
+  clean_up:
+    name: Clean Up Artifacts
+    needs: [docker]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete artifacts
+        uses: geekyeggo/delete-artifact@v2
+        with:
+          name: |
+            go-coverage-reports
+            frontend-coverage-reports
+          failOnError: false
             
