@@ -69,6 +69,10 @@ jobs:
   security_scan_backend:
     name: Security Scan Backend
     runs-on: ubuntu-latest
+    # Add permissions for security events
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
