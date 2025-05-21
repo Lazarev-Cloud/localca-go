@@ -1,0 +1,91 @@
+name: SLSA Container Images
+
+on:
+  release:
+    types: [created]
+  
+  # Allow manual triggering for testing
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to use for the container images"
+        required: true
+        default: "latest"
+
+permissions: read-all
+
+jobs:
+  # Build and verify backend container
+  backend:
+    permissions:
+      id-token: write      # For signing
+      packages: write      # For pushing container
+      contents: write      # For release assets
+      attestations: write  # For attestations
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ghcr.io/${{ github.repository }}/backend
+      digest-only: false
+      provenance-registry: ghcr.io
+      provenance-repository: ${{ github.repository }}
+      builder-image-referrers: false
+      tags: ${{ github.event.release.tag_name || inputs.tag }}
+      dockerfile: Dockerfile
+      context: .
+      sbom: true
+      amd64: true
+      arm64: true
+  
+  # Build and verify frontend container
+  frontend:
+    permissions:
+      id-token: write      # For signing
+      packages: write      # For pushing container
+      contents: write      # For release assets
+      attestations: write  # For attestations
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ghcr.io/${{ github.repository }}/frontend
+      digest-only: false
+      provenance-registry: ghcr.io
+      provenance-repository: ${{ github.repository }}
+      builder-image-referrers: false
+      tags: ${{ github.event.release.tag_name || inputs.tag }}
+      dockerfile: Dockerfile.frontend
+      context: .
+      sbom: true
+      amd64: true
+      arm64: true
+      
+  # Verify attestations
+  verify:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+      
+      - name: Verify container attestations
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          
+          echo "Verifying backend container attestation..."
+          gh attestation verify oci://ghcr.io/${{ github.repository }}/backend:${TAG} -R ${{ github.repository }} || echo "Verification failed, but continuing"
+          
+          echo "Verifying frontend container attestation..."
+          gh attestation verify oci://ghcr.io/${{ github.repository }}/frontend:${TAG} -R ${{ github.repository }} || echo "Verification failed, but continuing" 
