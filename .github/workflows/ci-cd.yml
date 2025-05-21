@@ -79,6 +79,14 @@ jobs:
           tags: ${{ env.BACKEND_TAGS }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=LocalCA Backend - Certificate Authority Management Tool
+            org.opencontainers.image.licenses=Dual License: Free for Self-Hosting / Commercial License Required
+            org.opencontainers.image.vendor=lazarev.cloud
+            org.opencontainers.image.authors=lazarevtill
+            org.opencontainers.image.title=LocalCA Backend
+            org.opencontainers.image.url=https://lazarev.cloud
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
@@ -88,4 +96,37 @@ jobs:
           push: true
           tags: ${{ env.FRONTEND_TAGS }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max 
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=LocalCA Frontend - Certificate Authority Management UI
+            org.opencontainers.image.licenses=Dual License: Free for Self-Hosting / Commercial License Required
+            org.opencontainers.image.vendor=lazarev.cloud
+            org.opencontainers.image.authors=lazarevtill
+            org.opencontainers.image.title=LocalCA Frontend
+            org.opencontainers.image.url=https://lazarev.cloud
+            
+      - name: Make packages public
+        run: |
+          # Convert repository name to lowercase
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          
+          # Set backend package to public
+          echo "Setting backend package to public"
+          gh api --method PATCH \
+            /orgs/${{ github.repository_owner }}/packages/container/${REPO_LOWER##*/}-backend/visibility \
+            -f visibility="public" \
+            || gh api --method PATCH \
+               /user/packages/container/${REPO_LOWER##*/}-backend/visibility \
+               -f visibility="public"
+          
+          # Set frontend package to public
+          echo "Setting frontend package to public"
+          gh api --method PATCH \
+            /orgs/${{ github.repository_owner }}/packages/container/${REPO_LOWER##*/}-frontend/visibility \
+            -f visibility="public" \
+            || gh api --method PATCH \
+               /user/packages/container/${REPO_LOWER##*/}-frontend/visibility \
+               -f visibility="public"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

@@ -15,6 +15,17 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 - **HTTPS Support**: Secure access to the management interface itself
 - **Docker Deployment**: Easy deployment with Docker and Docker Compose
 
+## License
+
+This software is licensed under a dual license model:
+
+- **Free for personal, non-commercial self-hosting**
+- **Paid license required for commercial, corporate, or organizational use**
+
+See the [LICENSE](LICENSE) file for complete details.
+
+Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
+
 ## Security Considerations
 
 ⚠️ **Important Warning**:
@@ -253,10 +264,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
