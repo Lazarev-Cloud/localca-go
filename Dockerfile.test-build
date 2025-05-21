@@ -3,7 +3,9 @@ FROM golang:1.23.0-alpine AS go-builder
 WORKDIR /app
 
 # Install git and other dependencies
-RUN apk add --no-cache git gcc musl-dev
+RUN echo "Installing Go build dependencies..." && \
+    apk add --no-cache git gcc musl-dev && \
+    echo "✅ Go build dependencies installed"
 
 # We'll mount the app directory as a volume
 # This will let us build without copying files
@@ -13,7 +15,9 @@ FROM node:20-alpine AS node-builder
 WORKDIR /app
 
 # Install dependencies and tools
-RUN apk add --no-cache jq bash
+RUN echo "Installing Node.js build dependencies..." && \
+    apk add --no-cache jq bash && \
+    echo "✅ Node.js build dependencies installed"
 
 # We'll mount node_modules and app as volumes
 
@@ -21,18 +25,81 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install necessary tools and Go 1.23.0
-RUN apk add --no-cache bash nodejs npm git jq curl && \
+# Install necessary tools and Go 1.23.0 with better feedback
+RUN echo "Installing base system..." && \
+    apk add --no-cache bash nodejs npm git jq curl && \
+    echo "✅ Base system installed" && \
+    echo "Installing Go 1.23.0..." && \
     mkdir -p /usr/local/go && \
     curl -sSL https://dl.google.com/go/go1.23.0.linux-amd64.tar.gz | tar -C /usr/local -xz && \
-    ln -s /usr/local/go/bin/go /usr/local/bin/go
+    ln -s /usr/local/go/bin/go /usr/local/bin/go && \
+    echo "✅ Go 1.23.0 installed"
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOPATH="/go"
 ENV GOROOT="/usr/local/go"
 
-# Copy the verification script
-COPY scripts/verify-build.sh /app/scripts/verify-build.sh
-RUN chmod +x /app/scripts/verify-build.sh
+# Create a modified verification script with better progress feedback
+RUN echo '#!/bin/bash' > /app/verify-build.sh && \
+    echo 'set -e' >> /app/verify-build.sh && \
+    echo 'echo "===== LocalCA Build Verification ====="' >> /app/verify-build.sh && \
+    echo 'echo "Starting verification process..."' >> /app/verify-build.sh && \
+    echo 'echo "Go version: $(go version)"' >> /app/verify-build.sh && \
+    echo 'echo "Node.js version: $(node -v)"' >> /app/verify-build.sh && \
+    echo 'echo "NPM version: $(npm -v)"' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Create directory if it doesn't exist' >> /app/verify-build.sh && \
+    echo 'mkdir -p scripts' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Update package.json for compatibility' >> /app/verify-build.sh && \
+    echo 'echo "Updating package.json for compatibility..."' >> /app/verify-build.sh && \
+    echo 'jq ".devDependencies.\\"@testing-library/react\\" = \\"^14.0.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /app/verify-build.sh && \
+    echo 'jq ".dependencies.react = \\"^18.2.0\\" | .dependencies.\\"react-dom\\" = \\"^18.2.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /app/verify-build.sh && \
+    echo 'jq ".dependencies.\\"date-fns\\" = \\"^3.6.0\\"" package.json > tmp.json && mv tmp.json package.json' >> /app/verify-build.sh && \
+    echo 'echo "✅ Package.json updated"' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Install Go dependencies' >> /app/verify-build.sh && \
+    echo 'echo "Installing Go dependencies..."' >> /app/verify-build.sh && \
+    echo 'go mod download' >> /app/verify-build.sh && \
+    echo 'echo "✅ Go dependencies installed"' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Build Go application' >> /app/verify-build.sh && \
+    echo 'echo "Building Go application..."' >> /app/verify-build.sh && \
+    echo 'CGO_ENABLED=0 go build -v -o localca-go' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Check Go build result' >> /app/verify-build.sh && \
+    echo 'if [ ! -f "localca-go" ]; then' >> /app/verify-build.sh && \
+    echo '    echo "❌ Go build failed - executable not found"' >> /app/verify-build.sh && \
+    echo '    exit 1' >> /app/verify-build.sh && \
+    echo 'else' >> /app/verify-build.sh && \
+    echo '    echo "✅ Go build successful"' >> /app/verify-build.sh && \
+    echo '    ls -la localca-go' >> /app/verify-build.sh && \
+    echo 'fi' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Install npm dependencies with less verbose output' >> /app/verify-build.sh && \
+    echo 'echo "Installing npm dependencies..."' >> /app/verify-build.sh && \
+    echo '# Suppress deprecation warnings' >> /app/verify-build.sh && \
+    echo 'npm config set loglevel error' >> /app/verify-build.sh && \
+    echo 'npm install --legacy-peer-deps --no-fund --no-audit' >> /app/verify-build.sh && \
+    echo 'echo "✅ NPM dependencies installed"' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Build frontend' >> /app/verify-build.sh && \
+    echo 'echo "Building frontend..."' >> /app/verify-build.sh && \
+    echo '# Suppress deprecation warnings' >> /app/verify-build.sh && \
+    echo 'NODE_OPTIONS=--no-warnings npm run build' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo '# Check frontend build result' >> /app/verify-build.sh && \
+    echo 'if [ ! -d ".next" ]; then' >> /app/verify-build.sh && \
+    echo '    echo "❌ Next.js build failed - .next directory not found"' >> /app/verify-build.sh && \
+    echo '    exit 1' >> /app/verify-build.sh && \
+    echo 'else' >> /app/verify-build.sh && \
+    echo '    echo "✅ Next.js build successful"' >> /app/verify-build.sh && \
+    echo '    du -sh .next' >> /app/verify-build.sh && \
+    echo 'fi' >> /app/verify-build.sh && \
+    echo '' >> /app/verify-build.sh && \
+    echo 'echo "===== Build verification completed successfully ====="' >> /app/verify-build.sh && \
+    echo 'exit 0' >> /app/verify-build.sh && \
+    chmod +x /app/verify-build.sh
 
-CMD ["/app/scripts/verify-build.sh"] 
+# Use our new verification script
+CMD ["/app/verify-build.sh"] 
