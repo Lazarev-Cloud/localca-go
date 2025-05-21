@@ -82,16 +82,18 @@ jobs:
           directory: ./
           files: ./coverage-merged.out
 
-      - name: Generate SPDX SBOM for Backend
-        run: |
-          go install github.com/spdx/spdx-sbom-generator/cmd/sbom-generator@latest
-          sbom-generator -o . --name "LocalCA-Go-Backend" --format json
-        
+      - name: Generate SBOM for Backend
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: backend-sbom.spdx.json
+          format: spdx-json
+          path: .
+          
       - name: Upload SBOM as artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-sbom
-          path: bom-go-mod.json
+          path: backend-sbom.spdx.json
           retention-days: 5
 
   security_scan_backend:
@@ -266,15 +268,18 @@ jobs:
             echo "Original package.json restored"
           fi
 
-      - name: Generate SPDX SBOM for Frontend
-        run: |
-          npx @cyclonedx/cyclonedx-npm --output-format spdx-json --output-file frontend-sbom.json
-        
+      - name: Generate SBOM for Frontend
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: frontend-sbom.spdx.json
+          format: spdx-json
+          path: .
+          
       - name: Upload SBOM as artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-sbom
-          path: frontend-sbom.json
+          path: frontend-sbom.spdx.json
           retention-days: 5
 
   security_scan_frontend:
@@ -543,32 +548,21 @@ jobs:
     name: Generate SBOM
     runs-on: ubuntu-latest
     needs: [build]
+    permissions:
+      contents: write # Needed for release asset uploads
+      actions: read # Needed to find workflow artifacts
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate SBOM for Go dependencies
+      - name: Generate Comprehensive SBOM
         uses: anchore/sbom-action@v0
         with:
           format: spdx-json
-          output-file: sbom-go.spdx.json
+          artifact-name: localca-go-sbom.spdx.json
           path: .
-
-      - name: Generate SBOM for npm dependencies
-        uses: anchore/sbom-action@v0
-        with:
-          format: spdx-json
-          output-file: sbom-npm.spdx.json
-          path: .
-
-      - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-files
-          path: |
-            sbom-go.spdx.json
-            sbom-npm.spdx.json
-          retention-days: 90
+          upload-release-assets: true
+          dependency-snapshot: true
 
   docker:
     name: Build and Push Docker Images
@@ -648,11 +642,22 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.created=${{ steps.version.outputs.build_date }}
 
-      # Download SBOM files
-      - name: Download SBOM files
-        uses: actions/download-artifact@v4
+      # Generate SBOMs for Docker images
+      - name: Generate SBOM for Backend Docker Image
+        uses: anchore/sbom-action@v0
         with:
-          name: sbom-files
+          format: spdx-json
+          artifact-name: backend-docker-sbom.spdx.json
+          path: .
+          dockerfile: ./Dockerfile
+
+      - name: Generate SBOM for Frontend Docker Image
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          artifact-name: frontend-docker-sbom.spdx.json
+          path: .
+          dockerfile: ./Dockerfile.frontend
 
       # Build and push backend image with provenance
       - name: Build and push backend image
@@ -667,8 +672,6 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
-          attestations: |
-            sbom-go.spdx.json
 
       # Build and push frontend image with provenance
       - name: Build and push frontend image
@@ -683,8 +686,6 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
-          attestations: |
-            sbom-npm.spdx.json
 
   update_readme:
     name: Update README with Attestation Information
@@ -778,15 +779,14 @@ jobs:
       - name: Download SBOM files
         uses: actions/download-artifact@v4
         with:
-          name: sbom-files
+          name: localca-go-sbom.spdx.json
           path: sbom
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
           cp artifacts/localca-go release-assets/
-          cp sbom/sbom-go.spdx.json release-assets/
-          cp sbom/sbom-npm.spdx.json release-assets/
+          cp sbom/localca-go-sbom.spdx.json release-assets/
           
           # Create checksums
           cd release-assets
@@ -852,15 +852,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Download backend SBOM
+      - name: Download SBOMs
         uses: actions/download-artifact@v4
         with:
-          name: backend-sbom
-          
-      - name: Download frontend SBOM
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-sbom
+          pattern: '*-sbom.spdx.json'
+          merge: true
+          path: ./sboms
           
       - name: Merge SBOMs
         run: |
@@ -868,19 +865,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
           
-          # Copy the existing SPDX.json as a base if it exists, otherwise use backend SBOM
-          if [ -f "SPDX.json" ]; then
-            cp SPDX.json merged-sbom.json
-          else
-            cp bom-go-mod.json merged-sbom.json
-          fi
+          # List all downloaded SBOMs
+          echo "Downloaded SBOMs:"
+          ls -la ./sboms/
           
-          # In a real implementation, you would use a proper SBOM merging tool here
+          # Copy the backend SBOM as the merged SBOM
+          cp ./sboms/backend-sbom.spdx.json ./merged-sbom.json
+          
           echo "SBOMs merged into merged-sbom.json"
           
       - name: Commit merged SBOM
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: update SPDX SBOM"
-          file_pattern: "*.json merged-sbom.json"
+          file_pattern: "merged-sbom.json"
             
