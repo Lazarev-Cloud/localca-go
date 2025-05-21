@@ -1,0 +1,68 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Go Backend Structure
+
+The LocalCA backend is written in Go and follows a modular, clean architecture design.
+
+## Main Entry Point
+
+- [main.go](mdc:main.go) - Application entry point
+  - Configuration loading
+  - Service initialization
+  - HTTP/HTTPS server setup
+  - ACME server initialization
+  - Signal handling for graceful shutdown
+
+## Package Organization
+
+### Core Packages
+
+- [pkg/certificates/](mdc:pkg/certificates)
+  - [ca.go](mdc:pkg/certificates/ca.go) - CA operations
+  - [server.go](mdc:pkg/certificates/server.go) - Server certificate operations
+  - [client.go](mdc:pkg/certificates/client.go) - Client certificate operations
+  - [interface.go](mdc:pkg/certificates/interface.go) - Service interface definition
+  - [errors.go](mdc:pkg/certificates/errors.go) - Error definitions
+
+- [pkg/storage/](mdc:pkg/storage)
+  - [storage.go](mdc:pkg/storage/storage.go) - File system storage implementation
+  - [errors.go](mdc:pkg/storage/errors.go) - Storage-related error definitions
+
+- [pkg/config/](mdc:pkg/config)
+  - [config.go](mdc:pkg/config/config.go) - Configuration loading and validation
+  - [defaults.go](mdc:pkg/config/defaults.go) - Default configuration values
+
+### Web and API
+
+- [pkg/handlers/](mdc:pkg/handlers)
+  - [router.go](mdc:pkg/handlers/router.go) - HTTP route configuration
+  - [auth.go](mdc:pkg/handlers/auth.go) - Authentication middleware
+  - [certificates.go](mdc:pkg/handlers/certificates.go) - Certificate API endpoints
+  - [setup.go](mdc:pkg/handlers/setup.go) - Initial setup handlers
+  - [middleware.go](mdc:pkg/handlers/middleware.go) - Common middleware
+
+### ACME Protocol Support
+
+- [pkg/acme/](mdc:pkg/acme)
+  - [server.go](mdc:pkg/acme/server.go) - ACME server implementation
+  - [jws.go](mdc:pkg/acme/jws.go) - JSON Web Signature implementation
+  - [models.go](mdc:pkg/acme/models.go) - ACME data models
+  - [storage.go](mdc:pkg/acme/storage.go) - ACME data storage
+
+### Email Notifications
+
+- [pkg/email/](mdc:pkg/email)
+  - [service.go](mdc:pkg/email/service.go) - Email service implementation
+  - [templates.go](mdc:pkg/email/templates.go) - Email templates
+
+## Architecture Patterns
+
+- **Dependency Injection**: Services are initialized with their dependencies
+- **Interface Segregation**: Small, focused interfaces
+- **Clean Architecture**: Clear separation between business logic and infrastructure
+- **Error Handling**: Consistent error handling with descriptive errors
+- **Middleware Chaining**: HTTP middleware for cross-cutting concerns
+

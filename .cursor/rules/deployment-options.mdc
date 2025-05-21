@@ -1,0 +1,76 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Deployment Options
+
+LocalCA provides multiple deployment options for different environments.
+
+## Docker Deployment
+
+The easiest way to deploy LocalCA is using Docker:
+
+- [Dockerfile](mdc:Dockerfile) - Backend Docker image
+- [Dockerfile.frontend](mdc:Dockerfile.frontend) - Frontend Docker image
+- [docker-compose.yml](mdc:docker-compose.yml) - Complete deployment with both services
+
+### Docker Compose Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/Lazarev-Cloud/localca-go.git
+cd localca-go
+
+# Start the services
+docker-compose up -d
+```
+
+## Manual Deployment
+
+### Backend Deployment
+
+```bash
+# Build the Go backend
+go build -o localca-go
+
+# Run the server
+./localca-go
+```
+
+### Frontend Deployment
+
+```bash
+# Install dependencies
+npm install
+
+# Build the frontend
+npm run build
+
+# Start the Next.js server
+npm start
+```
+
+## Configuration Options
+
+Configuration can be provided via environment variables:
+
+- `LOCALCA_DATA_DIR` - Data directory location (default: `./data`)
+- `LOCALCA_LISTEN_ADDR` - HTTP listen address (default: `:8080`)
+- `LOCALCA_TLS_ENABLED` - Enable HTTPS (default: `true`)
+- `LOCALCA_ACME_ENABLED` - Enable ACME server (default: `true`)
+- `LOCALCA_EMAIL_ENABLED` - Enable email notifications (default: `false`)
+- `LOCALCA_EMAIL_HOST` - SMTP server host
+- `LOCALCA_EMAIL_PORT` - SMTP server port
+- `LOCALCA_EMAIL_USERNAME` - SMTP username
+- `LOCALCA_EMAIL_PASSWORD` - SMTP password
+- `LOCALCA_EMAIL_FROM` - Sender email address
+
+## Deployment Considerations
+
+- **Security**: LocalCA handles sensitive cryptographic material. Secure your deployment.
+- **Persistence**: Use volumes for the data directory to persist certificates.
+- **Backups**: Regularly back up the data directory.
+- **TLS**: The service will generate its own TLS certificate for HTTPS.
+- **Networking**: Expose ports 8080 (HTTP), 8443 (HTTPS), and 8555 (ACME) as needed.
+
