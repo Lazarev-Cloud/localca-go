@@ -1,5 +1,7 @@
 # LocalCA - Self-Hosted Certificate Authority
 
+[![codecov](https://codecov.io/gh/Lazarev-Cloud/localca-go/graph/badge.svg)](https://codecov.io/gh/Lazarev-Cloud/localca-go)
+
 LocalCA is a complete solution for running your own Certificate Authority (CA) within a local network environment. It allows you to generate, manage, and deploy SSL/TLS certificates for internal services and clients without relying on external certificate providers.
 
 ## Features
