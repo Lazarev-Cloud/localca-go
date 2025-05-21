@@ -4,12 +4,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
-	// "strings"
+	"strings"
 	"time"
 )
 
-// sanitizeInput sanitizes input to prevent injection attacks
-func sanitizeInput(input string) string {
+// SanitizeInput sanitizes input to prevent injection attacks
+func SanitizeInput(input string) string {
 	// Replace CRLF characters to prevent header injection
 	return strings.ReplaceAll(strings.ReplaceAll(input, "\r", ""), "\n", "")
 }
@@ -52,9 +52,9 @@ func (e *EmailService) SendEmail(from, to, subject, body string) error {
 
 	// Format the message
 	// Sanitize inputs
-	safeTo := sanitizeInput(to)
-	safeSubject := sanitizeInput(subject)
-	safeBody := sanitizeInput(body)
+	safeTo := SanitizeInput(to)
+	safeSubject := SanitizeInput(subject)
+	safeBody := SanitizeInput(body)
 
 	message := []byte(
 		fmt.Sprintf("To: %s\r\n"+
