@@ -214,11 +214,34 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      # Create a copy of the original package.json for later restoration
+      - name: Backup original package.json
+        run: cp package.json package.json.original
+
+      # Update package.json to fix dependency conflicts
+      - name: Update package.json for compatibility
+        run: |
+          # Update date-fns to a compatible version for react-day-picker
+          jq '.dependencies."date-fns" = "^3.6.0"' package.json > tmp.json
+          mv tmp.json package.json
+          
+          # Show the modified package.json for debugging
+          echo "Modified package.json:"
+          cat package.json
+
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build frontend
         run: npm run build
+
+      # Restore original package.json after build
+      - name: Restore original package.json
+        run: |
+          if [ -f package.json.original ]; then
+            mv package.json.original package.json
+            echo "Original package.json restored"
+          fi
 
       - name: Verify build artifacts
         run: |

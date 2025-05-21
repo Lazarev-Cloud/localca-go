@@ -5,8 +5,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm ci
+# Update date-fns version for compatibility with react-day-picker
+RUN npm pkg set dependencies.date-fns="^3.6.0"
+
+# Install dependencies with legacy-peer-deps flag
+RUN npm ci --legacy-peer-deps
 
 # Copy the rest of the application
 COPY . .
