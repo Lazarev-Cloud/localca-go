@@ -103,20 +103,19 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Create coverage directory
+        run: mkdir -p coverage
+
       - name: Run frontend tests with coverage
         run: |
           echo "Running frontend tests with coverage..."
-          # Create coverage directory if it doesn't exist already
-          mkdir -p coverage || echo "Warning: Could not create coverage directory"
-          
           # Run tests with proper error handling
           npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage || echo "Warning: Tests failed but continuing workflow"
           
-          # Check if coverage file was generated
-          if [ -f "coverage/lcov.info" ]; then
-            echo "Coverage file successfully generated"
-          else
-            echo "Warning: Coverage file not generated"
+          # Create empty lcov.info file if it doesn't exist
+          if [ ! -f "coverage/lcov.info" ]; then
+            echo "Creating empty lcov.info file"
+            touch coverage/lcov.info
           fi
           
           # List coverage directory contents for debugging
@@ -134,25 +133,19 @@ jobs:
           # Check if coverage directory exists
           if [ ! -d "coverage" ]; then
             echo "Coverage directory not found, creating it"
-            mkdir -p coverage || echo "Warning: Could not create coverage directory"
-          else
-            echo "Coverage directory exists"
+            mkdir -p coverage
           fi
           
           # Check lcov.info file
           if [ ! -f "coverage/lcov.info" ]; then
             echo "lcov.info not found, creating empty file"
-            touch coverage/lcov.info || echo "Warning: Could not create lcov.info file"
-          else
-            echo "lcov.info file exists"
+            touch coverage/lcov.info
           fi
           
           # Check eslint report
           if [ ! -f "eslint-report.xml" ]; then
             echo "eslint-report.xml not found, creating empty file"
-            touch eslint-report.xml || echo "Warning: Could not create eslint-report.xml file"
-          else
-            echo "eslint-report.xml file exists"
+            touch eslint-report.xml
           fi
           
           # List files for debugging
@@ -164,7 +157,7 @@ jobs:
         with:
           name: frontend-coverage-reports
           path: |
-            coverage/lcov.info
+            coverage/
             eslint-report.xml
 
       # Restore original package.json to avoid issues in later stages
@@ -255,13 +248,13 @@ jobs:
             ls -la coverage || echo "Cannot list coverage directory contents"
           else
             echo "Coverage directory missing, creating it"
-            mkdir -p coverage || echo "Warning: Could not create coverage directory"
+            mkdir -p coverage
           fi
           
           # Check go coverage reports
           if [ ! -f "coverage-merged.out" ]; then
             echo "coverage-merged.out not found, creating empty file"
-            echo "mode: set" > coverage-merged.out || echo "Warning: Could not create coverage-merged.out"
+            echo "mode: set" > coverage-merged.out
           else
             echo "coverage-merged.out exists"
           fi
@@ -269,7 +262,7 @@ jobs:
           # Check lcov.info
           if [ ! -f "coverage/lcov.info" ]; then
             echo "coverage/lcov.info not found, creating empty file"
-            touch coverage/lcov.info || echo "Warning: Could not create lcov.info file"
+            touch coverage/lcov.info
           else
             echo "coverage/lcov.info exists"
           fi
@@ -355,8 +348,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}/backend
-            ghcr.io/${{ github.repository }}/frontend
+            ghcr.io/lazarev-cloud/localca-go/backend
+            ghcr.io/lazarev-cloud/localca-go/frontend
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -419,10 +412,10 @@ jobs:
           # https://cli.github.com/manual/installation
 
           # Verify the binary
-          gh attestation verify localca-go -R Lazarev-Cloud/localca-go
+          gh attestation verify localca-go -R lazarev-cloud/localca-go
           
           # Verify the SBOM
-          gh attestation verify localca-go -R Lazarev-Cloud/localca-go --predicate-type https://spdx.dev/Document/v2.3
+          gh attestation verify localca-go -R lazarev-cloud/localca-go --predicate-type https://spdx.dev/Document/v2.3
           ```
 
           ### Verifying Container Attestations
@@ -434,10 +427,10 @@ jobs:
           docker login ghcr.io
           
           # Verify backend container
-          gh attestation verify oci://ghcr.io/Lazarev-Cloud/localca-go/backend:latest -R Lazarev-Cloud/localca-go
+          gh attestation verify oci://ghcr.io/lazarev-cloud/localca-go/backend:latest -R lazarev-cloud/localca-go
           
           # Verify frontend container
-          gh attestation verify oci://ghcr.io/Lazarev-Cloud/localca-go/frontend:latest -R Lazarev-Cloud/localca-go
+          gh attestation verify oci://ghcr.io/lazarev-cloud/localca-go/frontend:latest -R lazarev-cloud/localca-go
           ```
 
           These verifications ensure the software you're using was built from the source code in this repository using GitHub Actions secure builder workflows.
