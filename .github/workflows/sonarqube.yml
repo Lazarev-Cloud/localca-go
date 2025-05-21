@@ -1,6 +1,0 @@
-# This file is being removed as it conflicts with the CI-based SonarQube analysis in ci-cd.yml.
-# According to SonarQube Cloud documentation, CI-based analysis should not run concurrently
-# with automatic analysis. We're keeping only the CI-based analysis in the main workflow.
-# See: https://docs.sonarsource.com/sonarqube-cloud/advanced-setup/ci-based-analysis/overview-of-integrated-cis/
-
-# This file is deprecated and will be removed in a future commit. 
