@@ -147,7 +147,8 @@ func testEmailHandler(certSvc certificates.CertificateServiceInterface, store *s
 		// Send test email
 		subject := "LocalCA Test Email"
 		body := "This is a test email from LocalCA."
-		if err := emailSvc.SendEmail(emailFrom, testEmail, subject, body); err != nil {
+		safeTestEmail := sanitizeInput(testEmail)
+		if err := emailSvc.SendEmail(emailFrom, safeTestEmail, subject, body); err != nil {
 			log.Printf("Failed to send test email: %v", err)
 			c.JSON(http.StatusInternalServerError, APIResponse{
 				Success: false,
