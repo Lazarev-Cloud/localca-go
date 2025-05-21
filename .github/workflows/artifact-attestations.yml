@@ -37,6 +37,12 @@ jobs:
       - name: Build binary
         run: go build -v -o localca-go
 
+      # Ensure binary is executable
+      - name: Set permissions
+        run: |
+          chmod +x localca-go
+          ls -la localca-go
+
       # Generate SBOM for the binary
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -85,6 +91,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Set lowercase repository name
+      - name: Set lowercase repository name
+        run: |
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
+
       # Build and push backend image
       - name: Build backend image
         id: build-backend
@@ -93,10 +105,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/backend:attestation
+          tags: ghcr.io/${{ env.REPO_LC }}/backend:attestation
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ github.repository }}/backend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Backend
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/backend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Backend
 
       # Extract the image digest for attestation
       - name: Extract backend image digest
@@ -110,7 +122,7 @@ jobs:
       - name: Generate Backend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository }}/backend:attestation
+          image: ghcr.io/${{ env.REPO_LC }}/backend:attestation
           format: spdx-json
           output-file: backend.spdx.json
 
@@ -118,7 +130,7 @@ jobs:
       - name: Attest Backend Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}/backend
+          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
           subject-digest: ${{ env.BACKEND_DIGEST }}
           push-to-registry: true
 
@@ -126,7 +138,7 @@ jobs:
       - name: Attest Backend SBOM
         uses: actions/attest-sbom@v1
         with:
-          subject-name: ghcr.io/${{ github.repository }}/backend
+          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
           subject-digest: ${{ env.BACKEND_DIGEST }}
           sbom-path: backend.spdx.json
           push-to-registry: true
@@ -139,10 +151,10 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ghcr.io/${{ github.repository }}/frontend:attestation
+          tags: ghcr.io/${{ env.REPO_LC }}/frontend:attestation
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ github.repository }}/frontend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Frontend
+          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/frontend:attestation,annotation-index.org.opencontainers.image.description=LocalCA-Go Frontend
 
       # Extract the image digest for attestation
       - name: Extract frontend image digest
@@ -156,7 +168,7 @@ jobs:
       - name: Generate Frontend SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/${{ github.repository }}/frontend:attestation
+          image: ghcr.io/${{ env.REPO_LC }}/frontend:attestation
           format: spdx-json
           output-file: frontend.spdx.json
 
@@ -164,7 +176,7 @@ jobs:
       - name: Attest Frontend Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}/frontend
+          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
           subject-digest: ${{ env.FRONTEND_DIGEST }}
           push-to-registry: true
 
@@ -172,7 +184,7 @@ jobs:
       - name: Attest Frontend SBOM
         uses: actions/attest-sbom@v1
         with:
-          subject-name: ghcr.io/${{ github.repository }}/frontend
+          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
           subject-digest: ${{ env.FRONTEND_DIGEST }}
           sbom-path: frontend.spdx.json
           push-to-registry: true
@@ -199,13 +211,19 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
+      # Set lowercase repository name
+      - name: Set lowercase repository name
+        run: |
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
+
       # Verify binary attestation
       - name: Verify Binary Attestation
         run: |
           echo "Verifying binary attestation..."
-          gh attestation verify ./artifacts/localca-go -R ${{ github.repository }} || true
+          gh attestation verify ./artifacts/localca-go -R ${{ env.REPO_LC }} || true
           echo "Verifying binary SBOM attestation..."
-          gh attestation verify ./artifacts/localca-go -R ${{ github.repository }} --predicate-type https://spdx.dev/Document/v2.3 || true
+          gh attestation verify ./artifacts/localca-go -R ${{ env.REPO_LC }} --predicate-type https://spdx.dev/Document/v2.3 || true
 
       # Login to container registry
       - name: Log in to GitHub Container Registry
@@ -219,6 +237,6 @@ jobs:
       - name: Verify Container Attestations
         run: |
           echo "Verifying backend container attestation..."
-          gh attestation verify oci://ghcr.io/${{ github.repository }}/backend:attestation -R ${{ github.repository }} || true
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/backend:attestation -R ${{ env.REPO_LC }} || true
           echo "Verifying frontend container attestation..."
-          gh attestation verify oci://ghcr.io/${{ github.repository }}/frontend:attestation -R ${{ github.repository }} || true 
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}/frontend:attestation -R ${{ env.REPO_LC }} || true 
