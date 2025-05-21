@@ -57,6 +57,16 @@ func SetupRoutes(router *gin.Engine, certSvc *certificates.CertificateService, s
 	// Configure session
 	router.Use(sessionMiddleware())
 
+	// Add authentication middleware
+	router.Use(authMiddleware(store))
+
+	// Authentication routes
+	router.GET("/login", loginHandler(certSvc, store))
+	router.POST("/login", loginPostHandler(certSvc, store))
+	router.GET("/logout", logoutHandler())
+	router.GET("/setup", setupHandler(certSvc, store, cfg))
+	router.POST("/setup", setupPostHandler(certSvc, store))
+
 	// Home page
 	router.GET("/", indexHandler(certSvc, store, cfg))
 	router.POST("/", createCertificateHandler(certSvc, store))

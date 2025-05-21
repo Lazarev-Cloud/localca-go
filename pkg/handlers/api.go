@@ -19,6 +19,11 @@ func SetupAPIRoutes(router *gin.Engine, certSvc *certificates.CertificateService
 		// CORS middleware for API routes
 		api.Use(corsMiddleware())
 
+		// Authentication endpoints
+		api.POST("/login", apiLoginHandler(certSvc, store))
+		api.GET("/setup", apiSetupHandler(certSvc, store))
+		api.POST("/setup", apiSetupHandler(certSvc, store))
+
 		// Certificate endpoints
 		api.GET("/certificates", apiGetCertificatesHandler(certSvc, store))
 		api.POST("/certificates", apiCreateCertificateHandler(certSvc, store))

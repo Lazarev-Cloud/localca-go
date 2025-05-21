@@ -76,6 +76,19 @@ func main() {
 		log.Println("Using existing CA certificate")
 	}
 
+	// Load auth config and log setup token if setup is not completed
+	authConfig, err := handlers.LoadAuthConfig(store)
+	if err != nil {
+		log.Printf("Failed to load auth config: %v", err)
+	} else if !authConfig.SetupCompleted {
+		log.Println("==========================================================")
+		log.Println("INITIAL SETUP REQUIRED")
+		log.Println("Please visit /setup to complete the initial configuration")
+		log.Println("Setup Token:", authConfig.SetupToken)
+		log.Println("This token will expire in 24 hours")
+		log.Println("==========================================================")
+	}
+
 	// Initialize router
 	router := gin.Default()
 
