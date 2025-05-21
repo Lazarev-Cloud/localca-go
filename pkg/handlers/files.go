@@ -137,9 +137,25 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 func getCertificateDetails(certPath string) (CertificateDetails, error) {
 	details := CertificateDetails{}
 
+	// Validate certificate path to prevent command injection
+	if !filepath.IsAbs(certPath) {
+		return details, fmt.Errorf("certificate path must be absolute")
+	}
+
+	// Check if the file exists
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return details, fmt.Errorf("certificate file does not exist: %w", err)
+	}
+
+	// Find OpenSSL path
+	opensslPath, err := exec.LookPath("openssl")
+	if err != nil {
+		return details, fmt.Errorf("failed to find openssl executable: %w", err)
+	}
+
 	// Use OpenSSL to get certificate details
 	cmd := exec.Command(
-		"openssl", "x509",
+		opensslPath, "x509",
 		"-in", certPath,
 		"-noout",
 		"-text",

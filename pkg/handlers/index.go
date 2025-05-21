@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
+	"github.com/gin-gonic/gin"
 )
 
 // indexHandler handles the home page
@@ -377,8 +377,25 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 
 	// Read certificate
 	certPath := store.GetCertificatePath(name)
+
+	// Validate certificate path to prevent command injection
+	if !filepath.IsAbs(certPath) {
+		return certInfo, fmt.Errorf("certificate path must be absolute")
+	}
+
+	// Check if the file exists
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return certInfo, fmt.Errorf("certificate file does not exist: %w", err)
+	}
+
+	// Find OpenSSL path
+	opensslPath, err := exec.LookPath("openssl")
+	if err != nil {
+		return certInfo, fmt.Errorf("failed to find openssl executable: %w", err)
+	}
+
 	cmd := exec.Command(
-		"openssl", "x509",
+		opensslPath, "x509",
 		"-in", certPath,
 		"-noout",
 		"-text",
@@ -410,12 +427,12 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 		if endIndex != -1 {
 			expiryLine := expiryPart[:endIndex]
 			expiryDateStr := strings.TrimSpace(strings.TrimPrefix(expiryLine, "Not After:"))
-			
+
 			// Parse date
 			expiryDate, err := time.Parse("Jan 2 15:04:05 2006 MST", expiryDateStr)
 			if err == nil {
 				certInfo.ExpiryDate = expiryDate.Format("2006-01-02")
-				
+
 				// Check if expired or expiring soon
 				now := time.Now()
 				certInfo.IsExpired = now.After(expiryDate)

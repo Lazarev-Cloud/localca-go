@@ -118,10 +118,10 @@ func (c *CertificateService) CreateCA() error {
 
 	// Create an encrypted version of the private key using OpenSSL (for compatibility)
 	cmd := exec.Command(
-		"openssl", "rsa", 
+		"openssl", "rsa",
 		"-in", c.storage.GetCAPrivateKeyPath(),
 		"-out", c.storage.GetCAEncryptedKeyPath(),
-		"-aes256", 
+		"-aes256",
 		"-passout", fmt.Sprintf("pass:%s", c.config.CAKeyPassword),
 	)
 	if err := cmd.Run(); err != nil {
@@ -134,20 +134,39 @@ func (c *CertificateService) CreateCA() error {
 		return fmt.Errorf("failed to copy CA certificate: %w", err)
 	}
 
-	// Set appropriate permissions
-	os.Chmod(c.storage.GetCAPrivateKeyPath(), 0600)
-	os.Chmod(c.storage.GetCAEncryptedKeyPath(), 0600)
-	os.Chmod(c.storage.GetCAPublicKeyPath(), 0644)
-	os.Chmod(c.storage.GetCAPublicCopyPath(), 0644)
+	// Set appropriate permissions with proper error handling
+	const (
+		privateFileMode = 0600 // Read/write for owner only
+		publicFileMode  = 0644 // Read for everyone, write for owner
+	)
+
+	if err := os.Chmod(c.storage.GetCAPrivateKeyPath(), privateFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on CA private key: %w", err)
+	}
+	if err := os.Chmod(c.storage.GetCAEncryptedKeyPath(), privateFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on CA encrypted key: %w", err)
+	}
+	if err := os.Chmod(c.storage.GetCAPublicKeyPath(), publicFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on CA public key: %w", err)
+	}
+	if err := os.Chmod(c.storage.GetCAPublicCopyPath(), publicFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on CA public copy: %w", err)
+	}
 
 	return nil
 }
 
 // RenewCA renews the CA certificate
 func (c *CertificateService) RenewCA() error {
+	// Use full path to OpenSSL for security
+	opensslPath, err := exec.LookPath("openssl")
+	if err != nil {
+		return fmt.Errorf("failed to find openssl executable: %w", err)
+	}
+
 	// Create a CSR from the current CA certificate and key
 	cmd := exec.Command(
-		"openssl", "x509", 
+		opensslPath, "x509",
 		"-x509toreq",
 		"-in", c.storage.GetCAPublicKeyPath(),
 		"-signkey", c.storage.GetCAPrivateKeyPath(),
@@ -159,7 +178,7 @@ func (c *CertificateService) RenewCA() error {
 
 	// Create a new CA certificate with extended validity
 	cmd = exec.Command(
-		"openssl", "x509",
+		opensslPath, "x509",
 		"-req",
 		"-days", "3650", // 10 years
 		"-in", c.storage.GetCADirectory()+"/ca.csr",
@@ -170,15 +189,18 @@ func (c *CertificateService) RenewCA() error {
 		return fmt.Errorf("failed to create new CA certificate: %w", err)
 	}
 
-	// Replace existing CA certificate
-	cmd = exec.Command("mv", c.storage.GetCADirectory()+"/ca-new.pem", c.storage.GetCAPublicKeyPath())
-	if err := cmd.Run(); err != nil {
+	// Replace existing CA certificate - use Go's file operations instead of exec
+	srcFile, err := os.ReadFile(c.storage.GetCADirectory() + "/ca-new.pem")
+	if err != nil {
+		return fmt.Errorf("failed to read new CA certificate: %w", err)
+	}
+
+	if err := os.WriteFile(c.storage.GetCAPublicKeyPath(), srcFile, 0644); err != nil {
 		return fmt.Errorf("failed to replace CA certificate: %w", err)
 	}
 
-	// Copy to public location
-	cmd = exec.Command("cp", c.storage.GetCAPublicKeyPath(), c.storage.GetCAPublicCopyPath())
-	if err := cmd.Run(); err != nil {
+	// Copy to public location - use Go's file operations instead of exec
+	if err := os.WriteFile(c.storage.GetCAPublicCopyPath(), srcFile, 0644); err != nil {
 		return fmt.Errorf("failed to copy new CA certificate: %w", err)
 	}
 
@@ -306,10 +328,10 @@ func (c *CertificateService) CreateServiceCertificate() error {
 
 	// Create server certificate
 	serverCertBytes, err := x509.CreateCertificate(
-		rand.Reader, 
-		&serverTemplate, 
-		caCert, 
-		&serverPrivKey.PublicKey, 
+		rand.Reader,
+		&serverTemplate,
+		caCert,
+		&serverPrivKey.PublicKey,
 		caKey,
 	)
 	if err != nil {
@@ -329,8 +351,17 @@ func (c *CertificateService) CreateServiceCertificate() error {
 	}
 
 	// Set proper permissions
-	os.Chmod(serverKeyPath, 0600)
-	os.Chmod(serverCertPath, 0644)
+	const (
+		privateFileMode = 0600 // Read/write for owner only
+		publicFileMode  = 0644 // Read for everyone, write for owner
+	)
+
+	if err := os.Chmod(serverKeyPath, privateFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on service key: %w", err)
+	}
+	if err := os.Chmod(serverCertPath, publicFileMode); err != nil {
+		return fmt.Errorf("failed to set permissions on service certificate: %w", err)
+	}
 
 	return nil
 }
@@ -359,7 +390,7 @@ func (c *CertificateService) GetAllCertificates() ([]Certificate, error) {
 // GetCertificateInfo returns information about a specific certificate
 func (c *CertificateService) GetCertificateInfo(name string) (*Certificate, error) {
 	certPath := c.storage.GetCertificatePath(name)
-	
+
 	// Check if certificate exists
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("certificate does not exist: %s", name)
