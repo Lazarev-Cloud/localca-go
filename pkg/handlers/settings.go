@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
 	"strconv"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
@@ -104,6 +105,16 @@ func testEmailHandler(certSvc certificates.CertificateServiceInterface, store *s
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
 				Message: "Test email address is required",
+			})
+			return
+		}
+
+		// Validate email format
+		_, err := mail.ParseAddress(testEmail)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid email address format",
 			})
 			return
 		}
