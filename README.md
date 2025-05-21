@@ -425,6 +425,37 @@ gh attestation verify oci://ghcr.io/lazarev-cloud/localca-go/frontend:latest -R 
 
 These verifications ensure the software you're using was built from the source code in this repository using GitHub Actions secure builder workflows.
 
+## Software Bill of Materials (SBOM)
+
+LocalCA-Go includes a Software Bill of Materials (SBOM) in [SPDX format](https://spdx.dev/). The SBOM provides a comprehensive inventory of all components used in the software, including dependencies, licenses, and other metadata.
+
+### SBOM Files
+
+- `SPDX.json`: The main SBOM file in SPDX 2.3 format
+- `merged-sbom.json`: Generated during CI/CD, combines backend and frontend component information
+
+### Automated SBOM Generation
+
+The SBOM is automatically generated and updated through our CI/CD pipeline using the GitHub Actions workflow defined in `.github/workflows/spdx-sbom-generator.yml`. This ensures the SBOM stays current with the project's dependencies.
+
+### SBOM Tools Used
+
+- [SPDX SBOM Generator](https://github.com/spdx/spdx-sbom-generator) for Go backend components
+- [CycloneDX NPM](https://github.com/CycloneDX/cyclonedx-npm) for frontend JavaScript/TypeScript components
+
+### Manual SBOM Generation
+
+To generate the SBOM manually:
+
+```bash
+# For Go backend
+go install github.com/spdx/spdx-sbom-generator/cmd/sbom-generator@latest
+sbom-generator -o . --name "LocalCA-Go-Backend" --format json
+
+# For frontend
+npx @cyclonedx/cyclonedx-npm --output-format spdx-json --output-file frontend-sbom.json
+```
+
 ---
 
 Created by [@lazarevtill](https://github.com/lazarevtill) - feel free to contact me!

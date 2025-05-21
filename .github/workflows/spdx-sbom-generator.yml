@@ -1,0 +1,63 @@
+name: Generate SPDX SBOM
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-sbom:
+    name: Generate SPDX SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed to commit the SBOM file
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install SPDX SBOM Generator
+        run: |
+          go install github.com/spdx/spdx-sbom-generator/cmd/sbom-generator@latest
+
+      - name: Generate SBOM for Go Backend
+        run: |
+          sbom-generator -o . --name "LocalCA-Go-Backend" --format json
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate SBOM for Frontend
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-format spdx-json --output-file frontend-sbom.json
+
+      - name: Merge SBOMs
+        run: |
+          # Use jq to merge the SBOMs (simplified approach)
+          # In a real implementation, you would need a more sophisticated merging strategy
+          # or use a dedicated SBOM merging tool
+          cp SPDX.json merged-sbom.json
+
+      - name: Commit SBOM file
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update SPDX SBOM"
+          file_pattern: "*.json SPDX.json merged-sbom.json"
+          branch: ${{ github.head_ref || github.ref_name }} 

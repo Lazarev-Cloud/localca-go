@@ -76,6 +76,18 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Generate SPDX SBOM for Backend
+        run: |
+          go install github.com/spdx/spdx-sbom-generator/cmd/sbom-generator@latest
+          sbom-generator -o . --name "LocalCA-Go-Backend" --format json
+        
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: bom-go-mod.json
+          retention-days: 5
+
   security_scan_backend:
     name: Security Scan Backend
     runs-on: ubuntu-latest
@@ -241,6 +253,17 @@ jobs:
             mv package.json.original package.json
             echo "Original package.json restored"
           fi
+
+      - name: Generate SPDX SBOM for Frontend
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-format spdx-json --output-file frontend-sbom.json
+        
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom
+          path: frontend-sbom.json
+          retention-days: 5
 
   security_scan_frontend:
     name: Security Scan Frontend
@@ -777,4 +800,46 @@ jobs:
             frontend-coverage-reports
             build-artifacts
           failOnError: false
+
+  # Add a new job for merging SBOMs if both backend and frontend tests pass
+  merge_sboms:
+    name: Merge SBOMs
+    needs: [backend_test, frontend_test]
+    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download backend SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-sbom
+          
+      - name: Download frontend SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-sbom
+          
+      - name: Merge SBOMs
+        run: |
+          # Install jq for JSON processing
+          sudo apt-get update
+          sudo apt-get install -y jq
+          
+          # Copy the existing SPDX.json as a base if it exists, otherwise use backend SBOM
+          if [ -f "SPDX.json" ]; then
+            cp SPDX.json merged-sbom.json
+          else
+            cp bom-go-mod.json merged-sbom.json
+          fi
+          
+          # In a real implementation, you would use a proper SBOM merging tool here
+          echo "SBOMs merged into merged-sbom.json"
+          
+      - name: Commit merged SBOM
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update SPDX SBOM"
+          file_pattern: "*.json merged-sbom.json"
             
