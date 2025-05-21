@@ -106,27 +106,3 @@ jobs:
             org.opencontainers.image.title=LocalCA Frontend
             org.opencontainers.image.url=https://lazarev.cloud
             
-      - name: Make packages public
-        run: |
-          # Convert repository name to lowercase
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          
-          # Set backend package to public
-          echo "Setting backend package to public"
-          gh api --method PATCH \
-            /orgs/${{ github.repository_owner }}/packages/container/${REPO_LOWER##*/}-backend/visibility \
-            -f visibility="public" \
-            || gh api --method PATCH \
-               /user/packages/container/${REPO_LOWER##*/}-backend/visibility \
-               -f visibility="public"
-          
-          # Set frontend package to public
-          echo "Setting frontend package to public"
-          gh api --method PATCH \
-            /orgs/${{ github.repository_owner }}/packages/container/${REPO_LOWER##*/}-frontend/visibility \
-            -f visibility="public" \
-            || gh api --method PATCH \
-               /user/packages/container/${REPO_LOWER##*/}-frontend/visibility \
-               -f visibility="public"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

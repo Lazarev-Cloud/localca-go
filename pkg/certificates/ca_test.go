@@ -122,10 +122,13 @@ func TestCertificateService_CreateCA(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
+	// Generate a random password for testing
+	testPassword := generateRandomPassword()
+
 	// Create config
 	cfg := &config.Config{
 		CAName:        "Test CA",
-		CAKeyPassword: "testpassword",
+		CAKeyPassword: testPassword,
 		Organization:  "Test Org",
 		Country:       "US",
 		DataDir:       tempDir,
@@ -170,10 +173,13 @@ func TestCertificateService_CAExists(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
+	// Generate a random password for testing
+	testPassword := generateRandomPassword()
+
 	// Create config
 	cfg := &config.Config{
 		CAName:        "Test CA",
-		CAKeyPassword: "testpassword",
+		CAKeyPassword: testPassword,
 		Organization:  "Test Org",
 		Country:       "US",
 		DataDir:       tempDir,
@@ -208,4 +214,22 @@ func TestCertificateService_CAExists(t *testing.T) {
 	if !exists {
 		t.Errorf("CA should exist now")
 	}
+}
+
+// generateRandomPassword generates a random password for testing
+func generateRandomPassword() string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
+	const length = 16
+
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "test_password_fallback"
+	}
+
+	for i := range b {
+		b[i] = chars[int(b[i])%len(chars)]
+	}
+
+	return string(b)
 }

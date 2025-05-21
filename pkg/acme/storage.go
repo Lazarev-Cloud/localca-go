@@ -71,7 +71,11 @@ func (s *ACMEStorage) loadData() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(accountsDir, file.Name()))
+		// Sanitize file name to prevent path traversal
+		fileName := filepath.Base(file.Name())
+		filePath := filepath.Join(accountsDir, fileName)
+
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}
@@ -96,7 +100,11 @@ func (s *ACMEStorage) loadData() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(ordersDir, file.Name()))
+		// Sanitize file name to prevent path traversal
+		fileName := filepath.Base(file.Name())
+		filePath := filepath.Join(ordersDir, fileName)
+
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}
@@ -121,7 +129,11 @@ func (s *ACMEStorage) loadData() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(authzDir, file.Name()))
+		// Sanitize file name to prevent path traversal
+		fileName := filepath.Base(file.Name())
+		filePath := filepath.Join(authzDir, fileName)
+
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}
@@ -146,7 +158,11 @@ func (s *ACMEStorage) loadData() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(challengesDir, file.Name()))
+		// Sanitize file name to prevent path traversal
+		fileName := filepath.Base(file.Name())
+		filePath := filepath.Join(challengesDir, fileName)
+
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}

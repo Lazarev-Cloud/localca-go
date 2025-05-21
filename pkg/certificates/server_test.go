@@ -125,10 +125,13 @@ func TestCreateServerCertificate(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
+	// Generate a random password for testing
+	testPassword := generateTestPassword()
+
 	// Create config
 	cfg := &config.Config{
 		CAName:        "Test CA",
-		CAKeyPassword: "testpassword",
+		CAKeyPassword: testPassword,
 		Organization:  "Test Org",
 		Country:       "US",
 		DataDir:       tempDir,
@@ -167,4 +170,22 @@ func TestCreateServerCertificate(t *testing.T) {
 	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
 		t.Errorf("Server key file was not created at %s", keyFile)
 	}
+}
+
+// generateTestPassword generates a random password for testing
+func generateTestPassword() string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
+	const length = 16
+
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "test_password_fallback"
+	}
+
+	for i := range b {
+		b[i] = chars[int(b[i])%len(chars)]
+	}
+
+	return string(b)
 }

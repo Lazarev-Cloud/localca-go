@@ -4,7 +4,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -324,10 +323,12 @@ func (s *Storage) GetCertificateNameBySerial(serialNumber string) (string, error
 
 	// Check each certificate for the matching serial number
 	for _, name := range certNames {
-		certPath := s.GetCertificatePath(name)
+		// Sanitize name to prevent path traversal
+		safeName := filepath.Base(name)
+		certPath := s.GetCertificatePath(safeName)
 
 		// Read and parse the certificate
-		certData, err := ioutil.ReadFile(certPath)
+		certData, err := os.ReadFile(certPath)
 		if err != nil {
 			continue // Skip if can't read
 		}
@@ -345,7 +346,7 @@ func (s *Storage) GetCertificateNameBySerial(serialNumber string) (string, error
 		// Check if serial number matches
 		certSerial := fmt.Sprintf("%X", cert.SerialNumber)
 		if certSerial == serialNumber {
-			return name, nil
+			return safeName, nil
 		}
 	}
 

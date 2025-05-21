@@ -49,15 +49,19 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 		}
 
 		// Validate certificate name to prevent path traversal
-		if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		// Only allow alphanumeric characters, hyphens, and underscores
+		if !isValidCertName(name) {
 			c.HTML(http.StatusBadRequest, "files.html", gin.H{
 				"Error": "Invalid certificate name",
 			})
 			return
 		}
 
+		// Get the safe name (base name only)
+		safeName := filepath.Base(name)
+
 		// Check if certificate exists
-		certDir := store.GetCertificateDirectory(name)
+		certDir := store.GetCertificateDirectory(safeName)
 		if _, err := os.Stat(certDir); os.IsNotExist(err) {
 			c.HTML(http.StatusNotFound, "files.html", gin.H{
 				"Error": "Certificate not found",
@@ -66,7 +70,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 		}
 
 		// Get certificate details
-		certDetails, err := getCertificateDetails(store.GetCertificatePath(name))
+		certDetails, err := getCertificateDetails(store.GetCertificatePath(safeName))
 		if err != nil {
 			log.Printf("Failed to get certificate details: %v", err)
 		}
@@ -89,7 +93,10 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 				continue
 			}
 
-			filePath := filepath.Join(certDir, file.Name())
+			// Sanitize file name to prevent path traversal
+			safeFileName := filepath.Base(file.Name())
+			filePath := filepath.Join(certDir, safeFileName)
+
 			info, err := file.Info()
 			if err != nil {
 				log.Printf("Failed to get file info: %v", err)
@@ -100,7 +107,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 			fileSize := fmt.Sprintf("%.1f KB", float64(info.Size())/1024.0)
 
 			// Check if p12 file
-			isP12 := strings.HasSuffix(file.Name(), ".p12")
+			isP12 := strings.HasSuffix(safeFileName, ".p12")
 
 			// Read file content for non-p12 files
 			content := ""
@@ -115,7 +122,7 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 			}
 
 			fileInfos = append(fileInfos, FileInfo{
-				Name:     file.Name(),
+				Name:     safeFileName,
 				Path:     filePath,
 				Content:  content,
 				IsP12:    isP12,
@@ -125,12 +132,26 @@ func filesHandler(certSvc *certificates.CertificateService, store *storage.Stora
 
 		// Render template
 		c.HTML(http.StatusOK, "files.html", gin.H{
-			"Name":               name,
+			"Name":               safeName,
 			"Files":              fileInfos,
 			"CertificateDetails": certDetails,
 			"CSRFToken":          c.GetString("csrf_token"),
 		})
 	}
+}
+
+// isValidCertName checks if a certificate name is valid
+// Only allows alphanumeric characters, hyphens, and underscores
+func isValidCertName(name string) bool {
+	for _, char := range name {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '-' || char == '_' || char == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // getCertificateDetails gets detailed information about a certificate
