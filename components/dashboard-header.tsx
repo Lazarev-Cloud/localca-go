@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Shield, Menu, Home, FileText, Plus, Settings, LogOut, Bell, Download, RefreshCw } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast-new"
+import { useCertificates } from "@/hooks/use-certificates"
 
 export function DashboardHeader() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { fetchCertificates, certificates } = useCertificates()
 
   const handleLogout = async () => {
     try {
@@ -45,6 +47,92 @@ export function DashboardHeader() {
       })
     }
   }
+
+  const handleDownloadCA = async () => {
+    try {
+      const response = await fetch('/api/proxy/download/ca', {
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to download CA certificate')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'ca.pem'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast({
+        title: "Download successful",
+        description: "CA certificate downloaded successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: error instanceof Error ? error.message : "Failed to download CA certificate",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDownloadCRL = async () => {
+    try {
+      const response = await fetch('/api/proxy/download/crl', {
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to download CRL')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'ca.crl'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast({
+        title: "Download successful",
+        description: "CRL downloaded successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: error instanceof Error ? error.message : "Failed to download CRL",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleRefreshCertificates = async () => {
+    try {
+      await fetchCertificates()
+      toast({
+        title: "Refresh successful",
+        description: "Certificate list refreshed successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Refresh failed",
+        description: error instanceof Error ? error.message : "Failed to refresh certificates",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Get expiring certificates for notifications
+  const expiringCertificates = certificates.filter(cert => cert.is_expiring_soon && !cert.is_revoked)
+  const recentlyCreatedCertificates = certificates.slice(0, 3) // Show last 3 certificates as "recent"
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background">
@@ -128,16 +216,45 @@ export function DashboardHeader() {
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
+                {expiringCertificates.length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                    {expiringCertificates.length}
+                  </span>
+                )}
                 <span className="sr-only">Notifications</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Certificate "server.local" expires in 7 days</DropdownMenuItem>
-              <DropdownMenuItem>Certificate "client.p12" was created successfully</DropdownMenuItem>
+              {expiringCertificates.length > 0 ? (
+                expiringCertificates.map((cert) => (
+                  <DropdownMenuItem key={cert.serial_number} asChild>
+                    <Link href={`/certificates/${cert.serial_number}`}>
+                      Certificate "{cert.common_name}" expires soon
+                    </Link>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>
+                  No notifications
+                </DropdownMenuItem>
+              )}
+              {recentlyCreatedCertificates.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Recent Activity</DropdownMenuLabel>
+                  {recentlyCreatedCertificates.map((cert) => (
+                    <DropdownMenuItem key={`recent-${cert.serial_number}`} asChild>
+                      <Link href={`/certificates/${cert.serial_number}`}>
+                        Certificate "{cert.common_name}" was created
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -150,9 +267,12 @@ export function DashboardHeader() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Download</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>CA Certificate</DropdownMenuItem>
-              <DropdownMenuItem>CA Certificate Chain</DropdownMenuItem>
-              <DropdownMenuItem>CRL</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDownloadCA}>
+                CA Certificate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDownloadCRL}>
+                CRL
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -165,8 +285,12 @@ export function DashboardHeader() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Refresh</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Refresh Certificate List</DropdownMenuItem>
-              <DropdownMenuItem>Refresh CRL</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleRefreshCertificates}>
+                Refresh Certificate List
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDownloadCRL}>
+                Refresh CRL
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>

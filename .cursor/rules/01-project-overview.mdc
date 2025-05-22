@@ -31,6 +31,16 @@ The main entry point for the backend is [main.go](mdc:main.go), which initialize
 
 The frontend starts at [app/page.tsx](mdc:app/page.tsx), which renders the main dashboard.
 
+## Frontend-Backend Connectivity
+
+The frontend connects to the backend through:
+
+1. Direct API calls from the browser to the backend
+2. Server-side API calls during SSR
+3. API proxy routes at `app/api/proxy/[...path]` for complex operations
+
+The API URL is configured in [lib/config.ts](mdc:lib/config.ts) and the rewrites in [next.config.mjs](mdc:next.config.mjs).
+
 ## Key Components
 
 1. Certificate Service: Manages all certificate operations

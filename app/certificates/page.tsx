@@ -1,6 +1,6 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { CertificateTable } from "@/components/certificate-table"
-import { CertificateFilters } from "@/components/certificate-filters"
+import { CertificateFilters, CertificateFiltersProvider } from "@/components/certificate-filters"
 import { CreateCertificateButton } from "@/components/create-certificate-button"
 
 export default function CertificatesPage() {
@@ -12,10 +12,12 @@ export default function CertificatesPage() {
           <h2 className="text-3xl font-bold tracking-tight">Certificates</h2>
           <CreateCertificateButton />
         </div>
-        <div className="space-y-4">
-          <CertificateFilters />
-          <CertificateTable />
-        </div>
+        <CertificateFiltersProvider>
+          <div className="space-y-4">
+            <CertificateFilters />
+            <CertificateTable />
+          </div>
+        </CertificateFiltersProvider>
       </main>
     </div>
   )

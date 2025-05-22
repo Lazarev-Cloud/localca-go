@@ -43,7 +43,7 @@ export function CreateCertificateForm() {
     
     // Validate password for client certificates
     if (isClientCert) {
-      const password = formData.get('p12_password') as string
+      const password = formData.get('password') as string
       if (!password || password.length < 8) {
         newErrors.password = 'Password must be at least 8 characters long'
       }
@@ -51,7 +51,7 @@ export function CreateCertificateForm() {
     
     // Validate alternative names for server certificates
     if (!isClientCert) {
-      const altNames = formData.get('alt_names') as string
+      const altNames = formData.get('additional_domains') as string
       if (altNames) {
         const domains = altNames.split(',').map(domain => domain.trim())
         for (const domain of domains) {
@@ -145,7 +145,7 @@ export function CreateCertificateForm() {
                   <Label htmlFor="alternativeNames" className={errors.altNames ? "text-destructive" : ""}>Subject Alternative Names (SAN)</Label>
                   <Textarea
                     id="alternativeNames"
-                    name="alt_names"
+                    name="additional_domains"
                     placeholder="e.g., www.server.local, api.server.local"
                     disabled={isClientCert}
                     className={errors.altNames ? "border-destructive" : ""}
@@ -178,7 +178,7 @@ export function CreateCertificateForm() {
                     <Label htmlFor="p12Password" className={errors.password ? "text-destructive" : ""}>P12 Password</Label>
                     <Input 
                       id="p12Password" 
-                      name="p12_password"
+                      name="password"
                       type="password" 
                       placeholder="Enter a secure password"
                       required={isClientCert}

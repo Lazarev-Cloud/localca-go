@@ -1,33 +1,49 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AlertTriangle, CheckCircle, XCircle, Calendar, FileText, Key, Globe, Building, Hash } from "lucide-react"
+import { AlertTriangle, CheckCircle, XCircle, Calendar, FileText, Key, Globe, Building, Hash, Loader2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useCertificates } from "@/hooks/use-certificates"
 
 interface CertificateDetailsProps {
   id: string
 }
 
 export function CertificateDetails({ id }: CertificateDetailsProps) {
-  // In a real application, this would fetch the certificate details from the API
-  const certificate = {
-    id,
-    commonName: "server.local",
-    type: "Server",
-    expiryDate: "2025-05-01",
-    issuedDate: "2023-05-01",
-    isExpiringSoon: true,
-    isExpired: false,
-    isRevoked: false,
-    serialNumber: "1A:2B:3C:4D:5E:6F",
-    organization: "LocalCA",
-    country: "US",
-    alternativeNames: ["www.server.local", "api.server.local"],
-    keyUsage: ["Digital Signature", "Key Encipherment"],
-    extendedKeyUsage: ["Server Authentication", "Client Authentication"],
-    keyType: "RSA",
-    keySize: "2048 bits",
-    signatureAlgorithm: "SHA256withRSA",
-    fingerprint: "12:34:56:78:9A:BC:DE:F0:12:34:56:78:9A:BC:DE:F0",
+  const { certificates, loading, error } = useCertificates()
+  const [certificate, setCertificate] = useState<any>(null)
+
+  useEffect(() => {
+    // Find the certificate by serial number
+    const cert = certificates.find(c => c.serial_number === id)
+    setCertificate(cert)
+  }, [certificates, id])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error.message}</AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (!certificate) {
+    return (
+      <Alert>
+        <AlertDescription>Certificate not found.</AlertDescription>
+      </Alert>
+    )
   }
 
   return (
@@ -35,21 +51,21 @@ export function CertificateDetails({ id }: CertificateDetailsProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div className="space-y-1">
-            <CardTitle className="text-2xl">{certificate.commonName}</CardTitle>
-            <CardDescription>{certificate.type} Certificate</CardDescription>
+            <CardTitle className="text-2xl">{certificate.common_name}</CardTitle>
+            <CardDescription>{certificate.is_client ? "Client" : "Server"} Certificate</CardDescription>
           </div>
           <div>
-            {certificate.isRevoked ? (
+            {certificate.is_revoked ? (
               <Badge variant="outline" className="flex items-center gap-1 text-red-500 border-red-200 bg-red-50">
                 <XCircle className="h-3 w-3" />
                 Revoked
               </Badge>
-            ) : certificate.isExpired ? (
+            ) : certificate.is_expired ? (
               <Badge variant="outline" className="flex items-center gap-1 text-red-500 border-red-200 bg-red-50">
                 <XCircle className="h-3 w-3" />
                 Expired
               </Badge>
-            ) : certificate.isExpiringSoon ? (
+            ) : certificate.is_expiring_soon ? (
               <Badge variant="outline" className="flex items-center gap-1 text-amber-500 border-amber-200 bg-amber-50">
                 <AlertTriangle className="h-3 w-3" />
                 Expires Soon
@@ -67,7 +83,6 @@ export function CertificateDetails({ id }: CertificateDetailsProps) {
             <TabsList>
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="extensions">Extensions</TabsTrigger>
             </TabsList>
             <TabsContent value="general" className="space-y-4">
               <div className="grid gap-4 py-4">
@@ -75,28 +90,28 @@ export function CertificateDetails({ id }: CertificateDetailsProps) {
                   <FileText className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">Common Name</p>
-                    <p className="text-sm text-muted-foreground">{certificate.commonName}</p>
+                    <p className="text-sm text-muted-foreground">{certificate.common_name}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
                   <Calendar className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Valid From</p>
-                    <p className="text-sm text-muted-foreground">{certificate.issuedDate}</p>
+                    <p className="text-sm font-medium leading-none">Certificate Type</p>
+                    <p className="text-sm text-muted-foreground">{certificate.is_client ? "Client Certificate" : "Server Certificate"}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
                   <Calendar className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Valid Until</p>
-                    <p className="text-sm text-muted-foreground">{certificate.expiryDate}</p>
+                    <p className="text-sm font-medium leading-none">Expiry Date</p>
+                    <p className="text-sm text-muted-foreground">{certificate.expiry_date}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
                   <Hash className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">Serial Number</p>
-                    <p className="text-sm font-mono text-muted-foreground">{certificate.serialNumber}</p>
+                    <p className="text-sm font-mono text-muted-foreground">{certificate.serial_number}</p>
                   </div>
                 </div>
               </div>
@@ -104,83 +119,23 @@ export function CertificateDetails({ id }: CertificateDetailsProps) {
             <TabsContent value="details" className="space-y-4">
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Building className="h-5 w-5 text-muted-foreground" />
+                  <CheckCircle className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Organization</p>
-                    <p className="text-sm text-muted-foreground">{certificate.organization}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Globe className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Country</p>
-                    <p className="text-sm text-muted-foreground">{certificate.country}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Globe className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Alternative Names</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {certificate.alternativeNames.map((name, index) => (
-                        <Badge key={index} variant="secondary">
-                          {name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Key className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Key Information</p>
+                    <p className="text-sm font-medium leading-none">Status</p>
                     <p className="text-sm text-muted-foreground">
-                      {certificate.keyType}, {certificate.keySize}
+                      {certificate.is_revoked ? "Revoked" : 
+                       certificate.is_expired ? "Expired" : 
+                       certificate.is_expiring_soon ? "Expiring Soon" : "Valid"}
                     </p>
                   </div>
                 </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="extensions" className="space-y-4">
-              <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Key className="h-5 w-5 text-muted-foreground" />
+                  <FileText className="h-5 w-5 text-muted-foreground" />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Key Usage</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {certificate.keyUsage.map((usage, index) => (
-                        <Badge key={index} variant="secondary">
-                          {usage}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Key className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Extended Key Usage</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {certificate.extendedKeyUsage.map((usage, index) => (
-                        <Badge key={index} variant="secondary">
-                          {usage}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Hash className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Signature Algorithm</p>
-                    <p className="text-sm text-muted-foreground">{certificate.signatureAlgorithm}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
-                  <Hash className="h-5 w-5 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Fingerprint (SHA-1)</p>
-                    <p className="text-sm font-mono text-muted-foreground">{certificate.fingerprint}</p>
+                    <p className="text-sm font-medium leading-none">Certificate Usage</p>
+                    <p className="text-sm text-muted-foreground">
+                      {certificate.is_client ? "Client Authentication" : "Server Authentication"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -191,3 +146,4 @@ export function CertificateDetails({ id }: CertificateDetailsProps) {
     </div>
   )
 }
+
