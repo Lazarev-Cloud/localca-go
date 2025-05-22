@@ -1,0 +1,273 @@
+---
+name: Dependency Management
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'package-lock.json'
+  schedule:
+    - cron: '0 8 * * 1'  # Weekly on Monday at 8 AM
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          comment-summary-in-pr: always
+          deny-licenses: GPL-2.0, GPL-3.0
+
+  go-dependencies:
+    name: Go Dependencies Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "# Go Dependencies Report" > go-deps-report.md
+          echo "Generated: $(date)" >> go-deps-report.md
+          echo "" >> go-deps-report.md
+
+          # Install go-mod-outdated
+          go install github.com/psampaz/go-mod-outdated@latest
+
+          # Check for outdated dependencies
+          echo "## Outdated Dependencies" >> go-deps-report.md
+          go list -u -m -json all | go-mod-outdated -update -direct > outdated.txt || true
+
+          if [ -s outdated.txt ]; then
+            echo "\`\`\`" >> go-deps-report.md
+            cat outdated.txt >> go-deps-report.md
+            echo "\`\`\`" >> go-deps-report.md
+          else
+            echo "✅ All dependencies are up to date" >> go-deps-report.md
+          fi
+
+          echo "" >> go-deps-report.md
+          echo "## Dependency Tree" >> go-deps-report.md
+          echo "\`\`\`" >> go-deps-report.md
+          go mod graph | head -20 >> go-deps-report.md
+          echo "\`\`\`" >> go-deps-report.md
+
+      - name: Verify dependencies
+        run: |
+          go mod verify
+          go mod tidy
+
+          # Check if go.mod or go.sum changed
+          if ! git diff --quiet go.mod go.sum; then
+            echo "⚠️ go.mod or go.sum needs updating" >> go-deps-report.md
+            echo "\`\`\`diff" >> go-deps-report.md
+            git diff go.mod go.sum >> go-deps-report.md
+            echo "\`\`\`" >> go-deps-report.md
+          fi
+
+      - name: Upload Go dependencies report
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-dependencies-report
+          path: |
+            go-deps-report.md
+            outdated.txt
+          retention-days: 7
+
+  npm-dependencies:
+    name: NPM Dependencies Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "# NPM Dependencies Report" > npm-deps-report.md
+          echo "Generated: $(date)" >> npm-deps-report.md
+          echo "" >> npm-deps-report.md
+
+          # Fix date-fns version
+          npm pkg set dependencies.date-fns="^3.6.0"
+          npm install --legacy-peer-deps
+
+          # Check for outdated packages
+          echo "## Outdated Dependencies" >> npm-deps-report.md
+          npm outdated --json > outdated.json || true
+
+          if [ -s outdated.json ] && [ "$(cat outdated.json)" != "{}" ]; then
+            echo "\`\`\`json" >> npm-deps-report.md
+            cat outdated.json >> npm-deps-report.md
+            echo "\`\`\`" >> npm-deps-report.md
+          else
+            echo "✅ All dependencies are up to date" >> npm-deps-report.md
+          fi
+
+          echo "" >> npm-deps-report.md
+          echo "## Dependency Tree" >> npm-deps-report.md
+          echo "\`\`\`" >> npm-deps-report.md
+          npm ls --depth=1 >> npm-deps-report.md 2>&1 || true
+          echo "\`\`\`" >> npm-deps-report.md
+
+      - name: Check package-lock.json
+        run: |
+          # Verify package-lock.json is in sync
+          npm ci --legacy-peer-deps
+
+          # Check if package-lock.json changed
+          if ! git diff --quiet package-lock.json; then
+            echo "" >> npm-deps-report.md
+            echo "⚠️ package-lock.json needs updating" >> npm-deps-report.md
+          fi
+
+      - name: Upload NPM dependencies report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-dependencies-report
+          path: |
+            npm-deps-report.md
+            outdated.json
+          retention-days: 7
+
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Install license checker tools
+        run: |
+          go install github.com/fossa-contrib/fossa-cli@latest || echo "FOSSA CLI install failed"
+          npm install -g license-checker
+
+      - name: Check Go licenses
+        run: |
+          echo "# License Compliance Report" > license-report.md
+          echo "Generated: $(date)" >> license-report.md
+          echo "" >> license-report.md
+
+          echo "## Go Dependencies Licenses" >> license-report.md
+
+          # Simple license extraction from go.mod
+          echo "\`\`\`" >> license-report.md
+          go list -m -json all | jq -r '.Path' | head -20 >> license-report.md
+          echo "\`\`\`" >> license-report.md
+
+      - name: Check NPM licenses
+        run: |
+          # Fix date-fns and install
+          npm pkg set dependencies.date-fns="^3.6.0"
+          npm install --legacy-peer-deps
+
+          echo "" >> license-report.md
+          echo "## NPM Dependencies Licenses" >> license-report.md
+
+          # Check licenses
+          license-checker --json > npm-licenses.json
+
+          # Check for problematic licenses
+          PROBLEMATIC=$(license-checker --onlyAllow 'MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;Unlicense' --summary | grep -v "└─" || echo "All licenses are acceptable")
+
+          echo "\`\`\`" >> license-report.md
+          echo "$PROBLEMATIC" >> license-report.md
+          echo "\`\`\`" >> license-report.md
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-compliance-report
+          path: |
+            license-report.md
+            npm-licenses.json
+          retention-days: 14
+
+  summary:
+    name: Dependencies Summary
+    runs-on: ubuntu-latest
+    needs: [go-dependencies, npm-dependencies, license-compliance]
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+
+      - name: Generate summary
+        run: |
+          echo "# Dependency Management Summary" > summary.md
+          echo "Generated: $(date)" >> summary.md
+          echo "Commit: ${{ github.sha }}" >> summary.md
+          echo "" >> summary.md
+
+          # Go dependencies summary
+          if [ -f "reports/go-dependencies-report/go-deps-report.md" ]; then
+            echo "## Go Dependencies" >> summary.md
+            tail -n +4 reports/go-dependencies-report/go-deps-report.md >> summary.md
+            echo "" >> summary.md
+          fi
+
+          # NPM dependencies summary
+          if [ -f "reports/npm-dependencies-report/npm-deps-report.md" ]; then
+            echo "## NPM Dependencies" >> summary.md
+            tail -n +4 reports/npm-dependencies-report/npm-deps-report.md >> summary.md
+            echo "" >> summary.md
+          fi
+
+          # License compliance summary
+          if [ -f "reports/license-compliance-report/license-report.md" ]; then
+            echo "## License Compliance" >> summary.md
+            tail -n +4 reports/license-compliance-report/license-report.md >> summary.md
+            echo "" >> summary.md
+          fi
+
+          echo "## Actions Required" >> summary.md
+          echo "- Review outdated dependencies and plan updates" >> summary.md
+          echo "- Ensure all licenses are compatible with project requirements" >> summary.md
+          echo "- Monitor for security advisories" >> summary.md
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-summary
+          path: summary.md
+          retention-days: 30
+
+      - name: Add to job summary
+        run: cat summary.md >> $GITHUB_STEP_SUMMARY

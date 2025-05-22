@@ -1,47 +1,209 @@
-name: Cache Cleanup
+---
+name: Repository Maintenance
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # Run at midnight every Sunday
-  workflow_dispatch:  # Allow manual triggering
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2 AM
+  workflow_dispatch:
+    inputs:
+      cleanup_type:
+        description: 'Type of cleanup to perform'
+        type: choice
+        options:
+          - all
+          - caches
+          - artifacts
+          - packages
+        default: all
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
-  cleanup:
-    name: Cleanup Caches
+  cache-cleanup:
+    name: Cache Cleanup
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'caches'
     permissions:
       actions: write
     steps:
-      - name: Cleanup
+      - name: Cleanup old caches
         uses: actions/github-script@v7
         with:
           script: |
-            const caches = await github.rest.actions.getActionsCacheList({
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            });
-            
-            if (!caches.data.actions_caches || caches.data.actions_caches.length === 0) {
-              console.log('No caches found to clean up');
-              return;
-            }
-            
-            // Get caches older than 7 days
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - 7);
-            
+
+            let page = 1;
             let deletedCount = 0;
-            for (const cache of caches.data.actions_caches) {
-              const cacheDate = new Date(cache.created_at);
-              if (cacheDate < cutoffDate) {
-                console.log(`Deleting cache ${cache.key}, created at ${cache.created_at}`);
-                await github.rest.actions.deleteActionsCacheById({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  cache_id: cache.id
+
+            while (true) {
+              const caches = await github.rest.actions.getActionsCacheList({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+                page: page
+              });
+
+              if (caches.data.actions_caches.length === 0) break;
+
+              for (const cache of caches.data.actions_caches) {
+                const cacheDate = new Date(cache.created_at);
+                if (cacheDate < cutoffDate) {
+                  console.log(`Deleting cache: ${cache.key} (${cache.size_in_bytes} bytes)`);
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      cache_id: cache.id
+                    });
+                    deletedCount++;
+                  } catch (error) {
+                    console.error(`Failed to delete cache ${cache.key}: ${error.message}`);
+                  }
+                }
+              }
+
+              page++;
+            }
+
+            console.log(`Cleanup completed. Deleted ${deletedCount} caches.`);
+
+  artifact-cleanup:
+    name: Artifact Cleanup
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'artifacts'
+    permissions:
+      actions: write
+    steps:
+      - name: Cleanup old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep artifacts for 30 days
+
+            let page = 1;
+            let deletedCount = 0;
+
+            while (true) {
+              const artifacts = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+                page: page
+              });
+
+              if (artifacts.data.artifacts.length === 0) break;
+
+              for (const artifact of artifacts.data.artifacts) {
+                const artifactDate = new Date(artifact.created_at);
+                if (artifactDate < cutoffDate && !artifact.name.includes('security') && !artifact.name.includes('sbom')) {
+                  console.log(`Deleting artifact: ${artifact.name} (${artifact.size_in_bytes} bytes)`);
+                  try {
+                    await github.rest.actions.deleteArtifact({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      artifact_id: artifact.id
+                    });
+                    deletedCount++;
+                  } catch (error) {
+                    console.error(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                  }
+                }
+              }
+
+              page++;
+            }
+
+            console.log(`Cleanup completed. Deleted ${deletedCount} artifacts.`);
+
+  package-cleanup:
+    name: Package Cleanup
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'packages'
+    permissions:
+      packages: write
+    steps:
+      - name: Cleanup old container images
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const packageNames = ['backend', 'frontend'];
+
+            for (const packageName of packageNames) {
+              try {
+                console.log(`Cleaning up package: ${packageName}`);
+
+                const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                  package_type: 'container',
+                  package_name: `${context.repo.repo}/${packageName}`,
+                  org: context.repo.owner,
+                  per_page: 100
                 });
-                deletedCount++;
+
+                // Keep latest 10 versions and versions newer than 90 days
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - 90);
+
+                const sortedVersions = versions.data.sort((a, b) =>
+                  new Date(b.created_at) - new Date(a.created_at)
+                );
+
+                for (let i = 10; i < sortedVersions.length; i++) {
+                  const version = sortedVersions[i];
+                  const versionDate = new Date(version.created_at);
+
+                  if (versionDate < cutoffDate && !version.metadata?.container?.tags?.includes('latest')) {
+                    console.log(`Deleting version: ${version.name} created at ${version.created_at}`);
+                    try {
+                      await github.rest.packages.deletePackageVersionForOrg({
+                        package_type: 'container',
+                        package_name: `${context.repo.repo}/${packageName}`,
+                        org: context.repo.owner,
+                        package_version_id: version.id
+                      });
+                    } catch (error) {
+                      console.error(`Failed to delete version ${version.name}: ${error.message}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error(`Failed to cleanup package ${packageName}: ${error.message}`);
               }
             }
-            
-            console.log(`Deleted ${deletedCount} caches`); 
+
+  status-report:
+    name: Maintenance Status Report
+    runs-on: ubuntu-latest
+    needs: [cache-cleanup, artifact-cleanup, package-cleanup]
+    if: always()
+    steps:
+      - name: Generate maintenance report
+        run: |
+          echo "# Repository Maintenance Report" > maintenance-report.md
+          echo "Generated: $(date)" >> maintenance-report.md
+          echo "Trigger: ${{ github.event_name }}" >> maintenance-report.md
+          echo "" >> maintenance-report.md
+
+          echo "## Cleanup Status" >> maintenance-report.md
+          echo "- Cache cleanup: ${{ needs.cache-cleanup.result }}" >> maintenance-report.md
+          echo "- Artifact cleanup: ${{ needs.artifact-cleanup.result }}" >> maintenance-report.md
+          echo "- Package cleanup: ${{ needs.package-cleanup.result }}" >> maintenance-report.md
+          echo "" >> maintenance-report.md
+
+          echo "## Next Steps" >> maintenance-report.md
+          echo "- Review workflow logs for detailed cleanup information" >> maintenance-report.md
+          echo "- Monitor repository storage usage" >> maintenance-report.md
+          echo "- Adjust retention policies if needed" >> maintenance-report.md
+
+      - name: Upload maintenance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintenance-report
+          path: maintenance-report.md
+          retention-days: 90
+
+      - name: Add to job summary
+        run: cat maintenance-report.md >> $GITHUB_STEP_SUMMARY

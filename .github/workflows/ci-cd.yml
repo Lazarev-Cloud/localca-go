@@ -1,34 +1,39 @@
+---
 name: CI/CD Pipeline
-'on':
+
+on:
   push:
-    branches:
-      - main
-    tags:
-      - v*
+    branches: [main]
+    tags: [v*]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
-        description: Environment to run tests against
+        description: 'Environment to run tests against'
         type: choice
-        options:
-          - dev
-          - test
+        options: [dev, test]
         default: dev
         required: true
+
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+
 permissions:
-  contents: read # Default minimal permissions
-  security-events: write # For uploading security scan results
+  contents: read
 
 jobs:
-  backend_tests_and_security:
+  # Backend testing and security scanning
+  backend:
     name: Backend Tests & Security
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
+    outputs:
+      coverage_exists: ${{ steps.coverage.outputs.exists }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,75 +43,73 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: go.sum
 
-      - name: Install Go dependencies
+      - name: Install dependencies
         run: go mod download
 
-      - name: Run Go tests with coverage
+      - name: Run tests with coverage
+        id: test
         run: |
-          go test -v -cover ./pkg/... -coverprofile=coverage.out || true
-          go test -v -cover . -coverprofile=coverage-main.out || true
-          echo "mode: set" > coverage-merged.out
-          grep -h -v "mode: set" coverage.out coverage-main.out >> coverage-merged.out || true
+          mkdir -p coverage
+          go test -v -race -coverprofile=coverage/backend.out ./...
+          go tool cover -html=coverage/backend.out -o coverage/backend.html
 
-      # Run security scans in parallel with tests
-      - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
+          # Calculate coverage percentage
+          COVERAGE=$(go tool cover -func=coverage/backend.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "coverage=${COVERAGE}" >> $GITHUB_OUTPUT
+          echo "## Backend Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check coverage output
+        id: coverage
+        run: |
+          if [ -f "coverage/backend.out" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run security scanning
+        uses: securego/gosec@v2.21.4
         with:
           args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
-      - name: Upload SARIF file
+      - name: Upload security results
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: gosec-results.sarif
           category: gosec
 
-      - name: Run Nancy for Dependency Scanning
-        run: |
-          go install github.com/sonatype-nexus-community/nancy@latest
-          go list -json -deps | nancy sleuth --output json > nancy-results.json || true
-
-      # Generate SBOM as part of the same job
-      - name: Generate SBOM for Backend
-        uses: anchore/sbom-action@v0
+      - name: Upload coverage to Codecov
+        if: steps.coverage.outputs.exists == 'true'
+        uses: codecov/codecov-action@v4
         with:
-          artifact-name: backend-sbom.spdx.json
-          format: spdx-json
-          path: .
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/backend.out
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
 
-      # Upload all artifacts at once
-      - name: Upload Backend Artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: backend-artifacts
           path: |
-            coverage-merged.out
-            coverage.out
-            coverage-main.out
+            coverage/
             gosec-results.sarif
-            nancy-results.json
-            backend-sbom.spdx.json
-          retention-days: 5
+          retention-days: 3
 
-      # Upload coverage to Codecov
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: '${{ secrets.CODECOV_TOKEN }}'
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: false
-          files: ./coverage-merged.out
-
-  frontend_tests_and_security:
+  # Frontend testing and security scanning
+  frontend:
     name: Frontend Tests & Security
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
+    outputs:
+      coverage_exists: ${{ steps.coverage.outputs.exists }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -114,51 +117,57 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      # Simplify package.json preparation
-      - name: Prepare package.json for testing
+      - name: Install dependencies
         run: |
-          jq '.dependencies.react = "^18.2.0" | 
-              .dependencies."react-dom" = "^18.2.0" | 
-              .devDependencies."@testing-library/react" = "^14.0.0" | 
-              .devDependencies."@types/react" = "^18.2.48" | 
-              .devDependencies."@types/react-dom" = "^18.2.18" | 
-              .dependencies."date-fns" = "^3.6.0"' package.json > package.json.testing
-          cp package.json package.json.original
-          mv package.json.testing package.json
-          echo "Modified package.json for testing"
+          # Fix date-fns version compatibility
+          npm pkg set dependencies.date-fns="^3.6.0"
+          npm install --legacy-peer-deps
 
-      - name: Install frontend dependencies
-        run: npm install --legacy-peer-deps
-
-      # Run tests and linting in parallel
-      - name: Run frontend tests with coverage
+      - name: Run tests
+        id: test
         run: |
           mkdir -p coverage
-          npm test -- --coverage --coverageReporters=lcov --coverageDirectory=coverage || echo "Tests completed with issues"
-          [ ! -f "coverage/lcov.info" ] && touch coverage/lcov.info
+          npm test -- --coverage --coverageReporters=lcov --watchAll=false || echo "Tests completed with issues"
 
-      - name: Run ESLint and npm audit in parallel
+          # Ensure coverage file exists
+          if [ ! -f "coverage/lcov.info" ]; then
+            touch coverage/lcov.info
+            echo "coverage_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "coverage_exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check coverage output
+        id: coverage
         run: |
-          # Run ESLint and handle potential failure
-          npx eslint -f json app components hooks lib -o eslint-report.json || Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
-          
-          # Run npm audit and handle potential failure
-          npm audit --json > npm-audit.json 2>$null || Set-Content -Path npm-audit.json -Value '{"advisories":{}}' -Encoding UTF8
-        shell: pwsh
+          if [ -f "coverage/lcov.info" ] && [ -s "coverage/lcov.info" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
-      # Generate SBOM as part of the same job
-      - name: Generate SBOM for Frontend
-        uses: anchore/sbom-action@v0
+      - name: Run linting
+        run: |
+          npx eslint --format json --output-file eslint-report.json app components hooks lib || echo "[]" > eslint-report.json
+
+      - name: Run dependency audit
+        run: |
+          npm audit --json > npm-audit.json || echo '{"advisories":{}}' > npm-audit.json
+
+      - name: Upload coverage to Codecov
+        if: steps.coverage.outputs.exists == 'true'
+        uses: codecov/codecov-action@v4
         with:
-          artifact-name: frontend-sbom.spdx.json
-          format: spdx-json
-          path: .
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
 
-      # Upload all artifacts at once
-      - name: Upload Frontend Artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: frontend-artifacts
@@ -166,491 +175,244 @@ jobs:
             coverage/
             eslint-report.json
             npm-audit.json
-            frontend-sbom.spdx.json
-          retention-days: 5
+          retention-days: 3
 
-      # Upload coverage to Codecov
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: '${{ secrets.CODECOV_TOKEN }}'
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: false
-          directory: ./coverage/
-          files: ./coverage/lcov.info
-
-      - name: Restore original package.json
-        run: |
-          if [ -f package.json.original ]; then
-            mv package.json.original package.json
-          fi
-
-  build_and_verify:
-    name: Build & Verify
+  # Build and container security
+  build:
+    name: Build & Container Security
     runs-on: ubuntu-latest
-    needs: [backend_tests_and_security, frontend_tests_and_security]
+    needs: [backend, frontend]
+    if: always() && !failure()
     permissions:
       contents: read
-      id-token: write
-      attestations: write
-    outputs:
-      backend_digest: ${{ steps.build-backend.outputs.digest }}
-      frontend_digest: ${{ steps.build-frontend.outputs.digest }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Setup and build Go application
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Build Go application
-        run: |
-          go mod download
-          go build -v -o localca-go
-
-      # Setup and build frontend
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Prepare package.json for build
-        run: |
-          cp package.json package.json.original
-          jq '.dependencies."date-fns" = "^3.6.0"' package.json > package.json.tmp
-          mv package.json.tmp package.json
-
-      - name: Build frontend
-        run: |
-          npm install --legacy-peer-deps
-          npm run build
-
-      - name: Restore original package.json
-        run: |
-          if [ -f package.json.original ]; then
-            mv package.json.original package.json
-          fi
-
-      # Verify build artifacts
-      - name: Verify build artifacts
-        run: |
-          if [ ! -f "localca-go" ]; then
-            echo "Go build failed - executable not found"
-            exit 1
-          fi
-          if [ ! -d ".next" ]; then
-            echo "Next.js build failed - .next directory not found"
-            exit 1
-          fi
-          echo "✅ Build verification successful"
-
-      # Set up Docker for container builds
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Set lowercase repository name
-      - name: Set lowercase repository name
-        run: |
-          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
-
-      # Build backend container
-      - name: Build backend image
-        id: build-backend
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          load: true
-          tags: ghcr.io/${{ env.REPO_LC }}/backend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/backend:test
-
-      # Build frontend container
-      - name: Build frontend image
-        id: build-frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: false
-          load: true
-          tags: ghcr.io/${{ env.REPO_LC }}/frontend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=image,name=ghcr.io/${{ env.REPO_LC }}/frontend:test
-
-      # Scan containers with Trivy
-      - name: Scan backend container with Trivy
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ghcr.io/${{ env.REPO_LC }}/backend:test
-          format: 'sarif'
-          output: 'trivy-backend-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Scan frontend container with Trivy
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ghcr.io/${{ env.REPO_LC }}/frontend:test
-          format: 'sarif'
-          output: 'trivy-frontend-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      # Check if SARIF files exist and GitHub Advanced Security is available
-      - name: Check and prepare SARIF files
-        id: check-sarif
-        run: |
-          $backend_exists = Test-Path -Path trivy-backend-results.sarif
-          $frontend_exists = Test-Path -Path trivy-frontend-results.sarif
-          
-          if($backend_exists -or $frontend_exists) {
-            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
-            
-            # Create summary of vulnerabilities if files exist
-            if($backend_exists) {
-              echo "## Backend Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
-              if((Get-Content -Path trivy-backend-results.sarif | ConvertFrom-Json).runs.results.count -gt 0) {
-                echo "⚠️ Vulnerabilities found in backend container. See artifact for details." >> $env:GITHUB_STEP_SUMMARY
-              } else {
-                echo "✅ No vulnerabilities found in backend container." >> $env:GITHUB_STEP_SUMMARY
-              }
-            }
-            
-            if($frontend_exists) {
-              echo "## Frontend Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
-              if((Get-Content -Path trivy-frontend-results.sarif | ConvertFrom-Json).runs.results.count -gt 0) {
-                echo "⚠️ Vulnerabilities found in frontend container. See artifact for details." >> $env:GITHUB_STEP_SUMMARY
-              } else {
-                echo "✅ No vulnerabilities found in frontend container." >> $env:GITHUB_STEP_SUMMARY
-              }
-            }
-            
-            # Create a text summary file for artifacts
-            echo "# Container Security Scan Results" > security-scan-summary.txt
-            echo "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> security-scan-summary.txt
-            echo "" >> security-scan-summary.txt
-            
-            if($backend_exists) {
-              echo "## Backend Container" >> security-scan-summary.txt
-              $backendResults = Get-Content -Path trivy-backend-results.sarif | ConvertFrom-Json
-              $vulnCount = $backendResults.runs.results.count
-              echo "Total vulnerabilities found: $vulnCount" >> security-scan-summary.txt
-              
-              if($vulnCount -gt 0) {
-                echo "Severities:" >> security-scan-summary.txt
-                $severities = $backendResults.runs.results.level | Group-Object | ForEach-Object { "$($_.Name): $($_.Count)" }
-                $severities | ForEach-Object { echo "- $_" >> security-scan-summary.txt }
-              }
-              echo "" >> security-scan-summary.txt
-            }
-            
-            if($frontend_exists) {
-              echo "## Frontend Container" >> security-scan-summary.txt
-              $frontendResults = Get-Content -Path trivy-frontend-results.sarif | ConvertFrom-Json
-              $vulnCount = $frontendResults.runs.results.count
-              echo "Total vulnerabilities found: $vulnCount" >> security-scan-summary.txt
-              
-              if($vulnCount -gt 0) {
-                echo "Severities:" >> security-scan-summary.txt
-                $severities = $frontendResults.runs.results.level | Group-Object | ForEach-Object { "$($_.Name): $($_.Count)" }
-                $severities | ForEach-Object { echo "- $_" >> security-scan-summary.txt }
-              }
-            }
-          } else {
-            echo "has_sarif=false" >> $env:GITHUB_OUTPUT
-            echo "## Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
-            echo "⚠️ No scan results available" >> $env:GITHUB_STEP_SUMMARY
-            
-            # Create empty summary file
-            echo "# Container Security Scan Results" > security-scan-summary.txt
-            echo "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> security-scan-summary.txt
-            echo "" >> security-scan-summary.txt
-            echo "No scan results available" >> security-scan-summary.txt
-          }
-        shell: pwsh
-
-      # Upload backend SARIF file if it exists - might fail if Advanced Security not enabled
-      - name: Upload backend container scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-backend-results.sarif') != ''
-        continue-on-error: true
-        with:
-          sarif_file: trivy-backend-results.sarif
-          category: container-security-backend
-
-      # Upload frontend SARIF file if it exists - might fail if Advanced Security not enabled
-      - name: Upload frontend container scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-frontend-results.sarif') != ''
-        continue-on-error: true
-        with:
-          sarif_file: trivy-frontend-results.sarif
-          category: container-security-frontend
-
-      # Generate SBOM attestation for binary
-      - name: Generate SBOM for Binary
-        uses: anchore/sbom-action@v0
-        with:
-          artifact-name: localca-go-sbom.spdx.json
-          format: spdx-json
-          path: .
-          output-file: localca-go.spdx.json
-
-      # Generate binary attestation
-      - name: Generate Build Provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: localca-go
-
-      # Generate SBOM attestation
-      - name: Generate SBOM Attestation
-        uses: actions/attest-sbom@v1
-        with:
-          subject-path: localca-go
-          sbom-path: localca-go.spdx.json
-
-      # Upload build artifacts
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: |
-            localca-go
-            localca-go.spdx.json
-            .next/**/*
-            trivy-backend-results.sarif
-            trivy-frontend-results.sarif
-            security-scan-summary.txt
-          retention-days: 5
-
-  deploy:
-    name: Deploy
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    needs: build_and_verify
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+      security-events: write
       packages: write
       id-token: write
       attestations: write
+    outputs:
+      backend-digest: ${{ steps.backend-build.outputs.digest }}
+      frontend-digest: ${{ steps.frontend-build.outputs.digest }}
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Docker for pushing
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Set up environment
-      - name: Set environment variables
-        run: |
-          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "REPO_LC=${REPO_LC}" >> $GITHUB_ENV
-          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
-            TAG=${GITHUB_REF#refs/tags/}
-            echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
-          else
-            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-          fi
+      - name: Extract backend metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      # Build and push backend image
-      - name: Build and push backend image
-        id: build-backend
+      - name: Extract frontend metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build backend image
+        id: backend-build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
-            ghcr.io/${{ env.REPO_LC }}/backend:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      # Build and push frontend image
-      - name: Build and push frontend image
-        id: build-frontend
+      - name: Build frontend image
+        id: frontend-build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.frontend
-          push: true
-          tags: |
-            ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
-            ghcr.io/${{ env.REPO_LC }}/frontend:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      # Generate SBOM for published images
-      - name: Generate Backend SBOM
-        uses: anchore/sbom-action@v0
+      - name: Run Trivy vulnerability scanner on backend
+        uses: aquasecurity/trivy-action@0.24.0
+        if: always()
         with:
-          image: ghcr.io/${{ env.REPO_LC }}/backend:${{ env.IMAGE_TAG }}
-          format: spdx-json
-          output-file: backend.spdx.json
+          image-ref: ${{ fromJSON(steps.meta-backend.outputs.json).tags[0] }}
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
 
-      - name: Generate Frontend SBOM
-        uses: anchore/sbom-action@v0
+      - name: Run Trivy vulnerability scanner on frontend
+        uses: aquasecurity/trivy-action@0.24.0
+        if: always()
         with:
-          image: ghcr.io/${{ env.REPO_LC }}/frontend:${{ env.IMAGE_TAG }}
-          format: spdx-json
-          output-file: frontend.spdx.json
+          image-ref: ${{ fromJSON(steps.meta-frontend.outputs.json).tags[0] }}
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
 
-      # Attest container images
-      - name: Attest Backend Build Provenance
-        uses: actions/attest-build-provenance@v2
+      - name: Upload backend Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
-          subject-digest: ${{ steps.build-backend.outputs.digest }}
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload frontend Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+      - name: Generate build attestation (backend)
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository }}/backend
+          subject-digest: ${{ steps.backend-build.outputs.digest }}
           push-to-registry: true
 
-      - name: Attest Backend SBOM
-        uses: actions/attest-sbom@v1
+      - name: Generate build attestation (frontend)
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ghcr.io/${{ env.REPO_LC }}/backend
-          subject-digest: ${{ steps.build-backend.outputs.digest }}
-          sbom-path: backend.spdx.json
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository }}/frontend
+          subject-digest: ${{ steps.frontend-build.outputs.digest }}
           push-to-registry: true
 
-      - name: Attest Frontend Build Provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
-          subject-digest: ${{ steps.build-frontend.outputs.digest }}
-          push-to-registry: true
-
-      - name: Attest Frontend SBOM
-        uses: actions/attest-sbom@v1
-        with:
-          subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
-          subject-digest: ${{ steps.build-frontend.outputs.digest }}
-          sbom-path: frontend.spdx.json
-          push-to-registry: true
-
-      # Upload deployment artifacts
-      - name: Upload deployment artifacts
+      - name: Upload security artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-artifacts
+          name: security-artifacts
           path: |
-            backend.spdx.json
-            frontend.spdx.json
-          retention-days: 5
+            trivy-*.sarif
+          retention-days: 3
 
+  # SonarQube analysis (only on main branch and PRs)
   sonarqube:
     name: SonarQube Analysis
-    needs: [backend_tests_and_security, frontend_tests_and_security]
     runs-on: ubuntu-latest
-    if: ${{ !failure() && !cancelled() }}
+    needs: [backend, frontend]
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Download all artifacts
-      - name: Download artifacts
+      - name: Download backend artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: backend-artifacts
+          path: backend-artifacts/
 
-      # Prepare coverage reports
-      - name: Prepare coverage reports
+      - name: Download frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-artifacts
+          path: frontend-artifacts/
+
+      - name: Prepare SonarQube analysis
         run: |
-          New-Item -Path coverage -ItemType Directory -Force | Out-Null
-          
-          # Copy backend coverage if exists
-          if (Test-Path artifacts/backend-artifacts/coverage-merged.out) {
-            Copy-Item -Path artifacts/backend-artifacts/coverage-merged.out -Destination ./ -Force
-          } else {
-            New-Item -Path coverage-merged.out -ItemType File -Force | Out-Null
-          }
-          
-          # Copy frontend coverage if exists
-          if (Test-Path artifacts/frontend-artifacts/coverage) {
-            Copy-Item -Path artifacts/frontend-artifacts/coverage/* -Destination coverage/ -Recurse -Force
-          } else {
-            New-Item -Path coverage/lcov.info -ItemType File -Force | Out-Null
-          }
-          
-          # Copy ESLint report if exists
-          if (Test-Path artifacts/frontend-artifacts/eslint-report.json) {
-            Copy-Item -Path artifacts/frontend-artifacts/eslint-report.json -Destination ./ -Force
-          } else {
-            Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
-          }
-        shell: pwsh
-      
-      # Prepare SonarQube files
-      - name: Prepare SonarQube files
-        run: |
-          # Ensure ESLint report is valid JSON
-          if (-not (Test-Path eslint-report.json) -or (Get-Item eslint-report.json).Length -eq 0) {
-            Write-Host "ESLint report is empty, creating valid empty array"
-            Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
-          }
-          else {
-            # Try to parse the JSON, recreate if invalid
-            try {
-              Get-Content eslint-report.json -Raw | ConvertFrom-Json | Out-Null
-            }
-            catch {
-              Write-Host "ESLint report is invalid JSON, creating valid empty array"
-              Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
-            }
-          }
-          
-          # Ensure coverage files exist
-          if (-not (Test-Path coverage-merged.out)) {
-            New-Item -Path coverage-merged.out -ItemType File -Force | Out-Null
-          }
-          
-          if (-not (Test-Path coverage/lcov.info)) {
-            New-Item -Path coverage -ItemType Directory -Force | Out-Null
-            New-Item -Path coverage/lcov.info -ItemType File -Force | Out-Null
-          }
-        shell: pwsh
-      
-      # Set up SonarQube Scanner
-      - name: Set up SonarQube Scanner
-        uses: SonarSource/sonarqube-scan-action@v2
+          # Copy coverage files if they exist
+          [ -f "backend-artifacts/coverage/backend.out" ] && cp backend-artifacts/coverage/backend.out . || echo "" > backend.out
+          [ -f "frontend-artifacts/coverage/lcov.info" ] && cp frontend-artifacts/coverage/lcov.info . || echo "" > lcov.info
+
+          # Copy lint reports if they exist
+          [ -f "frontend-artifacts/eslint-report.json" ] && cp frontend-artifacts/eslint-report.json . || echo "[]" > eslint-report.json
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v2.3.0
         env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-          SONAR_TOKEN: '${{ secrets.SONAR_TOKEN }}'
-          SONAR_HOST_URL: 'https://sonarcloud.io'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
             -Dsonar.projectKey=Lazarev-Cloud_localca-go
             -Dsonar.organization=lazarev-cloud
             -Dsonar.sources=.
-            -Dsonar.host.url=https://sonarcloud.io
-            -Dsonar.go.coverage.reportPaths=coverage-merged.out
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**,**/.next/**,**/__mocks__/**,**/artifacts/**,**/*.sarif,**/*-report.json,**/nancy-results.json,**/*-audit.json,**/*.spdx.json,**/*.cyclonedx.json
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/node_modules/**,**/.next/**,**/backend-artifacts/**,**/frontend-artifacts/**
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx
+            -Dsonar.go.coverage.reportPaths=backend.out
+            -Dsonar.javascript.lcov.reportPaths=lcov.info
             -Dsonar.eslint.reportPaths=eslint-report.json
-            -Dsonar.javascript.node.maxspace=4096
-            -Dsonar.sourceEncoding=UTF-8
-            -Dsonar.typescript.tsconfigPaths=tsconfig.json
-            -Dsonar.scm.provider=git
-            -Dsonar.scm.forceReloadAll=true
+
+  # SBOM generation (only for releases)
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate backend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ needs.build.outputs.backend-image }}
+          format: spdx-json
+          output-file: backend.spdx.json
+
+      - name: Generate frontend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ needs.build.outputs.frontend-image }}
+          format: spdx-json
+          output-file: frontend.spdx.json
+
+      - name: Attest backend SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-name: ${{ needs.build.outputs.backend-image }}
+          subject-digest: ${{ needs.build.outputs.backend-digest }}
+          sbom-path: backend.spdx.json
+          push-to-registry: true
+
+      - name: Attest frontend SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-name: ${{ needs.build.outputs.frontend-image }}
+          subject-digest: ${{ needs.build.outputs.frontend-digest }}
+          sbom-path: frontend.spdx.json
+          push-to-registry: true
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-artifacts
+          path: |
+            *.spdx.json
+          retention-days: 30

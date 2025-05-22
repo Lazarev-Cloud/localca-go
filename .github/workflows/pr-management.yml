@@ -1,0 +1,136 @@
+---
+name: PR Management
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-label:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Auto-label based on files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const labels = [];
+
+            // Backend changes
+            if (files.some(f => f.filename.endsWith('.go') || f.filename.includes('go.mod') || f.filename.includes('go.sum'))) {
+              labels.push('backend');
+            }
+
+            // Frontend changes
+            if (files.some(f => f.filename.endsWith('.tsx') || f.filename.endsWith('.ts') || f.filename.endsWith('.js') || f.filename.endsWith('.jsx') || f.filename.includes('package.json'))) {
+              labels.push('frontend');
+            }
+
+            // Docker changes
+            if (files.some(f => f.filename.includes('Dockerfile') || f.filename.includes('docker-compose'))) {
+              labels.push('docker');
+            }
+
+            // CI/CD changes
+            if (files.some(f => f.filename.includes('.github/workflows'))) {
+              labels.push('ci/cd');
+            }
+
+            // Documentation changes
+            if (files.some(f => f.filename.endsWith('.md') || f.filename.endsWith('.txt'))) {
+              labels.push('documentation');
+            }
+
+            // Security changes
+            if (files.some(f => f.filename.includes('security') || f.filename.includes('auth') || f.filename.includes('crypto'))) {
+              labels.push('security');
+            }
+
+            // Dependencies
+            if (files.some(f => f.filename.includes('go.mod') || f.filename.includes('package.json') || f.filename.includes('dependabot'))) {
+              labels.push('dependencies');
+            }
+
+            // Tests
+            if (files.some(f => f.filename.includes('test') || f.filename.includes('spec'))) {
+              labels.push('tests');
+            }
+
+            // Apply labels
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
+
+  size-label:
+    name: Size Label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add size label
+        uses: codelytv/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size/xs'
+          xs_max_size: 10
+          s_label: 'size/s'
+          s_max_size: 30
+          m_label: 'size/m'
+          m_max_size: 100
+          l_label: 'size/l'
+          l_max_size: 500
+          xl_label: 'size/xl'
+          fail_if_xl: false
+
+  pr-checks:
+    name: PR Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const validPrefixes = ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:', 'ci:', 'perf:', 'revert:'];
+
+            if (!validPrefixes.some(prefix => title.toLowerCase().startsWith(prefix))) {
+              core.setFailed(`PR title should start with one of: ${validPrefixes.join(', ')}`);
+            }
+
+      - name: Check PR description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+
+            if (body.length < 20) {
+              core.warning('PR description seems too short. Please provide more details about the changes.');
+            }
+
+            // Check for common sections
+            const hasWhat = body.toLowerCase().includes('what') || body.toLowerCase().includes('changes');
+            const hasWhy = body.toLowerCase().includes('why') || body.toLowerCase().includes('reason');
+
+            if (!hasWhat && !hasWhy) {
+              core.warning('Consider adding sections explaining what changed and why.');
+            }
