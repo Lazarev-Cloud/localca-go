@@ -64,9 +64,14 @@
   "devDependencies": {
     "@codecov/nextjs-webpack-plugin": "^1.9.1",
     "@testing-library/react": "^14.0.0",
+    "@testing-library/jest-dom": "^6.1.0",
+    "@types/jest": "^29.5.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-fetch-mock": "^3.0.3",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
