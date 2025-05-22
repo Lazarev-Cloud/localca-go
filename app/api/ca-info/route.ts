@@ -33,8 +33,10 @@ export async function GET(request: NextRequest) {
         // Attempt to parse the response to determine if it's a setup or auth issue
         const data = await response.json()
         
-        // Check if this is a setup required message
-        if (data && data.data && data.data.setup_required === true) {
+        // Check if this is a setup required message - handle both possible formats
+        if ((data && data.data && data.data.setup_required === true) ||
+            (data && data.setupRequired === true) ||
+            (data && data.message === 'Setup required')) {
           return NextResponse.json(
             { 
               success: false, 
