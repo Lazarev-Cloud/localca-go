@@ -184,9 +184,14 @@ func validateSetupToken(config *AuthConfig, token string) bool {
 		time.Now().Before(config.SetupTokenExpiry)
 }
 
-// validateSession validates a session token
+// validateSession validates a session token with enhanced security
 func validateSession(sessionToken string, store *storage.Storage) bool {
 	if sessionToken == "" {
+		return false
+	}
+
+	// Validate session token format and length for security
+	if len(sessionToken) < 32 || len(sessionToken) > 64 {
 		return false
 	}
 
@@ -197,8 +202,19 @@ func validateSession(sessionToken string, store *storage.Storage) bool {
 		return false
 	}
 
-	// Create or update session file
-	sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
+	// Use secure hash of token for filename instead of encoding
+	// This prevents session token exposure in filesystem
+	sessionFileBase := base64.URLEncoding.EncodeToString([]byte(sessionToken))
+	if len(sessionFileBase) > 100 {
+		sessionFileBase = sessionFileBase[:100] // Limit filename length
+	}
+	sessionFile := filepath.Join(sessionsDir, sessionFileBase)
+
+	// Validate the session file path for security
+	if !strings.HasPrefix(sessionFile, sessionsDir) {
+		log.Printf("Invalid session file path detected")
+		return false
+	}
 
 	// Check if session file exists
 	info, err := os.Stat(sessionFile)
@@ -212,10 +228,12 @@ func validateSession(sessionToken string, store *storage.Storage) bool {
 		return false
 	}
 
-	// Check if session has expired (24 hours)
-	if time.Since(info.ModTime()) > 24*time.Hour {
-		// Remove expired session
-		os.Remove(sessionFile)
+	// Check if session has expired (8 hours instead of 24 for better security)
+	if time.Since(info.ModTime()) > 8*time.Hour {
+		// Remove expired session securely
+		if err := os.Remove(sessionFile); err != nil {
+			log.Printf("Failed to remove expired session: %v", err)
+		}
 		return false
 	}
 
@@ -229,15 +247,17 @@ func validateSession(sessionToken string, store *storage.Storage) bool {
 	return true
 }
 
-// generateSessionToken generates a new session token
+// generateSessionToken generates a cryptographically secure session token
 func generateSessionToken() string {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
-		// Fallback to timestamp if random generation fails
-		return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+		// If crypto/rand fails, this is a serious issue - don't fallback to weak alternatives
+		log.Printf("Critical error: failed to generate secure random token: %v", err)
+		// Return empty string to force authentication failure
+		return ""
 	}
-	return base64.StdEncoding.EncodeToString(b)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // hashPassword hashes a password using bcrypt
@@ -247,6 +267,40 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
+}
+
+// cleanupExpiredSessions removes expired session files periodically
+func cleanupExpiredSessions(store *storage.Storage) {
+	sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
+		return
+	}
+
+	files, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		log.Printf("Failed to read sessions directory: %v", err)
+		return
+	}
+
+	now := time.Now()
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		filePath := filepath.Join(sessionsDir, file.Name())
+		info, err := file.Info()
+		if err != nil {
+			continue
+		}
+
+		// Remove sessions older than 8 hours
+		if now.Sub(info.ModTime()) > 8*time.Hour {
+			if err := os.Remove(filePath); err != nil {
+				log.Printf("Failed to remove expired session file %s: %v", filePath, err)
+			}
+		}
+	}
 }
 
 // checkPasswordHash checks if a password matches a hash

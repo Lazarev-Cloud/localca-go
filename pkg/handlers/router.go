@@ -68,7 +68,7 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 	// Authentication routes
 	router.GET("/login", loginHandler(certSvc, store))
 	router.POST("/login", loginPostHandler(certSvc, store))
-	router.GET("/logout", logoutHandler())
+	router.GET("/logout", logoutHandler(store))
 	router.GET("/setup", setupHandler(certSvc, store, cfg))
 	router.POST("/setup", setupPostHandler(certSvc, store))
 
@@ -99,35 +99,62 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 	SetupAPIRoutes(router, certSvc, store)
 }
 
-// securityHeadersMiddleware adds security headers to prevent XSS and other attacks
+// securityHeadersMiddleware adds comprehensive security headers
 func securityHeadersMiddleware(allowLocalhost bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Set security headers
+		// Essential security headers
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		
-		// Create CSP header based on localhost setting
-		cspValue := "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'"
+		// Prevent information disclosure
+		c.Header("Server", "LocalCA")
+		c.Header("X-Powered-By", "")
 		
-		// If allowLocalhost is true, add localhost to the allowed sources
+		// Create strict CSP header
+		var cspValue string
 		if allowLocalhost {
+			// Development mode - allow localhost
 			cspValue = "default-src 'self' http://localhost:* https://localhost:*; " +
 				"script-src 'self' 'unsafe-inline' http://localhost:* https://localhost:*; " +
 				"style-src 'self' 'unsafe-inline' http://localhost:* https://localhost:*; " +
 				"connect-src 'self' http://localhost:* https://localhost:*; " +
-				"img-src 'self' http://localhost:* https://localhost:*; " +
+				"img-src 'self' data: http://localhost:* https://localhost:*; " +
 				"font-src 'self' http://localhost:* https://localhost:*; " +
-				"object-src 'none'; frame-ancestors 'none'"
+				"object-src 'none'; " +
+				"frame-ancestors 'none'; " +
+				"base-uri 'self'; " +
+				"form-action 'self'"
+		} else {
+			// Production mode - strict policy
+			cspValue = "default-src 'self'; " +
+				"script-src 'self' 'unsafe-inline'; " +
+				"style-src 'self' 'unsafe-inline'; " +
+				"img-src 'self' data:; " +
+				"font-src 'self'; " +
+				"connect-src 'self'; " +
+				"object-src 'none'; " +
+				"frame-ancestors 'none'; " +
+				"base-uri 'self'; " +
+				"form-action 'self'; " +
+				"upgrade-insecure-requests"
 		}
 		
 		c.Header("Content-Security-Policy", cspValue)
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()")
 
 		// Add strict transport security header if using HTTPS
 		if c.Request.TLS != nil {
-			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		}
+
+		// Cache control for sensitive pages
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/login") || strings.HasPrefix(path, "/setup") || strings.HasPrefix(path, "/settings") {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate, private")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
 		}
 
 		c.Next()
@@ -199,16 +226,16 @@ func csrfMiddleware() gin.HandlerFunc {
 	}
 }
 
-// generateCSRFToken generates a random token for CSRF protection
+// generateCSRFToken generates a cryptographically secure token for CSRF protection
 func generateCSRFToken() string {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
-		// If we can't generate random bytes, use timestamp as fallback
-		// This is not ideal but better than nothing
-		return base64.StdEncoding.EncodeToString([]byte(time.Now().String()))
+		// If crypto/rand fails, this is a serious security issue
+		// Don't fallback to weak alternatives - return empty to force failure
+		return ""
 	}
-	return base64.StdEncoding.EncodeToString(b)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // validateCSRFToken validates a CSRF token

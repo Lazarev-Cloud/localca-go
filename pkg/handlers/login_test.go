@@ -621,12 +621,17 @@ func TestAPISetupHandler(t *testing.T) {
 }
 
 func TestLogoutHandler(t *testing.T) {
+	// Setup test storage
+	tempDir := t.TempDir()
+	store, err := storage.NewStorage(tempDir)
+	assert.NoError(t, err)
+
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
 	// Add test routes
-	router.GET("/logout", logoutHandler())
+	router.GET("/logout", logoutHandler(store))
 
 	// Test logout
 	req := httptest.NewRequest("GET", "/logout", nil)

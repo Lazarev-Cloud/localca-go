@@ -116,6 +116,22 @@ func (c *CertificateService) CreateClientCertificate(commonName string, p12Passw
 
 	// Create PKCS#12 file
 	p12Path := c.storage.GetCertificateP12Path(commonName)
+	
+	// Create a temporary password file to avoid command line exposure
+	passwordFile, err := os.CreateTemp("", "p12pass")
+	if err != nil {
+		return fmt.Errorf("failed to create password file: %w", err)
+	}
+	defer os.Remove(passwordFile.Name())
+	defer passwordFile.Close()
+	
+	// Write password to temp file
+	validatedPassword := security.ValidatePassword(p12Password)
+	if _, err := passwordFile.WriteString(validatedPassword); err != nil {
+		return fmt.Errorf("failed to write password to temp file: %w", err)
+	}
+	passwordFile.Close()
+	
 	cmd := exec.Command(
 		"openssl", "pkcs12",
 		"-export",
@@ -123,7 +139,7 @@ func (c *CertificateService) CreateClientCertificate(commonName string, p12Passw
 		"-inkey", clientKeyPath,
 		"-in", clientCertPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", security.ValidatePassword(p12Password)),
+		"-passout", fmt.Sprintf("file:%s", passwordFile.Name()),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create PKCS#12 file: %w", err)
@@ -213,6 +229,21 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 	}
 
 	// Create PKCS#12 file
+	// Create a temporary password file to avoid command line exposure
+	passwordFile, err := os.CreateTemp("", "p12pass")
+	if err != nil {
+		return fmt.Errorf("failed to create password file: %w", err)
+	}
+	defer os.Remove(passwordFile.Name())
+	defer passwordFile.Close()
+	
+	// Write password to temp file
+	validatedPassword := security.ValidatePassword(p12Password)
+	if _, err := passwordFile.WriteString(validatedPassword); err != nil {
+		return fmt.Errorf("failed to write password to temp file: %w", err)
+	}
+	passwordFile.Close()
+	
 	cmd = exec.Command(
 		"openssl", "pkcs12",
 		"-export",
@@ -220,7 +251,7 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 		"-inkey", keyPath,
 		"-in", certPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", security.ValidatePassword(p12Password)),
+		"-passout", fmt.Sprintf("file:%s", passwordFile.Name()),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create PKCS#12 file: %w", err)

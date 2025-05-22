@@ -1,6 +1,7 @@
 package security
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -23,6 +24,11 @@ func ValidateFileName(filename string) string {
 	// Prevent files starting with dots (hidden files)
 	if strings.HasPrefix(safeName, ".") {
 		safeName = strings.TrimPrefix(safeName, ".")
+	}
+
+	// Prevent multiple consecutive dots (could be used for traversal)
+	for strings.Contains(safeName, "..") {
+		safeName = strings.ReplaceAll(safeName, "..", ".")
 	}
 
 	// Limit length to prevent issues
@@ -150,4 +156,74 @@ func ValidateSubjectDN(component string) string {
 	}
 
 	return strings.TrimSpace(sanitized)
+}
+
+// ValidateFilePath validates a file path to prevent path traversal attacks
+func ValidateFilePath(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	// Clean the path to resolve any .. or . components
+	cleanPath := filepath.Clean(path)
+
+	// Check for path traversal attempts
+	if strings.Contains(cleanPath, "..") {
+		return false
+	}
+
+	// Ensure the path doesn't contain null bytes
+	if strings.Contains(cleanPath, "\x00") {
+		return false
+	}
+
+	// For absolute paths, ensure they don't escape the expected base directory
+	if filepath.IsAbs(cleanPath) {
+		// Allow only paths under /app or the current working directory
+		allowedPrefixes := []string{"/app", "/tmp"}
+		isAllowed := false
+		for _, prefix := range allowedPrefixes {
+			if strings.HasPrefix(cleanPath, prefix) {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			return false
+		}
+	}
+
+	return true
+}
+
+// SecureJoinPath safely joins path components and validates the result
+func SecureJoinPath(base string, components ...string) (string, error) {
+	if base == "" {
+		return "", fmt.Errorf("base path cannot be empty")
+	}
+
+	// Clean the base path
+	cleanBase := filepath.Clean(base)
+
+	// Validate each component
+	for _, component := range components {
+		if component == "" {
+			continue
+		}
+		
+		// Validate the component
+		safeComponent := ValidateFileName(component)
+		if safeComponent == "" {
+			return "", fmt.Errorf("invalid path component: %s", component)
+		}
+		
+		cleanBase = filepath.Join(cleanBase, safeComponent)
+	}
+
+	// Final validation of the complete path
+	if !ValidateFilePath(cleanBase) {
+		return "", fmt.Errorf("resulting path is not safe: %s", cleanBase)
+	}
+
+	return cleanBase, nil
 }

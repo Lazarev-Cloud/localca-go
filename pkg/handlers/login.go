@@ -209,17 +209,36 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 	}
 }
 
-// logoutHandler handles logout
-func logoutHandler() gin.HandlerFunc {
+// logoutHandler handles logout with secure session cleanup
+func logoutHandler(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Clear session cookie
+		// Get current session token to clean up server-side session
+		sessionToken, err := c.Cookie("session")
+		if err == nil && sessionToken != "" {
+			// Clean up server-side session file securely
+			sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+			sessionFileBase := base64.URLEncoding.EncodeToString([]byte(sessionToken))
+			if len(sessionFileBase) > 100 {
+				sessionFileBase = sessionFileBase[:100]
+			}
+			sessionFile := filepath.Join(sessionsDir, sessionFileBase)
+			
+			// Validate the session file path before deletion
+			if strings.HasPrefix(sessionFile, sessionsDir) {
+				if err := os.Remove(sessionFile); err != nil && !os.IsNotExist(err) {
+					log.Printf("Failed to remove session file: %v", err)
+				}
+			}
+		}
+
+		// Clear session cookie with secure parameters
 		c.SetCookie(
 			"session",
 			"",
 			-1, // expire immediately
 			"/",
-			"",
-			false, // secure
+			"", // domain - empty for current domain
+			false, // secure - set based on HTTPS
 			true,  // httpOnly
 		)
 

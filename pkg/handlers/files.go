@@ -61,8 +61,17 @@ func filesHandler(certSvc certificates.CertificateServiceInterface, store *stora
 		// Validate and sanitize the certificate name
 		safeName := security.ValidateFileName(name)
 
-		// Check if certificate exists
+		// Check if certificate exists - use secure path validation
 		certDir := store.GetCertificateDirectory(safeName)
+		
+		// Validate the certificate directory path for security
+		if !security.ValidateFilePath(certDir) {
+			c.HTML(http.StatusBadRequest, "files.html", gin.H{
+				"Error": "Invalid certificate path",
+			})
+			return
+		}
+		
 		if _, err := os.Stat(certDir); os.IsNotExist(err) {
 			c.HTML(http.StatusNotFound, "files.html", gin.H{
 				"Error": "Certificate not found",
