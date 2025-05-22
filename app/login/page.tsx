@@ -60,21 +60,28 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Use direct login endpoint
-      const response = await fetch(`/api/login/direct`, {
+      // Use the proxy endpoint for login
+      const response = await fetch(`/api/proxy/login`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           username,
           password
-        }),
+        }).toString(),
         credentials: 'include',
       })
 
-      const data = await response.json()
+      // Try to parse the response
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        console.error('Error parsing response:', err);
+        data = { success: response.ok, message: response.ok ? 'Login successful' : 'Login failed' };
+      }
 
       if (!response.ok) {
         setError(data.message || 'Login failed')

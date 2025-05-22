@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
     formData.append('username', body.username)
     formData.append('password', body.password)
     
+    console.log('Login attempt for username:', body.username)
+    
     // Forward the request to the Go backend's regular login endpoint
     // Use full URL with timeout to handle potential network issues
     const controller = new AbortController()
@@ -29,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Get cookies from backend response
     const setCookieHeader = response.headers.get('set-cookie')
+    console.log('Set-Cookie from backend:', setCookieHeader)
 
     // Create success response
     const nextResponse = NextResponse.json({
@@ -36,32 +39,24 @@ export async function POST(request: NextRequest) {
       message: 'Login successful',
     })
 
-    // Forward cookies from backend to client if available
+    // Forward cookies from backend to client
     if (setCookieHeader) {
-      // Parse the cookie to set it properly
-      const cookieParts = setCookieHeader.split(';')
-      const mainPart = cookieParts[0].split('=')
+      // Simply forward the entire Set-Cookie header to client
+      // This is the most reliable approach
+      nextResponse.headers.set('Set-Cookie', setCookieHeader)
       
-      if (mainPart.length === 2) {
-        const cookieName = mainPart[0].trim()
-        const cookieValue = mainPart[1].trim()
-        
-        // Determine if cookie should be secure
-        const isSecure = setCookieHeader.toLowerCase().includes('secure')
-        
-        // Set cookie with appropriate attributes
-        nextResponse.cookies.set({
-          name: cookieName,
-          value: cookieValue,
-          path: '/',
-          httpOnly: true,
-          secure: isSecure,
-          sameSite: 'lax',
-        })
-      } else {
-        // Fallback to original method if parsing fails
-        nextResponse.headers.set('set-cookie', setCookieHeader)
+      // Log what we're sending back
+      console.log('Forwarding Set-Cookie header to client:', setCookieHeader)
+      
+      // For debugging, also try to parse individual cookies
+      try {
+        const cookies = setCookieHeader.split(/,(?=\s[A-Za-z0-9]+=)/);
+        console.log('Parsed individual cookies:', cookies);
+      } catch (err) {
+        console.error('Error parsing cookies:', err);
       }
+    } else {
+      console.log('No cookies received from backend');
     }
 
     return nextResponse

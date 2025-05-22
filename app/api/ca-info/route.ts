@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
     const cookieHeader = cookies
       .map(c => `${c.name}=${c.value}`)
       .join('; ')
+    
+    console.log('Cookies from request:', cookies)
+    console.log('Cookie header being sent to backend:', cookieHeader)
 
     // Add timeout for the backend request
     const controller = new AbortController()
@@ -27,11 +30,14 @@ export async function GET(request: NextRequest) {
     // Clear timeout
     clearTimeout(timeoutId)
 
+    console.log('Backend response status:', response.status)
+    
     // Check if setup is required
     if (response.status === 401) {
       try {
         // Attempt to parse the response to determine if it's a setup or auth issue
         const data = await response.json()
+        console.log('Backend 401 response data:', data)
         
         // Check if this is a setup required message - handle both possible formats
         if ((data && data.data && data.data.setup_required === true) ||
@@ -57,6 +63,7 @@ export async function GET(request: NextRequest) {
           { status: 401 }
         )
       } catch (err) {
+        console.error('Error parsing 401 response:', err)
         // If we can't parse the response, default to auth required
         return NextResponse.json(
           { 
