@@ -394,7 +394,7 @@ jobs:
           output-file: frontend.spdx.json
 
       - name: Attest backend SBOM
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@v2
         with:
           subject-name: ${{ needs.build.outputs.backend-image }}
           subject-digest: ${{ needs.build.outputs.backend-digest }}
@@ -402,7 +402,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest frontend SBOM
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@v2
         with:
           subject-name: ${{ needs.build.outputs.frontend-image }}
           subject-digest: ${{ needs.build.outputs.frontend-digest }}

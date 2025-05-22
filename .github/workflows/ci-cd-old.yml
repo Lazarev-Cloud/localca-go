@@ -416,7 +416,7 @@ jobs:
 
       # Generate SBOM attestation
       - name: Generate SBOM Attestation
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@v2
         with:
           subject-path: localca-go
           sbom-path: localca-go.spdx.json
@@ -524,7 +524,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest Backend SBOM
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@v2
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/backend
           subject-digest: ${{ steps.build-backend.outputs.digest }}
@@ -539,7 +539,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest Frontend SBOM
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@v2
         with:
           subject-name: ghcr.io/${{ env.REPO_LC }}/frontend
           subject-digest: ${{ steps.build-frontend.outputs.digest }}
