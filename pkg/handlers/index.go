@@ -387,9 +387,12 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 	// Read certificate
 	certPath := store.GetCertificatePath(name)
 
-	// Validate certificate path to prevent command injection
-	if !filepath.IsAbs(certPath) {
-		return certInfo, fmt.Errorf("certificate path must be absolute")
+	// Validate certificate path to prevent directory traversal
+	cleanPath := filepath.Clean(certPath)
+	basePath := filepath.Clean(store.GetBasePath())
+	
+	if !strings.HasPrefix(cleanPath, basePath) {
+		return certInfo, fmt.Errorf("certificate path is outside of allowed directory: %s not under %s", cleanPath, basePath)
 	}
 
 	// Check if the file exists
