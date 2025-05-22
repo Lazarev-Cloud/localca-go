@@ -7,6 +7,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"os"
@@ -128,9 +129,8 @@ func (c *CertificateService) CreateCA() error {
 		return fmt.Errorf("failed to encrypt CA private key: %w", err)
 	}
 
-	// Copy CA certificate to public location
-	cmd = exec.Command("cp", c.storage.GetCAPublicKeyPath(), c.storage.GetCAPublicCopyPath())
-	if err := cmd.Run(); err != nil {
+	// Copy CA certificate to public location using safe Go file operations
+	if err := safeCopyFile(c.storage.GetCAPublicKeyPath(), c.storage.GetCAPublicCopyPath()); err != nil {
 		return fmt.Errorf("failed to copy CA certificate: %w", err)
 	}
 
@@ -428,4 +428,34 @@ func (c *CertificateService) GetCertificateInfo(name string) (*Certificate, erro
 	// Full implementation would need to extract SerialNumber, NotBefore, NotAfter, etc.
 
 	return cert, nil
+}
+
+// safeCopyFile safely copies a file from src to dst using Go standard library
+func safeCopyFile(src, dst string) error {
+	// Open source file
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	// Create destination file
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dstFile.Close()
+
+	// Copy contents
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file contents: %w", err)
+	}
+
+	// Sync to ensure data is written to disk
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync destination file: %w", err)
+	}
+
+	return nil
 }

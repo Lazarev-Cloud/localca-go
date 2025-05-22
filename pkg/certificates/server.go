@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/Lazarev-Cloud/localca-go/pkg/security"
 )
 
 // Certificate represents a certificate
@@ -198,7 +200,7 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 		"-new",
 		"-key", keyPath,
 		"-out", csrPath,
-		"-subj", "/CN="+commonName,
+		"-subj", "/CN="+security.ValidateSubjectDN(commonName),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create CSR: %w", err)
@@ -257,13 +259,13 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 func createCertificateBundle(certPath, caPath, bundlePath string) error {
 	// Read certificate file
 	certData, err := os.ReadFile(certPath)
-	if err \!= nil {
+	if err != nil {
 		return fmt.Errorf("failed to read certificate file: %w", err)
 	}
 
 	// Read CA certificate file
 	caData, err := os.ReadFile(caPath)
-	if err \!= nil {
+	if err != nil {
 		return fmt.Errorf("failed to read CA certificate file: %w", err)
 	}
 
@@ -271,7 +273,7 @@ func createCertificateBundle(certPath, caPath, bundlePath string) error {
 	bundleData := append(certData, caData...)
 
 	// Write bundle file
-	if err := os.WriteFile(bundlePath, bundleData, 0644); err \!= nil {
+	if err := os.WriteFile(bundlePath, bundleData, 0644); err != nil {
 		return fmt.Errorf("failed to write bundle file: %w", err)
 	}
 

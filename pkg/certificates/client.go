@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Lazarev-Cloud/localca-go/pkg/security"
 )
 
 // CreateClientCertificate creates a new client certificate and p12 file
@@ -121,7 +123,7 @@ func (c *CertificateService) CreateClientCertificate(commonName string, p12Passw
 		"-inkey", clientKeyPath,
 		"-in", clientCertPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", p12Password),
+		"-passout", fmt.Sprintf("pass:%s", security.ValidatePassword(p12Password)),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create PKCS#12 file: %w", err)
@@ -170,7 +172,7 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 		"-new",
 		"-key", keyPath,
 		"-out", csrPath,
-		"-subj", "/CN="+commonName,
+		"-subj", "/CN="+security.ValidateSubjectDN(commonName),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create CSR: %w", err)
@@ -218,7 +220,7 @@ func (c *CertificateService) RenewClientCertificate(commonName string) error {
 		"-inkey", keyPath,
 		"-in", certPath,
 		"-certfile", c.storage.GetCAPublicKeyPath(),
-		"-passout", fmt.Sprintf("pass:%s", p12Password),
+		"-passout", fmt.Sprintf("pass:%s", security.ValidatePassword(p12Password)),
 	)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create PKCS#12 file: %w", err)
@@ -331,10 +333,9 @@ default_crl_days = 30
         return fmt.Errorf("failed to generate CRL: %w", err)
     }
 
-    // Make the CRL accessible
+    // Make the CRL accessible using safe Go file operations
     crlPublicPath := filepath.Join(c.storage.GetBasePath(), "ca.crl")
-    cmd = exec.Command("cp", crlPath, crlPublicPath)
-    if err := cmd.Run(); err != nil {
+    if err := safeCopyFile(crlPath, crlPublicPath); err != nil {
         return fmt.Errorf("failed to copy CRL to public location: %w", err)
     }
 
@@ -346,3 +347,4 @@ default_crl_days = 30
 
     return nil
 }
+

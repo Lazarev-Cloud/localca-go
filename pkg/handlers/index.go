@@ -403,6 +403,14 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 		return certInfo, fmt.Errorf("failed to find openssl executable: %w", err)
 	}
 
+	// Additional security validation of certificate path
+	if !filepath.IsAbs(certPath) {
+		return certInfo, fmt.Errorf("certificate path must be absolute")
+	}
+	if strings.Contains(certPath, "..") {
+		return certInfo, fmt.Errorf("invalid certificate path")
+	}
+
 	cmd := exec.Command(
 		opensslPath, "x509",
 		"-in", certPath,

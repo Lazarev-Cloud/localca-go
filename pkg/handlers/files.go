@@ -180,6 +180,14 @@ func getCertificateDetails(certPath string) (CertificateDetails, error) {
 		return details, fmt.Errorf("failed to find openssl executable: %w", err)
 	}
 
+	// Additional security validation of certificate path
+	if !filepath.IsAbs(certPath) {
+		return details, fmt.Errorf("certificate path must be absolute")
+	}
+	if strings.Contains(certPath, "..") {
+		return details, fmt.Errorf("invalid certificate path")
+	}
+
 	// Use OpenSSL to get certificate details
 	cmd := exec.Command(
 		opensslPath, "x509",

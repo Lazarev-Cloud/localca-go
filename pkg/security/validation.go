@@ -101,3 +101,53 @@ func SanitizeInput(input string) string {
 
 	return strings.TrimSpace(sanitized)
 }
+
+// ValidatePassword validates and sanitizes password input to prevent injection attacks
+func ValidatePassword(password string) string {
+	if password == "" {
+		return ""
+	}
+
+	// Remove shell metacharacters and control chars that could be used for injection
+	// Allow printable ASCII except shell metacharacters
+	reg := regexp.MustCompile(`[^a-zA-Z0-9!@#$%^&*()_+=\[\]{}|:";'<>?,./]`)
+	sanitized := reg.ReplaceAllString(password, "")
+
+	// Remove any characters that could be used for command injection
+	dangerousChars := []string{"`", "$", "\\", "\"", "'", ";", "&", "|", "<", ">", "(", ")", "{", "}", "[", "]"}
+	for _, char := range dangerousChars {
+		sanitized = strings.ReplaceAll(sanitized, char, "")
+	}
+
+	// Limit length for security
+	if len(sanitized) > 100 {
+		sanitized = sanitized[:100]
+	}
+
+	return sanitized
+}
+
+// ValidateSubjectDN validates and sanitizes certificate subject DN components
+func ValidateSubjectDN(component string) string {
+	if component == "" {
+		return ""
+	}
+
+	// Allow only alphanumeric, dots, hyphens, spaces for DN components
+	// Remove characters that could be used for injection or breaking DN parsing
+	reg := regexp.MustCompile(`[^a-zA-Z0-9\-\.\s]`)
+	sanitized := reg.ReplaceAllString(component, "")
+
+	// Remove DN separator characters that could break parsing
+	sanitized = strings.ReplaceAll(sanitized, "/", "")
+	sanitized = strings.ReplaceAll(sanitized, "=", "")
+	sanitized = strings.ReplaceAll(sanitized, ",", "")
+	sanitized = strings.ReplaceAll(sanitized, "+", "")
+
+	// Limit length
+	if len(sanitized) > 64 {
+		sanitized = sanitized[:64]
+	}
+
+	return strings.TrimSpace(sanitized)
+}
