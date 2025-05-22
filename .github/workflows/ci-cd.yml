@@ -142,8 +142,12 @@ jobs:
 
       - name: Run ESLint and npm audit in parallel
         run: |
-          npx eslint -f json app components hooks lib -o eslint-report.json || echo '[]' > eslint-report.json
-          npm audit --json > npm-audit.json || echo '{"advisories":{}}' > npm-audit.json
+          # Run ESLint and handle potential failure
+          npx eslint -f json app components hooks lib -o eslint-report.json || Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
+          
+          # Run npm audit and handle potential failure
+          npm audit --json > npm-audit.json 2>$null || Set-Content -Path npm-audit.json -Value '{"advisories":{}}' -Encoding UTF8
+        shell: pwsh
 
       # Generate SBOM as part of the same job
       - name: Generate SBOM for Frontend
@@ -303,11 +307,44 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       # Upload scan results
-      - name: Upload container scan results
+      - name: Check and prepare SARIF files
+        id: check-sarif
+        run: |
+          $backend_exists = Test-Path -Path trivy-backend-results.sarif
+          $frontend_exists = Test-Path -Path trivy-frontend-results.sarif
+          
+          if($backend_exists -and $frontend_exists) {
+            echo "Both SARIF files exist"
+            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
+          } elseif($backend_exists) {
+            echo "Only backend SARIF file exists"
+            Copy-Item -Path trivy-backend-results.sarif -Destination container-results.sarif
+            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
+          } elseif($frontend_exists) {
+            echo "Only frontend SARIF file exists"
+            Copy-Item -Path trivy-frontend-results.sarif -Destination container-results.sarif
+            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "No SARIF files exist"
+            echo "has_sarif=false" >> $env:GITHUB_OUTPUT
+          }
+        shell: pwsh
+
+      # Upload backend SARIF file if it exists
+      - name: Upload backend container scan results
         uses: github/codeql-action/upload-sarif@v3
+        if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-backend-results.sarif') != ''
         with:
-          sarif_file: 'trivy-backend-results.sarif,trivy-frontend-results.sarif'
-          category: 'container-security'
+          sarif_file: trivy-backend-results.sarif
+          category: container-security-backend
+
+      # Upload frontend SARIF file if it exists
+      - name: Upload frontend container scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-frontend-results.sarif') != ''
+        with:
+          sarif_file: trivy-frontend-results.sarif
+          category: container-security-frontend
 
       # Generate SBOM attestation for binary
       - name: Generate SBOM for Binary
@@ -340,8 +377,7 @@ jobs:
             localca-go
             localca-go.spdx.json
             .next/**/*
-            trivy-backend-results.sarif
-            trivy-frontend-results.sarif
+            container-results.sarif
           retention-days: 5
 
   deploy:
@@ -485,30 +521,59 @@ jobs:
       # Prepare coverage reports
       - name: Prepare coverage reports
         run: |
-          mkdir -p coverage
-          cp artifacts/backend-artifacts/coverage-merged.out . || touch coverage-merged.out
-          cp -r artifacts/frontend-artifacts/coverage/* coverage/ || mkdir -p coverage
-          touch coverage/lcov.info
-          cp artifacts/frontend-artifacts/eslint-report.json . || touch eslint-report.json
-
-      # Prepare files for SonarQube analysis
+          New-Item -Path coverage -ItemType Directory -Force | Out-Null
+          
+          # Copy backend coverage if exists
+          if (Test-Path artifacts/backend-artifacts/coverage-merged.out) {
+            Copy-Item -Path artifacts/backend-artifacts/coverage-merged.out -Destination ./ -Force
+          } else {
+            New-Item -Path coverage-merged.out -ItemType File -Force | Out-Null
+          }
+          
+          # Copy frontend coverage if exists
+          if (Test-Path artifacts/frontend-artifacts/coverage) {
+            Copy-Item -Path artifacts/frontend-artifacts/coverage/* -Destination coverage/ -Recurse -Force
+          } else {
+            New-Item -Path coverage/lcov.info -ItemType File -Force | Out-Null
+          }
+          
+          # Copy ESLint report if exists
+          if (Test-Path artifacts/frontend-artifacts/eslint-report.json) {
+            Copy-Item -Path artifacts/frontend-artifacts/eslint-report.json -Destination ./ -Force
+          } else {
+            Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
+          }
+        shell: pwsh
+      
+      # Prepare SonarQube files
       - name: Prepare SonarQube files
         run: |
           # Ensure ESLint report is valid JSON
-          if [ ! -s eslint-report.json ]; then
-            echo "ESLint report is empty, creating valid empty array"
-            echo '[]' > eslint-report.json
-          else
-            # Validate JSON and create empty array if invalid
-            if ! jq empty eslint-report.json 2>/dev/null; then
-              echo "ESLint report is invalid JSON, creating valid empty array"
-              echo '[]' > eslint-report.json
-            fi
-          fi
+          if (-not (Test-Path eslint-report.json) -or (Get-Item eslint-report.json).Length -eq 0) {
+            Write-Host "ESLint report is empty, creating valid empty array"
+            Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
+          }
+          else {
+            # Try to parse the JSON, recreate if invalid
+            try {
+              Get-Content eslint-report.json -Raw | ConvertFrom-Json | Out-Null
+            }
+            catch {
+              Write-Host "ESLint report is invalid JSON, creating valid empty array"
+              Set-Content -Path eslint-report.json -Value "[]" -Encoding UTF8
+            }
+          }
           
           # Ensure coverage files exist
-          [ ! -f coverage-merged.out ] && touch coverage-merged.out
-          [ ! -f coverage/lcov.info ] && mkdir -p coverage && touch coverage/lcov.info
+          if (-not (Test-Path coverage-merged.out)) {
+            New-Item -Path coverage-merged.out -ItemType File -Force | Out-Null
+          }
+          
+          if (-not (Test-Path coverage/lcov.info)) {
+            New-Item -Path coverage -ItemType Directory -Force | Out-Null
+            New-Item -Path coverage/lcov.info -ItemType File -Force | Out-Null
+          }
+        shell: pwsh
       
       # Set up SonarQube Scanner
       - name: Set up SonarQube Scanner
