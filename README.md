@@ -18,6 +18,24 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 - **HTTPS Support**: Secure access to the management interface itself
 - **Docker Deployment**: Easy deployment with Docker and Docker Compose
 - **ACME Protocol Support**: Automated certificate issuance compatible with standard ACME clients
+- **Security Hardened**: Comprehensive security measures including CSRF protection, secure headers, and input validation
+
+## Project Structure
+
+```
+├── app/              # Next.js 15 frontend application
+├── build/            # Docker build configurations and test setups
+├── components/       # React components (ShadcnUI + Tailwind)
+├── docs/             # Documentation files
+├── hooks/            # Custom React hooks
+├── pkg/              # Go backend packages
+├── public/           # Static assets
+├── security/         # Security analysis and SBOM files
+├── static/           # Backend static files
+├── templates/        # HTML templates for backend
+├── tools/            # Development and utility scripts
+└── examples/         # Example configurations
+```
 
 ## License
 

@@ -17,16 +17,16 @@ npm run dev
 docker-compose up -d
 
 # Local development scripts
-./run-dev.sh    # Linux/macOS
-run-dev.bat     # Windows
+./tools/run-dev.sh    # Linux/macOS
+tools/run-dev.bat     # Windows
 ```
 
 ### Testing
 
 ```bash
 # Run all Go tests with coverage
-./run-tests.sh  # Linux/macOS
-run-tests.bat   # Windows
+./tools/run-tests.sh  # Linux/macOS
+tools/run-tests.bat   # Windows
 
 # Go tests only
 go test -v -cover ./pkg/...
@@ -35,7 +35,7 @@ go test -v -cover ./pkg/...
 npm test
 
 # Run Docker tests
-./run-tests-docker.sh
+./tools/run-tests-docker.sh
 ```
 
 ### Build & Lint
