@@ -24,7 +24,7 @@ export function SettingsTabs() {
             <div className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="caName">CA Name</Label>
-                <Input id="caName" defaultValue="ca.homelab.local" />
+                <Input id="caName" placeholder="e.g., ca.example.com" />
                 <p className="text-sm text-muted-foreground">The common name of your Certificate Authority.</p>
               </div>
 

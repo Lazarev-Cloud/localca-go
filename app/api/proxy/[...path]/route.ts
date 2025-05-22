@@ -44,9 +44,6 @@ async function proxyRequest(
       .map(c => `${c.name}=${c.value}`)
       .join('; ')
     
-    console.log('Cookies from request:', cookies)
-    console.log('Cookie header being sent to backend:', cookieHeader)
-    
     // Get and forward all headers (except host)
     const headers: Record<string, string> = {}
     request.headers.forEach((value, key) => {
@@ -60,33 +57,40 @@ async function proxyRequest(
       headers['Cookie'] = cookieHeader
     }
     
-    // Add content-type if it's not already set
-    if (!headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json'
+    // Add CSRF token header if it exists in cookies
+    const csrfCookie = cookies.find(c => c.name === 'csrf_token')
+    if (csrfCookie) {
+      headers['X-CSRF-Token'] = csrfCookie.value
     }
     
-    // Get request body for POST/PUT requests
+    // Get request body for POST/PUT requests without modifying content-type
     let body = undefined
     if (method === 'POST' || method === 'PUT') {
-      if (request.headers.get('content-type')?.includes('application/json')) {
-        body = JSON.stringify(await request.json())
-      } else if (request.headers.get('content-type')?.includes('application/x-www-form-urlencoded')) {
-        body = await request.text()
+      const contentType = request.headers.get('content-type')
+      if (contentType?.includes('application/json')) {
+        // For JSON, parse and re-stringify to ensure valid JSON
+        try {
+          const jsonData = await request.json()
+          body = JSON.stringify(jsonData)
+        } catch (error) {
+          console.error('Invalid JSON in request:', error)
+          body = await request.text()
+        }
       } else {
+        // For all other content types (form data, text, etc.), pass as-is
         body = await request.text()
       }
     }
 
     // Add timeout for the backend request
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
     // Make the request to the backend
+    // Ensure we're using the configured API URL, not a hardcoded localhost
     const backendUrl = config.apiUrl 
       ? `${config.apiUrl}/${apiPath}` // Use configured API URL if available
       : `/${apiPath}`; // Otherwise use relative URL
-      
-    console.log(`Sending ${method} request to backend URL: ${backendUrl}`)
     
     const response = await fetch(backendUrl, {
       method,
@@ -100,38 +104,44 @@ async function proxyRequest(
     // Clear timeout
     clearTimeout(timeoutId)
 
-    console.log(`Backend response status: ${response.status}`)
-
     // Read response data
     const contentType = response.headers.get('content-type')
     let responseData: any
     
     if (contentType?.includes('application/json')) {
       responseData = await response.json()
-      console.log(`Backend ${response.status} response data:`, responseData)
     } else {
       responseData = await response.text()
     }
 
-    // Create the NextResponse
-    const nextResponse = NextResponse.json(responseData, {
-      status: response.status,
-    })
+    // Create the NextResponse - handle both JSON and non-JSON responses
+    let nextResponse
+    if (contentType?.includes('application/json')) {
+      nextResponse = NextResponse.json(responseData, {
+        status: response.status,
+      })
+    } else {
+      nextResponse = new NextResponse(responseData, {
+        status: response.status,
+        headers: {
+          'Content-Type': contentType || 'text/plain'
+        }
+      })
+    }
 
     // Forward all response headers
     response.headers.forEach((value, key) => {
       // Handle Set-Cookie specially to ensure it's properly forwarded
       if (key.toLowerCase() === 'set-cookie') {
-        nextResponse.headers.set('Set-Cookie', value)
-      } else {
+        nextResponse.headers.append('Set-Cookie', value)
+      } else if (key.toLowerCase() !== 'content-length' && key.toLowerCase() !== 'transfer-encoding') {
+        // Skip headers that Next.js manages automatically
         nextResponse.headers.set(key, value)
       }
     })
 
     return nextResponse
   } catch (error) {
-    console.error(`Failed to proxy ${config.apiUrl}/${pathSegments.join('/')} [${error}]`, error)
-    
     // Check if the error is a timeout or connection error
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -150,7 +160,7 @@ async function proxyRequest(
         return NextResponse.json(
           { 
             success: false, 
-            message: 'Could not connect to backend service',
+            message: `Could not connect to backend service. Please ensure the Go server is running.`,
             retryable: true
           },
           { status: 503 }

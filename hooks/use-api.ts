@@ -79,7 +79,10 @@ export function useApi() {
           // Check if setup is required
           if (response.status === 401 && 
               errorData && 
-              (errorData.setupRequired || errorData.message === 'Setup required')) {
+              (errorData.setupRequired || 
+               errorData.setup_required || 
+               errorData.data?.setup_required ||
+               errorData.message === 'Setup required')) {
             errorType = ApiErrorType.SETUP_REQUIRED
             setupRequired = true
             

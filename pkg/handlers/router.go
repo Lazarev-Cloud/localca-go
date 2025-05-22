@@ -108,19 +108,17 @@ func securityHeadersMiddleware(allowLocalhost bool) gin.HandlerFunc {
 		c.Header("X-XSS-Protection", "1; mode=block")
 		
 		// Create CSP header based on localhost setting
-		cspValue := "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
+		cspValue := "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'"
 		
 		// If allowLocalhost is true, add localhost to the allowed sources
 		if allowLocalhost {
 			cspValue = "default-src 'self' http://localhost:* https://localhost:*; " +
-				"script-src 'self' http://localhost:* https://localhost:*; " +
+				"script-src 'self' 'unsafe-inline' http://localhost:* https://localhost:*; " +
+				"style-src 'self' 'unsafe-inline' http://localhost:* https://localhost:*; " +
 				"connect-src 'self' http://localhost:* https://localhost:*; " +
 				"img-src 'self' http://localhost:* https://localhost:*; " +
-				"style-src 'self' http://localhost:* https://localhost:*; " +
 				"font-src 'self' http://localhost:* https://localhost:*; " +
 				"object-src 'none'; frame-ancestors 'none'"
-		} else {
-			cspValue = "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
 		}
 		
 		c.Header("Content-Security-Policy", cspValue)
@@ -139,9 +137,10 @@ func securityHeadersMiddleware(allowLocalhost bool) gin.HandlerFunc {
 // csrfMiddleware adds CSRF protection
 func csrfMiddleware() gin.HandlerFunc {
 	// Load exempt paths from environment variable
-	exemptPaths := []string{}
+	exemptPaths := []string{"/api/"} // API endpoints are exempt by default
 	if exemptPathsStr := os.Getenv("CSRF_EXEMPT_PATHS"); exemptPathsStr != "" {
-		exemptPaths = strings.Split(exemptPathsStr, ",")
+		additionalPaths := strings.Split(exemptPathsStr, ",")
+		exemptPaths = append(exemptPaths, additionalPaths...)
 	}
 	
 	return func(c *gin.Context) {

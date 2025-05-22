@@ -61,7 +61,7 @@ export default function LoginPage() {
 
     try {
       // Use the proxy endpoint for login
-      const response = await fetch(`/api/proxy/login`, {
+      const response = await fetch(`/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -168,9 +168,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-4 text-center text-xs text-gray-500">
-            <p>Backend API URL: {config.apiUrl}</p>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 text-center text-xs text-gray-500">
+              <p>Backend API URL: {config.apiUrl}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

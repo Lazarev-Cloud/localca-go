@@ -1,28 +1,26 @@
 // Configuration for the application
-const config = {
+interface Config {
+  apiUrl: string;
+}
+
+const config: Config = {
   // API URL for backend
   apiUrl: (() => {
-    // Get environment variable
-    const configuredUrl = process.env.NEXT_PUBLIC_API_URL;
-    
-    // If it's specifically set, use it
-    if (configuredUrl) {
-      console.log(`Using configured API URL: ${configuredUrl}`);
-      return configuredUrl;
-    }
-    
-    // In a browser environment, use relative URL
+    // For client-side, use empty string to make relative requests
     if (typeof window !== 'undefined') {
-      // Use relative URL if in browser
-      console.log('Using relative API URL for browser environment');
       return '';
     }
     
-    // In server environment (but not configured), default to localhost
-    console.log('Using default API URL: http://localhost:8080');
-    return 'http://localhost:8080';
+    // For server-side, check environment variable or use default
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    
+    // Log only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`API URL configuration: ${apiUrl}`);
+    }
+    
+    return apiUrl;
   })(),
 };
 
-console.log(`Final API URL configuration: ${config.apiUrl}`);
 export default config; 

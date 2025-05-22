@@ -12,12 +12,20 @@ const nextConfig = {
     unoptimized: true,
   },
   async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/:path*`,
-      },
-    ];
+    // Only add rewrites if we're not using the proxy routes
+    // The proxy routes handle API forwarding internally
+    if (process.env.USE_PROXY_ROUTES === 'false') {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${apiUrl}/api/:path*`,
+        },
+      ];
+    }
+    
+    return [];
   },
   webpack: (config, options) => {
     // Add Codecov bundle analysis plugin

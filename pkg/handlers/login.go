@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
-
-	"encoding/base64"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
@@ -96,7 +96,7 @@ func loginPostHandler(certSvc certificates.CertificateServiceInterface, store *s
 			log.Printf("Failed to create sessions directory: %v", err)
 		} else {
 			sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
-			if err := os.WriteFile(sessionFile, []byte(authConfig.AdminUsername), 0600); err != nil {
+			if err := os.WriteFile(sessionFile, []byte(username), 0600); err != nil {
 				log.Printf("Failed to create session file: %v", err)
 			}
 		}
@@ -109,21 +109,34 @@ func loginPostHandler(certSvc certificates.CertificateServiceInterface, store *s
 // apiLoginHandler handles API login
 func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get JSON data
-		var loginData struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
-		if err := c.BindJSON(&loginData); err != nil {
-			c.JSON(http.StatusBadRequest, APIResponse{
-				Success: false,
-				Message: "Invalid request format",
-			})
-			return
+		// Support both JSON and form data
+		var username, password string
+		
+		// Check content type
+		contentType := c.GetHeader("Content-Type")
+		if strings.Contains(contentType, "application/json") {
+			// Handle JSON data
+			var loginData struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}
+			if err := c.BindJSON(&loginData); err != nil {
+				c.JSON(http.StatusBadRequest, APIResponse{
+					Success: false,
+					Message: "Invalid JSON format",
+				})
+				return
+			}
+			username = loginData.Username
+			password = loginData.Password
+		} else {
+			// Handle form data (default)
+			username = c.PostForm("username")
+			password = c.PostForm("password")
 		}
 
 		// Validate input
-		if loginData.Username == "" || loginData.Password == "" {
+		if username == "" || password == "" {
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
 				Message: "Username and password are required",
@@ -143,7 +156,7 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 		}
 
 		// Check credentials
-		if loginData.Username != authConfig.AdminUsername || !checkPasswordHash(loginData.Password, authConfig.AdminPasswordHash) {
+		if username != authConfig.AdminUsername || !checkPasswordHash(password, authConfig.AdminPasswordHash) {
 			c.JSON(http.StatusUnauthorized, APIResponse{
 				Success: false,
 				Message: "Invalid username or password",
@@ -179,7 +192,7 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 			log.Printf("Failed to create sessions directory: %v", err)
 		} else {
 			sessionFile := filepath.Join(sessionsDir, base64.URLEncoding.EncodeToString([]byte(sessionToken)))
-			if err := os.WriteFile(sessionFile, []byte(authConfig.AdminUsername), 0600); err != nil {
+			if err := os.WriteFile(sessionFile, []byte(username), 0600); err != nil {
 				log.Printf("Failed to create session file: %v", err)
 			}
 		}

@@ -44,7 +44,8 @@ func corsMiddleware() gin.HandlerFunc {
 		// Get allowed origins from environment variable
 		allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 		if allowedOrigins == "" {
-			allowedOrigins = "*" // Default fallback
+			// If not specified, allow localhost development servers on common ports
+			allowedOrigins = "http://localhost:3000,http://localhost:8080,https://localhost:3000,https://localhost:8080"
 		}
 		
 		// Get allowed methods from environment variable
@@ -56,7 +57,7 @@ func corsMiddleware() gin.HandlerFunc {
 		// Get allowed headers from environment variable
 		allowedHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
 		if allowedHeaders == "" {
-			allowedHeaders = "Content-Type, Authorization" // Default fallback
+			allowedHeaders = "Content-Type, Authorization, X-CSRF-Token" // Default fallback
 		}
 		
 		// Check if the origin is allowed
@@ -67,16 +68,8 @@ func corsMiddleware() gin.HandlerFunc {
 				origins := strings.Split(allowedOrigins, ",")
 				allowed := false
 				for _, allowedOrigin := range origins {
-					// Check for wildcard in allowed origin (e.g., http://localhost:*)
-					if strings.Contains(allowedOrigin, "*") {
-						// Convert wildcard pattern to a prefix for matching
-						wildcardPrefix := strings.Replace(allowedOrigin, "*", "", 1)
-						if strings.HasPrefix(origin, wildcardPrefix) {
-							allowed = true
-							break
-						}
-					} else if allowedOrigin == origin {
-						// Exact match
+					// Check for exact match
+					if allowedOrigin == origin {
 						allowed = true
 						break
 					}
@@ -93,6 +86,7 @@ func corsMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Methods", allowedMethods)
 		c.Writer.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Max-Age", "86400") // Cache preflight for 24 hours
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
