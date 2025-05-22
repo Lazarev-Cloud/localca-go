@@ -1,0 +1,84 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Security Model
+
+LocalCA implements a comprehensive security model to protect the integrity and confidentiality of the Certificate Authority and its issued certificates.
+
+## Certificate Authority Security
+
+The CA root certificate and private key are protected through:
+
+- **Password Protection**: The CA private key is encrypted with a password
+- **Filesystem Permissions**: Strict filesystem permissions for sensitive files
+- **Access Control**: Role-based access control for administrative operations
+
+The CA implementation is located in [pkg/certificates/ca.go](mdc:pkg/certificates/ca.go).
+
+## Authentication and Authorization
+
+The web interface is protected by authentication:
+
+- Initial setup requires a secure token
+- Subsequent access requires authentication
+- Session management with secure cookies
+- CSRF protection for all forms
+
+Authentication logic is implemented in [pkg/handlers/auth.go](mdc:pkg/handlers/auth.go).
+
+## TLS Configuration
+
+Secure TLS configuration is enforced:
+
+- TLS 1.2/1.3 only
+- Strong cipher suites
+- Modern elliptic curve preferences
+- ECDHE key exchange
+
+TLS configuration is defined in [main.go](mdc:main.go).
+
+## Network Security
+
+LocalCA is designed for internal network use:
+
+- Not recommended for exposure to the public internet
+- HTTPS support for secure management interface access
+- Network isolation via Docker for containerized deployments
+
+## Credential Management
+
+Secure handling of credentials:
+
+- No hardcoded credentials
+- Environment variables for configuration
+- Secure storage of generated certificates
+- Password protection for client certificate exports
+
+## Certificate Validation
+
+Certificate security features:
+
+- Strong key sizes (default: RSA 2048-bit or ECC P-256)
+- Modern signature algorithms
+- Certificate Revocation List (CRL) for revoked certificates
+- Appropriate certificate extensions
+
+## Security Best Practices
+
+The [BestPractice.md](mdc:BestPractice.md) document outlines recommended security practices for:
+
+- Certificate deployment
+- Private key protection
+- Trust chain management
+- Certificate revocation management
+
+## Audit Logging
+
+Security events are logged for audit purposes:
+
+- Certificate creation/revocation events
+- Authentication attempts
+- Administrative actions
+- System startup and shutdown

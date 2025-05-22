@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
 # LocalCA: Self-Hosted Certificate Authority
@@ -44,3 +44,9 @@ The frontend starts at [app/page.tsx](mdc:app/page.tsx), which renders the main 
 3. Web Interface: Next.js + React application
    - [app](mdc:app): Next.js app directory with pages and API routes
    - [components](mdc:components): Reusable React components
+
+4. ACME Protocol Support: Automated certificate issuance
+   - [pkg/acme](mdc:pkg/acme): ACME protocol implementation
+
+5. Configuration Management:
+   - [pkg/config](mdc:pkg/config): Application configuration handling

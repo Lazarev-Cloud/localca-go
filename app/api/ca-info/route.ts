@@ -27,17 +27,44 @@ export async function GET(request: NextRequest) {
     // Clear timeout
     clearTimeout(timeoutId)
 
-    // Check for unauthorized response which likely means setup is required
+    // Check if setup is required
     if (response.status === 401) {
-      // Return a specific response that the frontend can use to redirect
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Setup required',
-          setupRequired: true
-        },
-        { status: 401 }
-      )
+      try {
+        // Attempt to parse the response to determine if it's a setup or auth issue
+        const data = await response.json()
+        
+        // Check if this is a setup required message
+        if (data && data.data && data.data.setup_required === true) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              message: 'Setup required',
+              setupRequired: true
+            },
+            { status: 401 }
+          )
+        }
+        
+        // Otherwise it's just a regular auth issue
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: 'Authentication required',
+            setupRequired: false
+          },
+          { status: 401 }
+        )
+      } catch (err) {
+        // If we can't parse the response, default to auth required
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: 'Authentication required',
+            setupRequired: false
+          },
+          { status: 401 }
+        )
+      }
     }
 
     if (!response.ok) {

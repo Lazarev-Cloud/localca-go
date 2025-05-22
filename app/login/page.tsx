@@ -8,25 +8,39 @@ export default function LoginPage() {
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
 
   // Check if already authenticated
   useEffect(() => {
     async function checkAuthStatus() {
       try {
+        setChecking(true)
         // Try to access ca-info endpoint which requires authentication
         const response = await fetch('/api/ca-info', {
           credentials: 'include',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
         })
         
         // If successful, we're already authenticated
         if (response.ok) {
-          router.push('/')
+          setMessage('Already authenticated. Redirecting to dashboard...')
+          setTimeout(() => {
+            router.push('/')
+          }, 1500)
+          return
         }
+        
+        setChecking(false)
       } catch (error) {
         // If there's an error, we'll stay on the login page
         console.error('Error checking auth status:', error)
+        setChecking(false)
       }
     }
     
@@ -36,6 +50,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setMessage('')
     
     if (!username || !password) {
       setError('Username and password are required')
@@ -50,6 +65,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
         },
         body: JSON.stringify({
           username,
@@ -66,13 +82,29 @@ export default function LoginPage() {
       }
 
       // Success - redirect to homepage
-      router.push('/')
+      setMessage('Login successful! Redirecting to dashboard...')
+      
+      // Delay redirect to allow cookies to be set properly
+      setTimeout(() => {
+        router.push('/')
+      }, 1500)
     } catch (err) {
       console.error('Login error:', err)
       setError('Failed to connect to the server')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+        <div className="text-center">
+          <h1 className="text-xl font-bold">Checking authentication status...</h1>
+          <p className="mt-2 text-gray-500">Please wait</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -87,6 +119,12 @@ export default function LoginPage() {
             </div>
           )}
           
+          {message && (
+            <div className="mb-4 rounded-md bg-green-50 p-4 text-green-700">
+              {message}
+            </div>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -97,6 +135,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none"
+                disabled={!!message}
               />
             </div>
             
@@ -109,12 +148,13 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none"
+                disabled={!!message}
               />
             </div>
             
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !!message}
               className="w-full rounded-md bg-blue-600 py-2 px-4 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {loading ? 'Logging in...' : 'Log In'}

@@ -1,55 +1,79 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
-# ACME Protocol Support
+# ACME Protocol Implementation
 
-LocalCA implements the ACME (Automated Certificate Management Environment) protocol to support automated certificate issuance and renewal.
-
-## What is ACME?
-
-ACME is the protocol behind popular services like Let's Encrypt. It allows for automated certificate issuance, validation, and renewal without manual intervention.
-
-## Implementation Details
-
-The ACME implementation in LocalCA is found in [pkg/acme](mdc:pkg/acme), which includes:
-
-- Directory endpoints
-- Account management
-- Order creation and processing
-- Domain validation
-- Certificate issuance
+LocalCA implements the Automated Certificate Management Environment (ACME) protocol, allowing for automated certificate issuance compatible with clients like certbot.
 
 ## ACME Server
 
-The ACME server is started in [main.go](mdc:main.go) and listens on port 8555 by default:
+The ACME server implementation is located in [pkg/acme](mdc:pkg/acme):
 
-```go
-// Start ACME server
-go func() {
-    log.Println("Starting ACME server on port 8555...")
-    if err := acme.StartACMEServer(ctx, certSvc, store, ":8555", getSecureTLSConfig()); err != nil {
-        if err != http.ErrServerClosed {
-            log.Printf("ACME server error: %v", err)
-        }
-    }
-}()
+- [server.go](mdc:pkg/acme/server.go): Main ACME server implementation
+- [handlers.go](mdc:pkg/acme/handlers.go): ACME API endpoint handlers
+- [challenge.go](mdc:pkg/acme/challenge.go): Challenge verification
+- [account.go](mdc:pkg/acme/account.go): ACME account management
+- [order.go](mdc:pkg/acme/order.go): Certificate order processing
+
+## ACME Protocol Flow
+
+1. **Account Registration**: Client registers an account with the ACME server
+2. **Order Creation**: Client creates a certificate order
+3. **Challenge Issuance**: Server issues challenges to verify domain control
+4. **Challenge Verification**: Client completes challenges, server verifies
+5. **Certificate Issuance**: Server issues the certificate
+
+## Supported Challenge Types
+
+LocalCA supports the HTTP-01 challenge type:
+
+- Client places a token at a specific HTTP location
+- Server verifies the token to confirm domain control
+- Challenge verification is handled in [challenge.go](mdc:pkg/acme/challenge.go)
+
+## ACME Server Configuration
+
+The ACME server is configured in [main.go](mdc:main.go):
+
+- Listens on port 8555 by default
+- Configurable TLS settings
+- Shares certificate service with the main application
+
+## Integration with Certificate Service
+
+The ACME server is integrated with the certificate service:
+
+- Uses the same CA for signing certificates
+- Follows the same certificate lifecycle
+- Certificate storage is consistent with manually issued certificates
+
+## Using the ACME Server
+
+Clients can interact with the ACME server using standard ACME clients:
+
+```bash
+# Example using certbot
+certbot certonly --server https://localca.example:8555/acme/directory \
+  --standalone -d example.local
 ```
 
-## Compatible Clients
+For secure communication, clients should trust the CA certificate.
 
-The ACME implementation is compatible with standard ACME clients like:
+## Certificate Issuance Limitations
 
-- Certbot
-- acme.sh
-- Caddy
-- Traefik
+The ACME server enforces certain limitations:
 
-## Usage with Clients
+- Domain validation is required through challenges
+- Certificate validity periods match the CA's configuration
+- Only domains allowed by the CA's policy can be issued
+- Rate limiting may be applied to prevent abuse
 
-To use LocalCA with an ACME client:
+## ACME Client Implementation
 
-1. Configure the client to use the LocalCA ACME endpoint (e.g., `http://localca:8555/acme/directory`)
-2. Ensure the client trusts the LocalCA root certificate
-3. Request certificates as usual with the ACME client
+The LocalCA system will expand to include an ACME client for automatic certificate renewal:
+
+- Certificate renewal process
+- Challenge response automation
+- Integration with the certificate lifecycle

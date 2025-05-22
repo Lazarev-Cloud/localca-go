@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
 # Frontend Architecture
@@ -9,37 +9,62 @@ The LocalCA frontend is built with Next.js and React, providing a modern, respon
 
 ## Application Structure
 
-The Next.js app is organized in the App Router pattern:
+The application follows Next.js 13+ App Router structure:
 
-- [app/page.tsx](mdc:app/page.tsx): Main dashboard page
-- [app/create](mdc:app/create): Certificate creation interface
-- [app/certificates/[id]](mdc:app/certificates/[id]): Certificate details view
-- [app/settings](mdc:app/settings): Application settings interface
+- [app](mdc:app): Main application directory
+  - [page.tsx](mdc:app/page.tsx): Homepage/dashboard
+  - [layout.tsx](mdc:app/layout.tsx): Root layout component
+  - [globals.css](mdc:app/globals.css): Global styles
+  - [api](mdc:app/api): API route handlers
+  - [login](mdc:app/login): Login page
+  - [setup](mdc:app/setup): Initial setup wizard
+  - [certificates](mdc:app/certificates): Certificate management pages
+  - [create](mdc:app/create): Certificate creation wizard
+  - [settings](mdc:app/settings): Application settings
 
-## API Routes
+## Component Architecture
 
-API routes in the frontend serve as proxies to the backend:
+The UI uses a component-based architecture with reusable components:
 
-- [app/api/ca-info](mdc:app/api/ca-info): CA information endpoints
-- [app/api/certificates](mdc:app/api/certificates): Certificate management
-- [app/api/delete](mdc:app/api/delete): Certificate deletion
-- [app/api/renew](mdc:app/api/renew): Certificate renewal
-- [app/api/revoke](mdc:app/api/revoke): Certificate revocation
+- [components](mdc:components): Reusable UI components
+  - Buttons, forms, modals, and other UI elements
+  - Layout components for consistent page structure
+  - Certificate visualization components
 
-## Core Components
+## UI Framework
 
-The reusable UI components are organized in the [components](mdc:components) directory:
+The application uses a combination of:
 
-- [components/certificate-list.tsx](mdc:components/certificate-list.tsx): Displays list of certificates
-- [components/ca-info-card.tsx](mdc:components/ca-info-card.tsx): Shows CA information
-- [components/quick-actions.tsx](mdc:components/quick-actions.tsx): Provides quick action buttons
-- [components/dashboard-header.tsx](mdc:components/dashboard-header.tsx): Header for the dashboard
-- [components/ui](mdc:components/ui): Shared UI components like buttons, cards, etc.
+- **TailwindCSS**: For styling and responsive design
+- **shadcn/ui**: For UI components based on Radix UI primitives
+- **React Hook Form**: For form handling
+- **Zod**: For form validation
 
-## Data Fetching
+## State Management
 
-The frontend uses React's fetch API to communicate with the backend API endpoints. Data fetching logic is encapsulated in custom hooks within the [hooks](mdc:hooks) directory.
+State management is handled through:
 
-## Styling
+- React's built-in hooks (useState, useContext)
+- Custom hooks in the [hooks](mdc:hooks) directory for shared logic
 
-The application uses Tailwind CSS for styling, with configuration in [tailwind.config.ts](mdc:tailwind.config.ts).
+## API Integration
+
+The frontend communicates with the backend through:
+
+- REST API calls for CRUD operations
+- Server-side rendering for initial data loading
+- Client-side data fetching for dynamic updates
+
+## Key Pages
+
+- **Dashboard**: Overview of all certificates and their status
+- **Certificate Creation**: Wizard for creating new certificates
+- **Certificate Details**: Viewing and managing certificate details
+- **Settings**: Configuration of CA parameters
+- **Login/Auth**: Authentication interface
+
+## Frontend-Backend Integration
+
+The frontend connects to the backend API defined in [pkg/handlers](mdc:pkg/handlers) through HTTP requests, configured via environment variables:
+
+- `NEXT_PUBLIC_API_URL`: Base URL for the backend API

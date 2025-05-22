@@ -1,0 +1,113 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Development and Contribution Workflow
+
+This document outlines the development workflow, testing approach, and contribution guidelines for the LocalCA project.
+
+## Development Workflow
+
+### Local Development Setup
+
+1. Clone the repository
+2. Install dependencies:
+   - Go 1.22+ for backend
+   - Node.js 18+ for frontend
+3. Configure the environment:
+   - Create a `cakey.txt` file with a password
+   - Set up any required environment variables
+4. Run the development server:
+   - Backend: `go run main.go`
+   - Frontend: `npm run dev`
+
+Development scripts are provided:
+- [run-dev.sh](mdc:run-dev.sh) / [run-dev.bat](mdc:run-dev.bat)
+
+### Version Control Workflow
+
+- `main` branch contains the latest stable version
+- Feature branches for new development
+- Pull requests for code review before merging
+
+## Testing Approach
+
+### Backend Testing
+
+Go tests are in test files alongside the implementation:
+
+- [main_test.go](mdc:main_test.go): Main application tests
+- Package-specific test files in each package
+
+Run backend tests:
+```bash
+go test ./...
+```
+
+### Frontend Testing
+
+Frontend tests use Jest and React Testing Library:
+
+- Component tests
+- API integration tests
+- End-to-end tests
+
+Run frontend tests:
+```bash
+npm test
+```
+
+### Docker Testing
+
+Test in Docker environment:
+- [run-tests-docker.sh](mdc:run-tests-docker.sh) / [run-tests-docker.bat](mdc:run-tests-docker.bat)
+
+### Test Coverage
+
+Test coverage is tracked using:
+- [CodeCov](mdc:https:/codecov.io) integration
+- SonarCloud for code quality
+
+## CI/CD Pipeline
+
+Continuous Integration pipeline is defined in [.github/workflows](mdc:.github/workflows):
+
+- Build and test on each push
+- Code coverage reporting
+- Security scanning
+- Container image building
+
+## Documentation
+
+Documentation is maintained in:
+
+- README.md: Project overview and quick start
+- [DEPLOYMENT.md](mdc:DEPLOYMENT.md): Deployment instructions
+- [BestPractice.md](mdc:BestPractice.md): Security best practices
+- Code comments for API documentation
+
+## Security Scanning
+
+Security scanning tools:
+
+- [run-security-scan.sh](mdc:run-security-scan.sh) / [run-security-scan.bat](mdc:run-security-scan.bat)
+- SBOM generation: [sbom.spdx.json](mdc:sbom.spdx.json) and [sbom.cyclonedx.json](mdc:sbom.cyclonedx.json)
+
+## Contribution Guidelines
+
+When contributing:
+
+1. Create a feature branch
+2. Write tests for new functionality
+3. Ensure code passes linting and tests
+4. Submit a pull request
+5. Address code review feedback
+
+## Licensing
+
+The LocalCA project is dual-licensed:
+- Free for personal, non-commercial use
+- Paid license required for commercial/organizational use
+
+See [LICENSE](mdc:LICENSE) for details.
