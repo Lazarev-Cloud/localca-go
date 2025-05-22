@@ -127,6 +127,7 @@ LocalCA is configured through environment variables:
 | `EMAIL_FROM` | From address for notification emails | "" |
 | `EMAIL_TO` | Default recipient for notification emails | "" |
 | `TLS_ENABLED` | Enable HTTPS for the web interface | "false" |
+| `ALLOW_LOCALHOST` | Allow loading content from localhost in CSP headers | "false" |
 | `NEXT_PUBLIC_API_URL` | URL for the frontend to connect to the backend | "http://localhost:8080" |
 
 ## Usage Guide

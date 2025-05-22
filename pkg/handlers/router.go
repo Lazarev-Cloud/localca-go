@@ -54,7 +54,7 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 	router.Use(gin.Recovery())
 
 	// Add security headers
-	router.Use(securityHeadersMiddleware())
+	router.Use(securityHeadersMiddleware(cfg.AllowLocalhost))
 
 	// Configure CSRF protection
 	router.Use(csrfMiddleware())
@@ -100,13 +100,30 @@ func SetupRoutes(router *gin.Engine, certSvc certificates.CertificateServiceInte
 }
 
 // securityHeadersMiddleware adds security headers to prevent XSS and other attacks
-func securityHeadersMiddleware() gin.HandlerFunc {
+func securityHeadersMiddleware(allowLocalhost bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Set security headers
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'")
+		
+		// Create CSP header based on localhost setting
+		cspValue := "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
+		
+		// If allowLocalhost is true, add localhost to the allowed sources
+		if allowLocalhost {
+			cspValue = "default-src 'self' http://localhost:* https://localhost:*; " +
+				"script-src 'self' http://localhost:* https://localhost:*; " +
+				"connect-src 'self' http://localhost:* https://localhost:*; " +
+				"img-src 'self' http://localhost:* https://localhost:*; " +
+				"style-src 'self' http://localhost:* https://localhost:*; " +
+				"font-src 'self' http://localhost:* https://localhost:*; " +
+				"object-src 'none'; frame-ancestors 'none'"
+		} else {
+			cspValue = "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
+		}
+		
+		c.Header("Content-Security-Policy", cspValue)
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 

@@ -25,6 +25,7 @@ func TestLoadConfig(t *testing.T) {
 		"EMAIL_FROM":    os.Getenv("EMAIL_FROM"),
 		"EMAIL_TO":      os.Getenv("EMAIL_TO"),
 		"TLS_ENABLED":   os.Getenv("TLS_ENABLED"),
+		"ALLOW_LOCALHOST": os.Getenv("ALLOW_LOCALHOST"),
 	}
 
 	// Restore environment variables when test completes
@@ -55,6 +56,7 @@ func TestLoadConfig(t *testing.T) {
 	os.Unsetenv("EMAIL_FROM")
 	os.Unsetenv("EMAIL_TO")
 	os.Unsetenv("TLS_ENABLED")
+	os.Unsetenv("ALLOW_LOCALHOST")
 
 	// Set required CA_KEY to avoid error
 	os.Setenv("CA_KEY", "testpassword")
@@ -83,6 +85,9 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.CAKeyPassword != "testpassword" {
 		t.Errorf("Expected CAKeyPassword 'testpassword', got '%s'", cfg.CAKeyPassword)
 	}
+	if cfg.AllowLocalhost {
+		t.Errorf("Expected default AllowLocalhost to be false")
+	}
 
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "localca-test")
@@ -109,6 +114,7 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv("EMAIL_FROM", "ca@example.com")
 	os.Setenv("EMAIL_TO", "admin@example.com")
 	os.Setenv("TLS_ENABLED", "true")
+	os.Setenv("ALLOW_LOCALHOST", "true")
 
 	cfg, err = LoadConfig()
 	if err != nil {
@@ -160,5 +166,8 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if !cfg.TLSEnabled {
 		t.Errorf("Expected TLSEnabled to be true")
+	}
+	if !cfg.AllowLocalhost {
+		t.Errorf("Expected AllowLocalhost to be true")
 	}
 }

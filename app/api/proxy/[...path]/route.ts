@@ -37,13 +37,15 @@ async function proxyRequest(
   try {
     // Construct the path for the backend API
     const apiPath = pathSegments.join('/')
-    console.log(`Proxying ${method} request to ${apiPath}`)
-
+    
     // Get and forward all cookies
     const cookies = request.cookies.getAll()
     const cookieHeader = cookies
       .map(c => `${c.name}=${c.value}`)
       .join('; ')
+    
+    console.log('Cookies from request:', cookies)
+    console.log('Cookie header being sent to backend:', cookieHeader)
     
     // Get and forward all headers (except host)
     const headers: Record<string, string> = {}
@@ -63,8 +65,6 @@ async function proxyRequest(
       headers['Content-Type'] = 'application/json'
     }
     
-    console.log('Proxy request headers:', headers)
-
     // Get request body for POST/PUT requests
     let body = undefined
     if (method === 'POST' || method === 'PUT') {
@@ -82,7 +82,13 @@ async function proxyRequest(
     const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
 
     // Make the request to the backend
-    const response = await fetch(`${config.apiUrl}/${apiPath}`, {
+    const backendUrl = config.apiUrl 
+      ? `${config.apiUrl}/${apiPath}` // Use configured API URL if available
+      : `/${apiPath}`; // Otherwise use relative URL
+      
+    console.log(`Sending ${method} request to backend URL: ${backendUrl}`)
+    
+    const response = await fetch(backendUrl, {
       method,
       headers,
       body,
@@ -94,12 +100,15 @@ async function proxyRequest(
     // Clear timeout
     clearTimeout(timeoutId)
 
+    console.log(`Backend response status: ${response.status}`)
+
     // Read response data
     const contentType = response.headers.get('content-type')
     let responseData: any
     
     if (contentType?.includes('application/json')) {
       responseData = await response.json()
+      console.log(`Backend ${response.status} response data:`, responseData)
     } else {
       responseData = await response.text()
     }
@@ -121,7 +130,7 @@ async function proxyRequest(
 
     return nextResponse
   } catch (error) {
-    console.error(`Proxy error for ${method} /${pathSegments.join('/')}:`, error)
+    console.error(`Failed to proxy ${config.apiUrl}/${pathSegments.join('/')} [${error}]`, error)
     
     // Check if the error is a timeout or connection error
     if (error instanceof Error) {
@@ -134,7 +143,10 @@ async function proxyRequest(
           },
           { status: 503 }
         )
-      } else if (error.message.includes('ECONNREFUSED')) {
+      } else if (
+        error.message.includes('ECONNREFUSED') || 
+        (error as any).code === 'ECONNREFUSED'
+      ) {
         return NextResponse.json(
           { 
             success: false, 

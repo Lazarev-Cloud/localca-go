@@ -23,13 +23,14 @@ services:
       - BASE_DOMAIN=in.lc
       - DEBUG=true
       - CA_KEY_FILE=/app/data/cakey.txt
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000
+      - CORS_ALLOWED_ORIGINS=http://localhost:*,https://localhost:*,http://frontend:3000,http://127.0.0.1:*,https://127.0.0.1:*
       - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
       - CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-CSRF-Token
       - CSRF_EXEMPT_PATHS=/api/
       - GIN_MODE=debug
       - COOKIE_DOMAIN=
       - COOKIE_SECURE=false
+      - ALLOW_LOCALHOST=true
     restart: unless-stopped
     networks:
       - localca-network

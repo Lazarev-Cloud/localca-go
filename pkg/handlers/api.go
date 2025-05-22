@@ -67,7 +67,16 @@ func corsMiddleware() gin.HandlerFunc {
 				origins := strings.Split(allowedOrigins, ",")
 				allowed := false
 				for _, allowedOrigin := range origins {
-					if allowedOrigin == origin {
+					// Check for wildcard in allowed origin (e.g., http://localhost:*)
+					if strings.Contains(allowedOrigin, "*") {
+						// Convert wildcard pattern to a prefix for matching
+						wildcardPrefix := strings.Replace(allowedOrigin, "*", "", 1)
+						if strings.HasPrefix(origin, wildcardPrefix) {
+							allowed = true
+							break
+						}
+					} else if allowedOrigin == origin {
+						// Exact match
 						allowed = true
 						break
 					}

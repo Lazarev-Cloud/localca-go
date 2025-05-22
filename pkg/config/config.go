@@ -26,17 +26,19 @@ type Config struct {
 	TLSEnabled    bool
 	DataDir       string
 	ListenAddr    string
+	AllowLocalhost bool
 }
 
 // LoadConfig loads the configuration from environment variables or defaults
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		CAName:       getEnvOrDefault("CA_NAME", "LocalCA"),
-		Organization: getEnvOrDefault("ORGANIZATION", "LocalCA Organization"),
-		Country:      getEnvOrDefault("COUNTRY", "US"),
-		DataDir:      getEnvOrDefault("DATA_DIR", "./data"),
-		ListenAddr:   getEnvOrDefault("LISTEN_ADDR", ":8080"),
-		StoragePath:  getEnv("STORAGE_PATH", "/app/certs"),
+		CAName:        getEnvOrDefault("CA_NAME", "LocalCA"),
+		Organization:  getEnvOrDefault("ORGANIZATION", "LocalCA Organization"),
+		Country:       getEnvOrDefault("COUNTRY", "US"),
+		DataDir:       getEnvOrDefault("DATA_DIR", "./data"),
+		ListenAddr:    getEnvOrDefault("LISTEN_ADDR", ":8080"),
+		StoragePath:   getEnv("STORAGE_PATH", "/app/certs"),
+		AllowLocalhost: strings.ToLower(getEnv("ALLOW_LOCALHOST", "false")) == "true",
 	}
 
 	// Create data directory if it doesn't exist
