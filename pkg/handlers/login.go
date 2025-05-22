@@ -153,6 +153,14 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 
 		// Generate session token
 		sessionToken := generateSessionToken()
+		
+		// Get cookie configuration from environment (or use defaults)
+		cookieDomain := os.Getenv("COOKIE_DOMAIN")
+		
+		cookieSecure := c.Request.TLS != nil // secure if using HTTPS
+		if secureStr := os.Getenv("COOKIE_SECURE"); secureStr != "" {
+			cookieSecure = secureStr == "true"
+		}
 
 		// Set session cookie
 		c.SetCookie(
@@ -160,9 +168,9 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 			sessionToken,
 			int(time.Hour.Seconds()*24), // 24 hours
 			"/",
-			"",
-			c.Request.TLS != nil, // secure if using HTTPS
-			true,                 // httpOnly
+			cookieDomain,
+			cookieSecure,
+			true, // httpOnly
 		)
 
 		// Create session file
@@ -182,6 +190,7 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 			Message: "Login successful",
 			Data: map[string]interface{}{
 				"token": sessionToken,
+				"redirectUrl": "/", // Add redirect URL for frontend
 			},
 		})
 	}

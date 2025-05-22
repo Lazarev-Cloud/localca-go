@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -119,7 +121,24 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 
 // csrfMiddleware adds CSRF protection
 func csrfMiddleware() gin.HandlerFunc {
+	// Load exempt paths from environment variable
+	exemptPaths := []string{}
+	if exemptPathsStr := os.Getenv("CSRF_EXEMPT_PATHS"); exemptPathsStr != "" {
+		exemptPaths = strings.Split(exemptPathsStr, ",")
+	}
+	
 	return func(c *gin.Context) {
+		// Current path
+		path := c.Request.URL.Path
+		
+		// Check if the path is exempt from CSRF checks
+		for _, exemptPath := range exemptPaths {
+			if strings.HasPrefix(path, exemptPath) {
+				c.Next()
+				return
+			}
+		}
+		
 		// Skip CSRF check for GET requests
 		if c.Request.Method == "GET" {
 			// Generate a new token for the response

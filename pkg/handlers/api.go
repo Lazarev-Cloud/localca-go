@@ -41,9 +41,49 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 // corsMiddleware handles CORS for API requests
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		// Get allowed origins from environment variable
+		allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+		if allowedOrigins == "" {
+			allowedOrigins = "*" // Default fallback
+		}
+		
+		// Get allowed methods from environment variable
+		allowedMethods := os.Getenv("CORS_ALLOWED_METHODS")
+		if allowedMethods == "" {
+			allowedMethods = "GET, POST, PUT, DELETE, OPTIONS" // Default fallback
+		}
+		
+		// Get allowed headers from environment variable
+		allowedHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
+		if allowedHeaders == "" {
+			allowedHeaders = "Content-Type, Authorization" // Default fallback
+		}
+		
+		// Check if the origin is allowed
+		origin := c.Request.Header.Get("Origin")
+		if origin != "" {
+			// If specific origins are defined (comma-separated list)
+			if allowedOrigins != "*" {
+				origins := strings.Split(allowedOrigins, ",")
+				allowed := false
+				for _, allowedOrigin := range origins {
+					if allowedOrigin == origin {
+						allowed = true
+						break
+					}
+				}
+				if allowed {
+					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				}
+			} else {
+				// Wildcard origin
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			}
+		}
+		
+		c.Writer.Header().Set("Access-Control-Allow-Methods", allowedMethods)
+		c.Writer.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)

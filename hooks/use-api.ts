@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 // Define API response type
 export interface ApiResponse<T = any> {
   success: boolean
   message: string
   data?: T
+  setupRequired?: boolean
 }
 
 // Define error types
@@ -14,18 +16,29 @@ export enum ApiErrorType {
   NETWORK = 'network',
   SERVER = 'server',
   TIMEOUT = 'timeout',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
+  SETUP_REQUIRED = 'setup_required'
 }
 
 export interface ApiError {
   type: ApiErrorType
   message: string
   status?: number
+  setupRequired?: boolean
 }
 
 export function useApi() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const router = useRouter()
+
+  // Effect to handle setup redirection when needed
+  useEffect(() => {
+    if (error?.setupRequired) {
+      console.log('Redirecting to setup page due to setupRequired flag')
+      router.push('/setup')
+    }
+  }, [error, router])
 
   const fetchApi = async <T>(
     endpoint: string, 
@@ -45,6 +58,7 @@ export function useApi() {
           'Content-Type': 'application/json',
           ...options?.headers,
         },
+        credentials: 'include',
         signal: controller.signal,
       })
       
@@ -54,6 +68,7 @@ export function useApi() {
         // Handle different error status codes
         let errorType = ApiErrorType.SERVER
         let errorMessage = `API request failed with status ${response.status}`
+        let setupRequired = false
         
         try {
           // Try to parse error message from response
@@ -61,14 +76,40 @@ export function useApi() {
           if (errorData && errorData.message) {
             errorMessage = errorData.message
           }
+          // Check if setup is required
+          if (response.status === 401 && 
+              errorData && 
+              (errorData.setupRequired || errorData.message === 'Setup required')) {
+            errorType = ApiErrorType.SETUP_REQUIRED
+            setupRequired = true
+            
+            // Handle setup required immediately
+            const apiError: ApiError = {
+              type: errorType,
+              message: errorMessage,
+              status: response.status,
+              setupRequired: true
+            }
+            
+            setError(apiError)
+            
+            // Don't throw error, just return appropriate response
+            return {
+              success: false,
+              message: errorMessage,
+              setupRequired: true
+            }
+          }
         } catch (e) {
           // Ignore JSON parse error and use default message
+          console.error('Error parsing error response:', e)
         }
         
         const apiError: ApiError = {
           type: errorType,
           message: errorMessage,
-          status: response.status
+          status: response.status,
+          setupRequired
         }
         
         setError(apiError)
@@ -79,12 +120,15 @@ export function useApi() {
           return fetchApi(endpoint, options, retries - 1)
         }
         
+        // Return error response
         return {
           success: false,
           message: errorMessage,
+          setupRequired
         }
       }
 
+      // Process successful response
       const data = await response.json()
       return data as ApiResponse<T>
     } catch (err) {
@@ -150,12 +194,18 @@ export function useApi() {
         // Handle different error status codes
         let errorType = ApiErrorType.SERVER
         let errorMessage = `API request failed with status ${response.status}`
+        let setupRequired = false
         
         try {
           // Try to parse error message from response
           const errorData = await response.json()
           if (errorData && errorData.message) {
             errorMessage = errorData.message
+          }
+          // Check if setup is required
+          if (response.status === 401 && errorData && (errorData.setupRequired || errorData.message === 'Setup required')) {
+            errorType = ApiErrorType.SETUP_REQUIRED
+            setupRequired = true
           }
         } catch (e) {
           // Ignore JSON parse error and use default message
@@ -164,10 +214,20 @@ export function useApi() {
         const apiError: ApiError = {
           type: errorType,
           message: errorMessage,
-          status: response.status
+          status: response.status,
+          setupRequired
         }
         
         setError(apiError)
+        
+        // Don't retry if setup is required
+        if (setupRequired) {
+          return {
+            success: false,
+            message: errorMessage,
+            setupRequired: true
+          }
+        }
         
         // Retry on server errors (5xx) if retries left
         if (response.status >= 500 && retries > 0) {

@@ -95,6 +95,7 @@ func isPublicPath(path string) bool {
 		"/static/",
 		"/login",
 		"/api/login",
+		"/api/setup",
 		"/.well-known/acme-challenge/",
 		"/download/ca",
 		"/download/crl",
