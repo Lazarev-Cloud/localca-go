@@ -2,12 +2,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HardDrive, Database, Clock, AlertTriangle } from "lucide-react"
+import type { SystemStatus as SystemStatusType } from "@/lib/api"
 
 interface SystemStatusProps {
   className?: string
+  systemStatus: SystemStatusType
 }
 
-export function SystemStatus({ className }: SystemStatusProps) {
+export function SystemStatus({ className, systemStatus }: SystemStatusProps) {
   return (
     <Card className={className}>
       <CardHeader>
@@ -29,9 +31,9 @@ export function SystemStatus({ className }: SystemStatusProps) {
                     <HardDrive className="h-4 w-4 text-muted-foreground" />
                     <div className="text-sm font-medium">Storage Usage</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">45%</div>
+                  <div className="text-sm text-muted-foreground">{systemStatus.storage_usage}%</div>
                 </div>
-                <Progress value={45} />
+                <Progress value={systemStatus.storage_usage} />
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
@@ -39,9 +41,9 @@ export function SystemStatus({ className }: SystemStatusProps) {
                     <Database className="h-4 w-4 text-muted-foreground" />
                     <div className="text-sm font-medium">Database Size</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">28%</div>
+                  <div className="text-sm text-muted-foreground">{systemStatus.database_size}%</div>
                 </div>
-                <Progress value={28} />
+                <Progress value={systemStatus.database_size} />
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
@@ -49,9 +51,9 @@ export function SystemStatus({ className }: SystemStatusProps) {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <div className="text-sm font-medium">Uptime</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">99.9%</div>
+                  <div className="text-sm text-muted-foreground">{systemStatus.uptime}%</div>
                 </div>
-                <Progress value={99.9} />
+                <Progress value={systemStatus.uptime} />
               </div>
             </div>
           </TabsContent>
@@ -59,19 +61,19 @@ export function SystemStatus({ className }: SystemStatusProps) {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col items-center justify-center rounded-lg border p-4">
-                  <div className="text-2xl font-bold">24</div>
+                  <div className="text-2xl font-bold">{systemStatus.certificate_count}</div>
                   <div className="text-xs text-muted-foreground">Active Certificates</div>
                 </div>
                 <div className="flex flex-col items-center justify-center rounded-lg border p-4">
-                  <div className="text-2xl font-bold">3</div>
+                  <div className="text-2xl font-bold">{systemStatus.expiring_soon_count}</div>
                   <div className="text-xs text-muted-foreground">Expiring Soon</div>
                 </div>
                 <div className="flex flex-col items-center justify-center rounded-lg border p-4">
-                  <div className="text-2xl font-bold">5</div>
+                  <div className="text-2xl font-bold">{systemStatus.revoked_count}</div>
                   <div className="text-xs text-muted-foreground">Revoked</div>
                 </div>
                 <div className="flex flex-col items-center justify-center rounded-lg border p-4">
-                  <div className="text-2xl font-bold">12</div>
+                  <div className="text-2xl font-bold">{systemStatus.client_certificate_count}</div>
                   <div className="text-xs text-muted-foreground">Client Certificates</div>
                 </div>
               </div>
@@ -79,27 +81,19 @@ export function SystemStatus({ className }: SystemStatusProps) {
           </TabsContent>
           <TabsContent value="alerts" className="space-y-4">
             <div className="grid gap-4 py-4">
-              <div className="flex items-center gap-4 rounded-lg border p-4">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                <div>
-                  <div className="font-medium">Certificate Expiring</div>
-                  <div className="text-sm text-muted-foreground">server.local expires in 7 days</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 rounded-lg border p-4">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                <div>
-                  <div className="font-medium">Certificate Expiring</div>
-                  <div className="text-sm text-muted-foreground">api.local expires in 14 days</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 rounded-lg border p-4">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                <div>
-                  <div className="font-medium">Storage Warning</div>
-                  <div className="text-sm text-muted-foreground">Storage usage above 40%</div>
-                </div>
-              </div>
+              {systemStatus.alerts.length > 0 ? (
+                systemStatus.alerts.map((alert, index) => (
+                  <div key={index} className="flex items-center gap-4 rounded-lg border p-4">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    <div>
+                      <div className="font-medium">{alert.type}</div>
+                      <div className="text-sm text-muted-foreground">{alert.message}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center p-4 text-muted-foreground">No alerts at this time</div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

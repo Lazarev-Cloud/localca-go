@@ -1,6 +1,9 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,104 +12,104 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, Info, Loader2 } from "lucide-react"
+import { AlertCircle, Info } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useCertificates } from "@/hooks/use-certificates"
-import { useToast } from "@/hooks/use-toast-new"
+import { createCertificate } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 export function CreateCertificateForm() {
   const [isClientCert, setIsClientCert] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [errors, setErrors] = useState<{
-    commonName?: string;
-    password?: string;
-    altNames?: string;
-  }>({})
-  const { createCertificate } = useCertificates()
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
   const { toast } = useToast()
 
-  const validateForm = (formData: FormData): boolean => {
-    const newErrors: {
-      commonName?: string;
-      password?: string;
-      altNames?: string;
-    } = {}
-    
-    // Validate common name
-    const commonName = formData.get('common_name') as string
-    if (!commonName || commonName.trim() === '') {
-      newErrors.commonName = 'Common name is required'
-    } else if (!/^[a-zA-Z0-9.-]+$/.test(commonName)) {
-      newErrors.commonName = 'Common name can only contain letters, numbers, dots, and hyphens'
-    }
-    
-    // Validate password for client certificates
-    if (isClientCert) {
-      const password = formData.get('p12_password') as string
-      if (!password || password.length < 8) {
-        newErrors.password = 'Password must be at least 8 characters long'
+  // Form state
+  const [formData, setFormData] = useState({
+    commonName: "",
+    alternativeNames: "",
+    p12Password: "",
+    validityPeriod: "365",
+    organization: "LocalCA",
+    country: "US",
+    keyType: "rsa",
+    keySize: "2048",
+    signatureAlgorithm: "sha256",
+  })
+
+  // Handle form input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  // Handle select changes
+  const handleSelectChange = (id: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      setIsLoading(true)
+
+      // Prepare data for API
+      const certificateData = {
+        common_name: formData.commonName,
+        type: isClientCert ? "Client" : "Server",
+        validity_days: Number.parseInt(formData.validityPeriod),
+        organization: formData.organization,
+        country: formData.country,
+        key_type: formData.keyType,
+        key_size: formData.keySize,
+        signature_algorithm: formData.signatureAlgorithm,
       }
-    }
-    
-    // Validate alternative names for server certificates
-    if (!isClientCert) {
-      const altNames = formData.get('alt_names') as string
-      if (altNames) {
-        const domains = altNames.split(',').map(domain => domain.trim())
-        for (const domain of domains) {
-          if (domain && !/^[a-zA-Z0-9.-]+$/.test(domain)) {
-            newErrors.altNames = 'Domain names can only contain letters, numbers, dots, and hyphens'
-            break
+
+      // Add client-specific or server-specific fields
+      if (isClientCert) {
+        if (formData.p12Password) {
+          Object.assign(certificateData, { p12_password: formData.p12Password })
+        }
+      } else {
+        if (formData.alternativeNames) {
+          const sans = formData.alternativeNames
+            .split(",")
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+
+          if (sans.length > 0) {
+            Object.assign(certificateData, { alternative_names: sans })
           }
         }
       }
-    }
-    
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setSubmitting(true)
+      const response = await createCertificate(certificateData)
 
-    const formData = new FormData(e.currentTarget)
-    
-    // Validate form before submission
-    if (!validateForm(formData)) {
-      setSubmitting(false)
-      return
-    }
-    
-    try {
-      const result = await createCertificate(formData)
-      
-      if (result.success) {
+      if (response.success) {
         toast({
-          title: "Certificate created",
-          description: "The certificate was created successfully.",
+          title: "Certificate Created",
+          description: "The certificate has been successfully created.",
         })
-        // Reset form
-        e.currentTarget.reset()
-        setIsClientCert(false)
-        setShowAdvanced(false)
-        setErrors({})
+
+        // Redirect to certificates page
+        router.push("/certificates")
       } else {
         toast({
+          title: "Error",
+          description: response.message || "Failed to create certificate.",
           variant: "destructive",
-          title: "Error creating certificate",
-          description: result.message || "An unknown error occurred.",
         })
       }
     } catch (error) {
       toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive",
-        title: "Error creating certificate",
-        description: error instanceof Error ? error.message : "An unknown error occurred.",
       })
     } finally {
-      setSubmitting(false)
+      setIsLoading(false)
     }
   }
 
@@ -124,36 +127,28 @@ export function CreateCertificateForm() {
             <CardContent className="pt-6">
               <div className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="commonName" className={errors.commonName ? "text-destructive" : ""}>Common Name</Label>
-                  <Input 
-                    id="commonName" 
-                    name="common_name"
-                    placeholder="e.g., server.local or john.doe" 
-                    required 
-                    className={errors.commonName ? "border-destructive" : ""}
-                    onChange={() => errors.commonName && setErrors({...errors, commonName: undefined})}
+                  <Label htmlFor="commonName">Common Name</Label>
+                  <Input
+                    id="commonName"
+                    placeholder="e.g., server.local or john.doe"
+                    value={formData.commonName}
+                    onChange={handleInputChange}
+                    required
                   />
-                  {errors.commonName && (
-                    <p className="text-sm text-destructive">{errors.commonName}</p>
-                  )}
                   <p className="text-sm text-muted-foreground">
                     For server certificates, use the server's hostname. For client certificates, use the user's name.
                   </p>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="alternativeNames" className={errors.altNames ? "text-destructive" : ""}>Subject Alternative Names (SAN)</Label>
+                  <Label htmlFor="alternativeNames">Subject Alternative Names (SAN)</Label>
                   <Textarea
                     id="alternativeNames"
-                    name="alt_names"
                     placeholder="e.g., www.server.local, api.server.local"
                     disabled={isClientCert}
-                    className={errors.altNames ? "border-destructive" : ""}
-                    onChange={() => errors.altNames && setErrors({...errors, altNames: undefined})}
+                    value={formData.alternativeNames}
+                    onChange={handleInputChange}
                   />
-                  {errors.altNames && (
-                    <p className="text-sm text-destructive">{errors.altNames}</p>
-                  )}
                   <p className="text-sm text-muted-foreground">
                     Additional domain names for this certificate, separated by commas. Only applicable for server
                     certificates.
@@ -161,33 +156,20 @@ export function CreateCertificateForm() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Switch 
-                    id="isClientCert" 
-                    name="is_client"
-                    checked={isClientCert} 
-                    onCheckedChange={(checked) => {
-                      setIsClientCert(checked);
-                      setErrors({});
-                    }} 
-                  />
+                  <Switch id="isClientCert" checked={isClientCert} onCheckedChange={setIsClientCert} />
                   <Label htmlFor="isClientCert">Create client certificate</Label>
                 </div>
 
                 {isClientCert && (
                   <div className="grid gap-2">
-                    <Label htmlFor="p12Password" className={errors.password ? "text-destructive" : ""}>P12 Password</Label>
-                    <Input 
-                      id="p12Password" 
-                      name="p12_password"
-                      type="password" 
+                    <Label htmlFor="p12Password">P12 Password</Label>
+                    <Input
+                      id="p12Password"
+                      type="password"
                       placeholder="Enter a secure password"
-                      required={isClientCert}
-                      className={errors.password ? "border-destructive" : ""}
-                      onChange={() => errors.password && setErrors({...errors, password: undefined})}
+                      value={formData.p12Password}
+                      onChange={handleInputChange}
                     />
-                    {errors.password && (
-                      <p className="text-sm text-destructive">{errors.password}</p>
-                    )}
                     <p className="text-sm text-muted-foreground">
                       This password will be required when importing the certificate into browsers or devices.
                     </p>
@@ -196,7 +178,10 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="validityPeriod">Validity Period</Label>
-                  <Select defaultValue="365" name="validity_days">
+                  <Select
+                    defaultValue={formData.validityPeriod}
+                    onValueChange={(value) => handleSelectChange("validityPeriod", value)}
+                  >
                     <SelectTrigger id="validityPeriod">
                       <SelectValue placeholder="Select validity period" />
                     </SelectTrigger>
@@ -234,27 +219,30 @@ export function CreateCertificateForm() {
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="organization">Organization</Label>
-                  <Input 
-                    id="organization" 
-                    name="organization"
-                    placeholder="e.g., Your Company" 
-                    defaultValue="LocalCA" 
+                  <Input
+                    id="organization"
+                    placeholder="e.g., Your Company"
+                    defaultValue={formData.organization}
+                    onChange={handleInputChange}
                   />
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="country">Country</Label>
-                  <Input 
-                    id="country" 
-                    name="country"
-                    placeholder="e.g., US" 
-                    defaultValue="US" 
+                  <Input
+                    id="country"
+                    placeholder="e.g., US"
+                    defaultValue={formData.country}
+                    onChange={handleInputChange}
                   />
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="keyType">Key Type</Label>
-                  <Select defaultValue="rsa" name="key_type">
+                  <Select
+                    defaultValue={formData.keyType}
+                    onValueChange={(value) => handleSelectChange("keyType", value)}
+                  >
                     <SelectTrigger id="keyType">
                       <SelectValue placeholder="Select key type" />
                     </SelectTrigger>
@@ -267,7 +255,10 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="keySize">Key Size</Label>
-                  <Select defaultValue="2048" name="key_size">
+                  <Select
+                    defaultValue={formData.keySize}
+                    onValueChange={(value) => handleSelectChange("keySize", value)}
+                  >
                     <SelectTrigger id="keySize">
                       <SelectValue placeholder="Select key size" />
                     </SelectTrigger>
@@ -285,7 +276,10 @@ export function CreateCertificateForm() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="signatureAlgorithm">Signature Algorithm</Label>
-                  <Select defaultValue="sha256" name="signature_algorithm">
+                  <Select
+                    defaultValue={formData.signatureAlgorithm}
+                    onValueChange={(value) => handleSelectChange("signatureAlgorithm", value)}
+                  >
                     <SelectTrigger id="signatureAlgorithm">
                       <SelectValue placeholder="Select signature algorithm" />
                     </SelectTrigger>
@@ -311,10 +305,11 @@ export function CreateCertificateForm() {
       </Tabs>
 
       <div className="flex justify-end space-x-4">
-        <Button variant="outline" type="button" onClick={() => window.history.back()}>Cancel</Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create Certificate
+        <Button type="button" variant="outline" onClick={() => router.push("/certificates")} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? "Creating..." : "Create Certificate"}
         </Button>
       </div>
     </form>

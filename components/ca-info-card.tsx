@@ -1,83 +1,71 @@
-"use client"
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Shield, AlertTriangle, CheckCircle, Loader2 } from "lucide-react"
-import { useCertificates } from "@/hooks/use-certificates"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Shield, Calendar, Building, Globe } from "lucide-react"
+import type { CAInfo } from "@/lib/api"
 
 interface CAInfoCardProps {
   className?: string
+  caInfo: CAInfo
 }
 
-export function CAInfoCard({ className }: CAInfoCardProps) {
-  const { caInfo, loading, error } = useCertificates()
+export function CAInfoCard({ className, caInfo }: CAInfoCardProps) {
+  // Calculate remaining time in a human-readable format
+  const getRemainingTimeText = (days: number) => {
+    if (days > 365) {
+      const years = Math.floor(days / 365)
+      return `${years} ${years === 1 ? "year" : "years"} remaining`
+    } else {
+      return `${days} ${days === 1 ? "day" : "days"} remaining`
+    }
+  }
 
   return (
     <Card className={className}>
-      <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle>Certificate Authority</CardTitle>
-          <CardDescription>Information about your CA</CardDescription>
+          <CardDescription>CA information and status</CardDescription>
         </div>
+        <Shield className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {!loading && !error && !caInfo && (
-          <div className="py-8 text-center text-muted-foreground">
-            CA information not available.
-          </div>
-        )}
-
-        {!loading && !error && caInfo && (
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <Shield className="h-10 w-10 text-primary" />
-              <div>
-                <p className="text-lg font-medium">{caInfo.common_name}</p>
-                <div className="flex items-center space-x-2">
-                  {caInfo.is_expired ? (
-                    <Badge variant="outline" className="flex items-center gap-1 text-red-500 border-red-200 bg-red-50">
-                      <AlertTriangle className="h-3 w-3" />
-                      Expired
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="flex items-center gap-1 text-green-500 border-green-200 bg-green-50">
-                      <CheckCircle className="h-3 w-3" />
-                      Valid
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium">Organization</p>
-                <p className="text-sm text-muted-foreground">{caInfo.organization}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Country</p>
-                <p className="text-sm text-muted-foreground">{caInfo.country}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Expiry Date</p>
-                <p className="text-sm text-muted-foreground">{caInfo.expiry_date}</p>
-              </div>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
+            <span
+              className={`flex h-2 w-2 translate-y-1 rounded-full ${caInfo.status === "Active" ? "bg-green-500" : "bg-red-500"}`}
+            />
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">Status: {caInfo.status}</p>
+              <p className="text-sm text-muted-foreground">
+                {caInfo.status === "Active"
+                  ? "CA is operational and ready to issue certificates"
+                  : "CA is not operational"}
+              </p>
             </div>
           </div>
-        )}
+          <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
+            <Calendar className="h-5 w-5 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">Valid Until</p>
+              <p className="text-sm text-muted-foreground">
+                {caInfo.valid_until} ({getRemainingTimeText(caInfo.remaining_days)})
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
+            <Building className="h-5 w-5 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">Organization</p>
+              <p className="text-sm text-muted-foreground">{caInfo.organization}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-[25px_1fr] items-start pb-2 last:mb-0 last:pb-0">
+            <Globe className="h-5 w-5 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">Common Name</p>
+              <p className="text-sm text-muted-foreground">{caInfo.common_name}</p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
