@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/acme"
+	"github.com/Lazarev-Cloud/localca-go/pkg/cache"
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/handlers"
+	"github.com/Lazarev-Cloud/localca-go/pkg/logging"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 
 	"github.com/gin-gonic/gin"
@@ -49,36 +51,100 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize storage
-	store, err := storage.NewStorage(cfg.DataDir)
+	// Initialize structured logger
+	logger, err := logging.NewLogger(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize storage: %v", err)
+		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
-	// Initialize certificate service
-	certSvc, err := certificates.NewCertificateService(cfg, store)
+	logger.Info("Starting LocalCA server with enhanced storage and logging")
+
+	// Initialize cache
+	cacheInstance, err := cache.NewCache(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize certificate service: %v", err)
+		logger.WithError(err).Fatal("Failed to initialize cache")
+	}
+	defer func() {
+		if err := cacheInstance.Close(); err != nil {
+			logger.WithError(err).Error("Failed to close cache")
+		}
+	}()
+
+	// Initialize enhanced storage (with database and S3 support)
+	enhancedStore, err := storage.NewEnhancedStorage(cfg, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize enhanced storage")
+	}
+	defer func() {
+		if err := enhancedStore.Close(); err != nil {
+			logger.WithError(err).Error("Failed to close enhanced storage")
+		}
+	}()
+
+	// Log storage health status
+	health := enhancedStore.Health()
+	for backend, err := range health {
+		if err != nil {
+			logger.WithField("backend", backend).WithError(err).Warn("Storage backend not available")
+		} else {
+			logger.WithField("backend", backend).Info("Storage backend healthy")
+		}
+	}
+
+	// Initialize file storage for backward compatibility
+	baseStore, err := storage.NewStorage(cfg.DataDir)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize file storage")
+	}
+
+	// Initialize storage wrapper - either cached or regular
+	var store storage.StorageInterface
+	var cachedStore *storage.CachedStorage
+
+	if cfg.CacheEnabled {
+		cachedStore = storage.NewCachedStorage(baseStore, cacheInstance)
+		store = cachedStore
+
+		// Warm up the cache with frequently accessed data
+		go func() {
+			if err := cachedStore.WarmUpCache(); err != nil {
+				logger.WithError(err).Error("Failed to warm up cache")
+			}
+		}()
+
+		logger.Info("Cache-enabled storage initialized")
+	} else {
+		store = baseStore
+		logger.Info("Cache-disabled storage initialized")
+	}
+
+	// Initialize certificate service with enhanced storage
+	certSvc, err := certificates.NewCertificateService(cfg, enhancedStore)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize certificate service")
 	}
 
 	// Check if CA exists, create if it doesn't
 	exists, err := certSvc.CAExists()
 	if err != nil {
-		log.Fatalf("Failed to check CA existence: %v", err)
+		logger.WithError(err).Fatal("Failed to check CA existence")
 	}
 
 	if !exists {
-		log.Println("Creating new CA certificate...")
+		logger.Info("Creating new CA certificate...")
 		if err := certSvc.CreateCA(); err != nil {
-			log.Fatalf("Failed to create CA: %v", err)
+			logger.WithError(err).Fatal("Failed to create CA")
 		}
-		log.Println("CA certificate created successfully")
+		logger.Info("CA certificate created successfully")
+
+		// Log CA creation audit event
+		enhancedStore.LogAudit("create", "ca", cfg.CAName, "system", "localca-server", "CA created during startup", true, "")
 	} else {
-		log.Println("Using existing CA certificate")
+		logger.Info("Using existing CA certificate")
 	}
 
 	// Load auth config and log setup token if setup is not completed
-	authConfig, err := handlers.LoadAuthConfig(store)
+	authConfig, err := handlers.LoadAuthConfig(baseStore)
 	if err != nil {
 		log.Printf("Failed to load auth config: %v", err)
 	} else if !authConfig.SetupCompleted {
@@ -97,8 +163,12 @@ func main() {
 	router.Static("/static", "./static")
 	router.LoadHTMLGlob("templates/*")
 
-	// Setup routes
-	handlers.SetupRoutes(router, certSvc, store, cfg)
+	// Setup routes - pass cachedStore if caching is enabled, otherwise baseStore
+	if cfg.CacheEnabled && cachedStore != nil {
+		handlers.SetupRoutes(router, certSvc, baseStore, cfg)
+	} else {
+		handlers.SetupRoutes(router, certSvc, baseStore, cfg)
+	}
 
 	// Configure server
 	server := &http.Server{
@@ -134,7 +204,7 @@ func main() {
 	// Start ACME server
 	go func() {
 		log.Println("Starting ACME server on port 8555...")
-		if err := acme.StartACMEServer(ctx, certSvc, store, ":8555", getSecureTLSConfig()); err != nil {
+		if err := acme.StartACMEServer(ctx, certSvc, baseStore, ":8555", getSecureTLSConfig()); err != nil {
 			if err != http.ErrServerClosed {
 				log.Printf("ACME server error: %v", err)
 			}

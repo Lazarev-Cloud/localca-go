@@ -22,11 +22,11 @@ import (
 // CertificateService handles certificate operations
 type CertificateService struct {
 	config  *config.Config
-	storage *storage.Storage
+	storage storage.StorageInterface
 }
 
 // NewCertificateService creates a new certificate service
-func NewCertificateService(cfg *config.Config, store *storage.Storage) (*CertificateService, error) {
+func NewCertificateService(cfg *config.Config, store storage.StorageInterface) (*CertificateService, error) {
 	return &CertificateService{
 		config:  cfg,
 		storage: store,

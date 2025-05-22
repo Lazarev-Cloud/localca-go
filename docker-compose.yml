@@ -1,6 +1,66 @@
 # version: '3.8'  # Version field is obsolete and removed
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: localca-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=localca
+      - POSTGRES_USER=localca
+      - POSTGRES_PASSWORD=localca_postgres_password
+    restart: unless-stopped
+    networks:
+      - localca-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localca -d localca"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: localca-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=localca
+      - MINIO_ROOT_PASSWORD=localca_minio_password
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - localca-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: localca-keydb
+    ports:
+      - "6379:6379"
+    volumes:
+      - keydb-data:/data
+    environment:
+      - KEYDB_PASSWORD=localca_keydb_password
+    command: keydb-server --requirepass localca_keydb_password --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - localca-network
+    healthcheck:
+      test: ["CMD", "keydb-cli", "-a", "localca_keydb_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -32,9 +92,43 @@ services:
       - COOKIE_DOMAIN=
       - COOKIE_SECURE=false
       - ALLOW_LOCALHOST=true
+      # KeyDB/Redis Cache Configuration
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=localca_keydb_password
+      - KEYDB_DB=0
+      - CACHE_ENABLED=true
+      - CACHE_TTL=3600
+      # PostgreSQL Database Configuration
+      - DATABASE_ENABLED=true
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=localca
+      - DATABASE_USER=localca
+      - DATABASE_PASSWORD=localca_postgres_password
+      - DATABASE_SSL_MODE=disable
+      # S3/MinIO Configuration
+      - S3_ENABLED=true
+      - S3_ENDPOINT=minio:9000
+      - S3_ACCESS_KEY=localca
+      - S3_SECRET_KEY=localca_minio_password
+      - S3_BUCKET_NAME=localca-certificates
+      - S3_USE_SSL=false
+      - S3_REGION=us-east-1
+      # Logging Configuration
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - LOG_OUTPUT=stdout
     restart: unless-stopped
     networks:
       - localca-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
 
   frontend:
     build:
@@ -57,6 +151,12 @@ services:
 volumes:
   localca-data:
     name: localca-data
+  postgres-data:
+    name: postgres-data
+  minio-data:
+    name: minio-data
+  keydb-data:
+    name: keydb-data
 
 networks:
   localca-network:

@@ -87,10 +87,10 @@ async function proxyRequest(
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
     // Make the request to the backend
-    // Ensure we're using the configured API URL, not a hardcoded localhost
-    const backendUrl = config.apiUrl 
-      ? `${config.apiUrl}/${apiPath}` // Use configured API URL if available
-      : `/${apiPath}`; // Otherwise use relative URL
+    // For server-side proxy, always use the internal Docker network URL
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL 
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/${apiPath}` 
+      : `http://localhost:8080/api/${apiPath}`;
     
     const response = await fetch(backendUrl, {
       method,

@@ -101,10 +101,10 @@ For comprehensive documentation, see the [docs/](docs/) directory:
 
 - **[Quick Start Guide](docs/README.md)** - Documentation overview and quick links
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 - **[Security Best Practices](docs/BestPractice.md)** - Security guidelines and recommendations
 - **[Testing Guide](docs/README-TESTING.md)** - Testing procedures and guidelines
 - **[Development Guidelines](.cursor/rules/)** - Detailed development documentation
-- **[Troubleshooting](docs/)** - Common issues and solutions
 
 ## Security
 
