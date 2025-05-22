@@ -11,6 +11,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://backend:8080/api/:path*',
+      },
+    ];
+  },
   webpack: (config, options) => {
     // Add Codecov bundle analysis plugin
     if (process.env.NODE_ENV === 'production' && process.env.CODECOV_TOKEN) {
