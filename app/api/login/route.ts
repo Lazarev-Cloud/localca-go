@@ -3,97 +3,60 @@ import config from '@/lib/config'
 
 // Direct login proxy to handle authentication specifically
 export async function POST(request: NextRequest) {
-  const backendUrl = `${config.apiUrl}/api/login`
-  console.log(`Direct login proxy: POSTing to ${backendUrl}`)
-  
   try {
-    // Get request body
-    const body = await request.text()
+    // Get form data or JSON
+    const contentType = request.headers.get('content-type')
+    let body
     
-    // Forward cookies
+    if (contentType?.includes('application/json')) {
+      body = JSON.stringify(await request.json())
+    } else {
+      body = await request.text()
+    }
+
+    // Get cookies from the request
     const cookies = request.cookies.getAll()
     const cookieHeader = cookies
-      .map((c: any) => `${c.name}=${c.value}`)
+      .map(c => `${c.name}=${c.value}`)
       .join('; ')
-    
-    // Prepare headers
-    const headers: Record<string, string> = {}
-    request.headers.forEach((value, key) => {
-      if (key.toLowerCase() !== 'host') {
-        headers[key] = value
-      }
-    })
-    
-    if (cookieHeader) {
-      headers['Cookie'] = cookieHeader
-    }
-    
-    // Add timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    
-    // Send request to backend
-    const response = await fetch(backendUrl, {
+
+    // Forward the request to the Go backend
+    const response = await fetch(`${config.apiUrl}/api/login`, {
       method: 'POST',
-      headers,
-      body,
+      headers: {
+        'Content-Type': contentType || 'application/x-www-form-urlencoded',
+        'Cookie': cookieHeader,
+      },
       credentials: 'include',
-      cache: 'no-store',
-      signal: controller.signal,
+      body: body,
     })
-    
-    clearTimeout(timeoutId)
-    
-    // Handle response
-    let responseData
-    const contentType = response.headers.get('content-type')
-    
-    if (contentType?.includes('application/json')) {
-      responseData = await response.json()
-      console.log(`Login response (${response.status}):`, responseData)
-    } else {
-      responseData = await response.text()
-      console.log(`Login text response (${response.status}): ${responseData.substring(0, 100)}...`)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      return NextResponse.json(errorData, { status: response.status })
     }
+
+    const data = await response.json()
     
-    // Create response - handle both JSON and non-JSON responses
-    let nextResponse
-    if (contentType?.includes('application/json')) {
-      nextResponse = NextResponse.json(responseData, {
-        status: response.status,
-      })
-    } else {
-      // For non-JSON responses, return as text but with JSON wrapper for consistency
-      nextResponse = NextResponse.json({
-        success: response.ok,
-        message: responseData
-      }, {
-        status: response.status,
-      })
-    }
+    // Create response
+    const nextResponse = NextResponse.json(data)
     
-    // Forward response headers, handling Set-Cookie specially
+    // Forward Set-Cookie headers
     response.headers.forEach((value, key) => {
       if (key.toLowerCase() === 'set-cookie') {
-        // For Set-Cookie, we need to append rather than set to handle multiple cookies
         nextResponse.headers.append('Set-Cookie', value)
-      } else if (key.toLowerCase() !== 'content-length' && key.toLowerCase() !== 'transfer-encoding') {
-        // Skip headers that Next.js manages automatically
-        nextResponse.headers.set(key, value)
       }
     })
-    
+
     return nextResponse
   } catch (error) {
-    console.error(`Login proxy error connecting to ${backendUrl}:`, error)
-    
+    console.error('Error in login proxy:', error)
     return NextResponse.json(
       { 
-        success: false,
-        message: `Login failed: Could not connect to authentication service at ${config.apiUrl}`,
-        error: error instanceof Error ? error.message : String(error)
+        success: false, 
+        message: error instanceof Error ? error.message : 'Login failed' 
       },
-      { status: 503 }
+      { status: 500 }
     )
   }
 } 

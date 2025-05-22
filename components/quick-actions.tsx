@@ -25,7 +25,7 @@ export function QuickActions() {
 
   const handleDownloadCA = async () => {
     try {
-      const response = await fetch('/api/proxy/download/ca', {
+      const response = await fetch('/api/proxy/api/download/ca', {
         credentials: 'include'
       })
       

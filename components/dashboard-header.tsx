@@ -25,8 +25,8 @@ export function DashboardHeader() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/proxy/logout', {
-        method: 'GET',
+      const response = await fetch('/api/logout', {
+        method: 'POST',
         credentials: 'include',
       })
       
@@ -50,7 +50,7 @@ export function DashboardHeader() {
 
   const handleDownloadCA = async () => {
     try {
-      const response = await fetch('/api/proxy/download/ca', {
+      const response = await fetch('/api/proxy/api/download/ca', {
         credentials: 'include'
       })
       
@@ -83,7 +83,7 @@ export function DashboardHeader() {
 
   const handleDownloadCRL = async () => {
     try {
-      const response = await fetch('/api/proxy/download/crl', {
+      const response = await fetch('/api/proxy/api/download/crl', {
         credentials: 'include'
       })
       

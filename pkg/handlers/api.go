@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
@@ -20,10 +22,14 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		// CORS middleware for API routes
 		api.Use(corsMiddleware())
 
+		// Security middleware for API routes
+		api.Use(apiSecurityMiddleware())
+
 		// Authentication endpoints
 		api.POST("/login", apiLoginHandler(certSvc, store))
 		api.GET("/setup", apiSetupHandler(certSvc, store))
 		api.POST("/setup", apiSetupHandler(certSvc, store))
+		api.GET("/auth/status", apiAuthStatusHandler(store))
 
 		// Certificate endpoints
 		api.GET("/certificates", apiGetCertificatesHandler(certSvc, store))
@@ -41,6 +47,14 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		api.GET("/settings", apiGetSettingsHandler(certSvc, store))
 		api.POST("/settings", apiSaveSettingsHandler(certSvc, store))
 		api.POST("/test-email", apiTestEmailHandler(certSvc, store))
+
+		// Logout endpoint
+		api.POST("/logout", apiLogoutHandler(store))
+
+		// Download endpoints
+		api.GET("/download/ca", downloadCAHandler(certSvc, store))
+		api.GET("/download/crl", downloadCRLHandler(certSvc, store))
+		api.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
 	}
 }
 
@@ -53,19 +67,19 @@ func corsMiddleware() gin.HandlerFunc {
 			// If not specified, allow localhost development servers on common ports
 			allowedOrigins = "http://localhost:3000,http://localhost:8080,https://localhost:3000,https://localhost:8080"
 		}
-		
+
 		// Get allowed methods from environment variable
 		allowedMethods := os.Getenv("CORS_ALLOWED_METHODS")
 		if allowedMethods == "" {
 			allowedMethods = "GET, POST, PUT, DELETE, OPTIONS" // Default fallback
 		}
-		
+
 		// Get allowed headers from environment variable
 		allowedHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
 		if allowedHeaders == "" {
 			allowedHeaders = "Content-Type, Authorization, X-CSRF-Token" // Default fallback
 		}
-		
+
 		// Check if the origin is allowed
 		origin := c.Request.Header.Get("Origin")
 		if origin != "" {
@@ -88,7 +102,7 @@ func corsMiddleware() gin.HandlerFunc {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			}
 		}
-		
+
 		c.Writer.Header().Set("Access-Control-Allow-Methods", allowedMethods)
 		c.Writer.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -97,6 +111,49 @@ func corsMiddleware() gin.HandlerFunc {
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
+		}
+
+		c.Next()
+	}
+}
+
+// apiSecurityMiddleware adds additional security headers and validation for API routes
+func apiSecurityMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Add security headers specific to API
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate, private")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
+		// Rate limiting for API endpoints (basic implementation)
+		// In production, you'd want a more sophisticated rate limiter
+		userAgent := c.GetHeader("User-Agent")
+		if userAgent == "" {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "User-Agent header is required",
+			})
+			c.Abort()
+			return
+		}
+
+		// Validate Content-Type for POST requests
+		if c.Request.Method == "POST" {
+			contentType := c.GetHeader("Content-Type")
+			if contentType != "" &&
+				!strings.Contains(contentType, "application/json") &&
+				!strings.Contains(contentType, "application/x-www-form-urlencoded") &&
+				!strings.Contains(contentType, "multipart/form-data") {
+				c.JSON(http.StatusBadRequest, APIResponse{
+					Success: false,
+					Message: "Unsupported Content-Type",
+				})
+				c.Abort()
+				return
+			}
 		}
 
 		c.Next()
@@ -156,35 +213,75 @@ func apiCreateCertificateHandler(certSvc certificates.CertificateServiceInterfac
 			return
 		}
 
+		// Additional validation for common name
+		if len(commonName) > 64 {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Common Name must be 64 characters or less",
+			})
+			return
+		}
+
+		// Validate password for client certificates
+		if isClient && (password == "" || len(password) < 8) {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Password is required for client certificates and must be at least 8 characters",
+			})
+			return
+		}
+
+		// Check if certificate already exists
+		existingCerts, err := store.ListCertificates()
+		if err != nil {
+			log.Printf("Failed to list existing certificates: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to check existing certificates",
+			})
+			return
+		}
+
+		for _, existingCert := range existingCerts {
+			if existingCert == commonName {
+				c.JSON(http.StatusConflict, APIResponse{
+					Success: false,
+					Message: "Certificate with this Common Name already exists",
+				})
+				return
+			}
+		}
+
 		// Process additional domains
 		var domains []string
 		if additionalDomains != "" {
 			domains = parseCSVList(additionalDomains)
+			// Validate each domain
+			for _, domain := range domains {
+				if len(domain) > 255 {
+					c.JSON(http.StatusBadRequest, APIResponse{
+						Success: false,
+						Message: "Domain names must be 255 characters or less",
+					})
+					return
+				}
+			}
 		}
 
-		var err error
+		var err2 error
 		if isClient {
-			// Client certificate requires password
-			if password == "" {
-				c.JSON(http.StatusBadRequest, APIResponse{
-					Success: false,
-					Message: "Password is required for client certificates",
-				})
-				return
-			}
-
 			// Create client certificate
-			err = certSvc.CreateClientCertificate(commonName, password)
+			err2 = certSvc.CreateClientCertificate(commonName, password)
 		} else {
 			// Create server certificate
-			err = certSvc.CreateServerCertificate(commonName, domains)
+			err2 = certSvc.CreateServerCertificate(commonName, domains)
 		}
 
-		if err != nil {
-			log.Printf("Failed to create certificate: %v", err)
+		if err2 != nil {
+			log.Printf("Failed to create certificate: %v", err2)
 			c.JSON(http.StatusInternalServerError, APIResponse{
 				Success: false,
-				Message: fmt.Sprintf("Failed to create certificate: %v", err),
+				Message: fmt.Sprintf("Failed to create certificate: %v", err2),
 			})
 			return
 		}
@@ -374,20 +471,20 @@ func apiGetSettingsHandler(certSvc certificates.CertificateServiceInterface, sto
 		// For now, return mock settings data that matches the frontend interface
 		settings := map[string]interface{}{
 			"general": map[string]interface{}{
-				"caName":      "LocalCA in.lc",
+				"caName":       "LocalCA in.lc",
 				"organization": "LocalCA",
-				"country":     "US",
-				"tlsEnabled":  true,
+				"country":      "US",
+				"tlsEnabled":   true,
 			},
 			"email": map[string]interface{}{
-				"emailNotify":   false,
-				"smtpServer":    "",
-				"smtpPort":      "25",
-				"smtpUser":      "",
-				"smtpPassword":  "",
-				"smtpUseTLS":    false,
-				"emailFrom":     "",
-				"emailTo":       "",
+				"emailNotify":  false,
+				"smtpServer":   "",
+				"smtpPort":     "25",
+				"smtpUser":     "",
+				"smtpPassword": "",
+				"smtpUseTLS":   false,
+				"emailFrom":    "",
+				"emailTo":      "",
 			},
 			"storage": map[string]interface{}{
 				"storagePath": "/app/data",
@@ -450,6 +547,99 @@ func apiTestEmailHandler(certSvc certificates.CertificateServiceInterface, store
 		c.JSON(http.StatusOK, APIResponse{
 			Success: true,
 			Message: "Test email sent successfully",
+		})
+	}
+}
+
+// apiAuthStatusHandler handles authentication status checks
+func apiAuthStatusHandler(store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check if setup is completed
+		authConfig, err := LoadAuthConfig(store)
+		if err != nil {
+			log.Printf("Failed to load auth config: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Internal server error",
+			})
+			return
+		}
+
+		// If setup is not completed, return setup required
+		if !authConfig.SetupCompleted {
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Setup required",
+				Data: map[string]interface{}{
+					"setup_required": true,
+					"authenticated":  false,
+				},
+			})
+			return
+		}
+
+		// Check if user is authenticated
+		session, err := c.Cookie("session")
+		if err != nil || !validateSession(session, store) {
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Authentication required",
+				Data: map[string]interface{}{
+					"setup_required": false,
+					"authenticated":  false,
+				},
+			})
+			return
+		}
+
+		// User is authenticated
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "User is authenticated",
+			Data: map[string]interface{}{
+				"setup_required": false,
+				"authenticated":  true,
+			},
+		})
+	}
+}
+
+// apiLogoutHandler handles API logout
+func apiLogoutHandler(store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get current session token to clean up server-side session
+		sessionToken, err := c.Cookie("session")
+		if err == nil && sessionToken != "" {
+			// Clean up server-side session file securely
+			sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
+			sessionFileBase := base64.URLEncoding.EncodeToString([]byte(sessionToken))
+			if len(sessionFileBase) > 100 {
+				sessionFileBase = sessionFileBase[:100]
+			}
+			sessionFile := filepath.Join(sessionsDir, sessionFileBase)
+
+			// Validate the session file path before deletion
+			if strings.HasPrefix(sessionFile, sessionsDir) {
+				if err := os.Remove(sessionFile); err != nil && !os.IsNotExist(err) {
+					log.Printf("Failed to remove session file: %v", err)
+				}
+			}
+		}
+
+		// Clear session cookie with secure parameters
+		c.SetCookie(
+			"session",
+			"",
+			-1, // expire immediately
+			"/",
+			"",                   // domain - empty for current domain
+			c.Request.TLS != nil, // secure if using HTTPS
+			true,                 // httpOnly
+		)
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Logout successful",
 		})
 	}
 }
