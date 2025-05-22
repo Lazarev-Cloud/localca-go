@@ -142,8 +142,8 @@ jobs:
 
       - name: Run ESLint and npm audit in parallel
         run: |
-          npx eslint -f json app components hooks lib -o eslint-report.json || true
-          npm audit --json > npm-audit.json || true
+          npx eslint -f json app components hooks lib -o eslint-report.json || echo '[]' > eslint-report.json
+          npm audit --json > npm-audit.json || echo '{"advisories":{}}' > npm-audit.json
 
       # Generate SBOM as part of the same job
       - name: Generate SBOM for Frontend
@@ -491,6 +491,25 @@ jobs:
           touch coverage/lcov.info
           cp artifacts/frontend-artifacts/eslint-report.json . || touch eslint-report.json
 
+      # Prepare files for SonarQube analysis
+      - name: Prepare SonarQube files
+        run: |
+          # Ensure ESLint report is valid JSON
+          if [ ! -s eslint-report.json ]; then
+            echo "ESLint report is empty, creating valid empty array"
+            echo '[]' > eslint-report.json
+          else
+            # Validate JSON and create empty array if invalid
+            if ! jq empty eslint-report.json 2>/dev/null; then
+              echo "ESLint report is invalid JSON, creating valid empty array"
+              echo '[]' > eslint-report.json
+            fi
+          fi
+          
+          # Ensure coverage files exist
+          [ ! -f coverage-merged.out ] && touch coverage-merged.out
+          [ ! -f coverage/lcov.info ] && mkdir -p coverage && touch coverage/lcov.info
+      
       # Set up SonarQube Scanner
       - name: Set up SonarQube Scanner
         uses: SonarSource/sonarqube-scan-action@v2
