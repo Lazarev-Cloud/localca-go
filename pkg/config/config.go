@@ -51,20 +51,26 @@ func LoadConfig() (*Config, error) {
 		return nil, errors.New("CA_NAME environment variable is required")
 	}
 
-	// Load CA Key Password
+	// Load CA Key Password - allow empty for fresh installs
 	keyFile := getEnv("CA_KEY_FILE", "")
 	keyEnv := getEnv("CA_KEY", "")
 
 	if keyFile != "" {
 		content, err := os.ReadFile(keyFile)
 		if err != nil {
-			return nil, err
+			// If the file doesn't exist during fresh install, that's OK
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+			cfg.CAKeyPassword = "" // Will be set during setup
+		} else {
+			cfg.CAKeyPassword = strings.TrimSpace(string(content))
 		}
-		cfg.CAKeyPassword = strings.TrimSpace(string(content))
 	} else if keyEnv != "" {
 		cfg.CAKeyPassword = keyEnv
 	} else {
-		return nil, errors.New("either CA_KEY_FILE or CA_KEY environment variable is required")
+		// During fresh install, no CA key is expected
+		cfg.CAKeyPassword = ""
 	}
 
 	// Load Email settings

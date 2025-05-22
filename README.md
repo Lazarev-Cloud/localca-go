@@ -71,17 +71,17 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
    cd localca-go
    ```
 
-2. Create a password file for the CA:
-   ```bash
-   echo "your-secure-password" > cakey.txt
-   ```
-
-3. Start the service:
+2. Start the service:
    ```bash
    docker-compose up -d
    ```
 
-4. Access the web interface at http://localhost:3000
+3. Access the web interface at http://localhost:3000
+
+4. Complete the initial setup:
+   - On first access, you'll be redirected to the setup page
+   - Create an admin account with your desired username and password
+   - The setup token will be automatically loaded from the backend
 
 ### Option 2: Building from Source
 
@@ -97,12 +97,7 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
    go build -o localca-go
    ```
 
-3. Create a password file:
-   ```bash
-   echo "your-secure-password" > cakey.txt
-   ```
-
-4. Run the application using the provided scripts:
+3. Run the application using the provided scripts:
    
    Windows:
    ```bash
@@ -123,6 +118,11 @@ Copyright (c) 2023-2025 lazarevtill (lazarev.cloud)
 
 6. Access the web interface at http://localhost:3000
 
+7. Complete the initial setup:
+   - On first access, you'll be redirected to the setup page 
+   - Create an admin account with your desired username and password
+   - Follow the guided setup process
+
 ## Configuration
 
 LocalCA is configured through environment variables:
@@ -130,7 +130,7 @@ LocalCA is configured through environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `CA_NAME` | Name of the Certificate Authority (FQDN) | "LocalCA" |
-| `CA_KEY_FILE` | Path to the file containing the CA key password | *required* |
+| `CA_KEY_FILE` | Path to the file containing the CA key password | *optional* |
 | `CA_KEY` | Direct CA key password (alternative to CA_KEY_FILE) | "" |
 | `ORGANIZATION` | Organization name for the CA | "LocalCA Organization" |
 | `COUNTRY` | Country code for the CA | "US" |
@@ -153,7 +153,12 @@ LocalCA is configured through environment variables:
 ### Initial Setup
 
 1. **First Access**: Navigate to the web interface at http://localhost:3000
-2. **Trust the CA**: Download the CA certificate and install it in your browser/OS trust store
+2. **Complete Setup**: 
+   - Create an admin account with username and password
+   - The setup token is automatically loaded from the backend
+   - Complete the guided setup process
+3. **Login**: Use your created credentials to log into the dashboard
+4. **Trust the CA**: Download the CA certificate and install it in your browser/OS trust store
 
 ### Creating Certificates
 

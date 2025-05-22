@@ -15,12 +15,9 @@ export default function SetupPage() {
   const [setupCompleted, setSetupCompleted] = useState(false)
   const router = useRouter()
 
-  // Get the setup token from backend logs
+  // Get the setup token from backend
   useEffect(() => {
-    // This will display info about what to do
-    setSetupInfo('Please check your backend logs for the setup token. You can find it by running: docker logs localca-backend | grep "Setup token"')
-    
-    // Check if setup is already completed
+    // Check setup status and get token
     async function checkSetupStatus() {
       try {
         const response = await fetch('/api/setup', {
@@ -31,19 +28,26 @@ export default function SetupPage() {
         })
         const data = await response.json()
         
-        // If setup is already completed, redirect to login
-        if (data.data && data.data.setup_completed) {
-          setSetupCompleted(true)
-          setSetupInfo('Setup already completed. Redirecting to login page...')
-          
-          // Delay redirection to give user time to read the message
-          setTimeout(() => {
-            router.push('/login')
-          }, 2000)
+        if (data.success && data.data) {
+          // If setup is already completed, redirect to login
+          if (data.data.setup_completed) {
+            setSetupCompleted(true)
+            setSetupInfo('Setup already completed. Redirecting to login page...')
+            
+            // Delay redirection to give user time to read the message
+            setTimeout(() => {
+              router.push('/login')
+            }, 2000)
+          } else if (data.data.setup_token) {
+            // Auto-fill the setup token
+            setSetupToken(data.data.setup_token)
+            setSetupInfo('Setup token has been automatically loaded from the backend.')
+          }
         }
       } catch (error) {
         console.error('Error checking setup status:', error)
         setError('Error checking setup status. Please try again.')
+        setSetupInfo('Could not automatically load setup token. Please check your backend logs for the setup token.')
       }
     }
     

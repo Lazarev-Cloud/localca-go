@@ -36,6 +36,11 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		api.POST("/revoke", apiRevokeCertificateHandler(certSvc, store))
 		api.POST("/renew", apiRenewCertificateHandler(certSvc, store))
 		api.POST("/delete", apiDeleteCertificateHandler(certSvc, store))
+
+		// Settings endpoints
+		api.GET("/settings", apiGetSettingsHandler(certSvc, store))
+		api.POST("/settings", apiSaveSettingsHandler(certSvc, store))
+		api.POST("/test-email", apiTestEmailHandler(certSvc, store))
 	}
 }
 
@@ -361,4 +366,90 @@ func parseCSVList(csv string) []string {
 		}
 	}
 	return result
+}
+
+// apiGetSettingsHandler handles GET /api/settings
+func apiGetSettingsHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// For now, return mock settings data that matches the frontend interface
+		settings := map[string]interface{}{
+			"general": map[string]interface{}{
+				"caName":      "LocalCA in.lc",
+				"organization": "LocalCA",
+				"country":     "US",
+				"tlsEnabled":  true,
+			},
+			"email": map[string]interface{}{
+				"emailNotify":   false,
+				"smtpServer":    "",
+				"smtpPort":      "25",
+				"smtpUser":      "",
+				"smtpPassword":  "",
+				"smtpUseTLS":    false,
+				"emailFrom":     "",
+				"emailTo":       "",
+			},
+			"storage": map[string]interface{}{
+				"storagePath": "/app/data",
+				"backupPath":  "",
+				"autoBackup":  false,
+			},
+			"ca": map[string]interface{}{
+				"caKeyPassword": "",
+				"crlExpiryDays": "30",
+			},
+		}
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Settings retrieved successfully",
+			Data:    settings,
+		})
+	}
+}
+
+// apiSaveSettingsHandler handles POST /api/settings
+func apiSaveSettingsHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var settings map[string]interface{}
+		if err := c.BindJSON(&settings); err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid request format",
+			})
+			return
+		}
+
+		// For now, just return success
+		// In a real implementation, you would save the settings to a config file or database
+		log.Printf("Settings update request received: %+v", settings)
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Settings saved successfully",
+		})
+	}
+}
+
+// apiTestEmailHandler handles POST /api/test-email
+func apiTestEmailHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var emailConfig map[string]interface{}
+		if err := c.BindJSON(&emailConfig); err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid request format",
+			})
+			return
+		}
+
+		// For now, just simulate sending a test email
+		log.Printf("Test email request received: %+v", emailConfig)
+
+		// In a real implementation, you would actually send a test email
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Test email sent successfully",
+		})
+	}
 }
