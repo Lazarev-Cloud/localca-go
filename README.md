@@ -20,15 +20,73 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 - **ACME Protocol Support**: Automated certificate issuance compatible with standard ACME clients
 - **Security Hardened**: Comprehensive security measures including CSRF protection, secure headers, and input validation
 
+## Architecture Overview
+
+LocalCA follows a modern client-server architecture with clear separation of concerns:
+
+### Technology Stack
+
+**Backend (Go)**:
+- **Framework**: Gin web framework for HTTP handling
+- **Cryptography**: Go's crypto/x509 and crypto/rsa packages
+- **Storage**: File-based storage with JSON metadata
+- **ACME**: Custom ACME protocol implementation
+- **Security**: CSRF protection, secure headers, input validation
+
+**Frontend (Next.js + React)**:
+- **Framework**: Next.js 15 with App Router
+- **UI Components**: ShadcnUI + Radix UI primitives
+- **Styling**: Tailwind CSS with custom design system
+- **Forms**: React Hook Form with Zod validation
+- **State Management**: React hooks and context
+
+**Infrastructure**:
+- **Containerization**: Docker with multi-stage builds
+- **Orchestration**: Docker Compose for development
+- **Reverse Proxy**: Next.js rewrites for API integration
+- **Security**: TLS 1.2+, secure cipher suites
+
+### Service Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend API   │    │   ACME Server   │
+│   (Next.js)     │◄──►│   (Go/Gin)      │◄──►│   (Go)          │
+│   Port 3000     │    │   Port 8080     │    │   Port 8555     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Browser UI    │    │   Certificate   │    │   ACME Client   │
+│   Management    │    │   Storage       │    │   Integration   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
 ## Project Structure
 
 ```
 ├── app/              # Next.js 15 frontend application
+│   ├── api/          # API routes and proxy endpoints
+│   ├── certificates/ # Certificate management pages
+│   ├── create/       # Certificate creation flow
+│   ├── login/        # Authentication pages
+│   ├── settings/     # Application settings
+│   └── setup/        # Initial setup flow
 ├── build/            # Docker build configurations and test setups
 ├── components/       # React components (ShadcnUI + Tailwind)
+│   ├── ui/           # Base UI components
+│   ├── forms/        # Form components
+│   └── certificates/ # Certificate-specific components
 ├── docs/             # Documentation files
 ├── hooks/            # Custom React hooks
 ├── pkg/              # Go backend packages
+│   ├── acme/         # ACME protocol implementation
+│   ├── certificates/ # Certificate management
+│   ├── config/       # Configuration management
+│   ├── handlers/     # HTTP request handlers
+│   ├── security/     # Security utilities
+│   └── storage/      # File-based storage
 ├── public/           # Static assets
 ├── security/         # Security analysis and SBOM files
 ├── static/           # Backend static files
@@ -36,6 +94,29 @@ LocalCA is a complete solution for running your own Certificate Authority (CA) w
 ├── tools/            # Development and utility scripts
 └── examples/         # Example configurations
 ```
+
+## Documentation
+
+For comprehensive documentation, see the [docs/](docs/) directory:
+
+- **[Quick Start Guide](docs/README.md)** - Documentation overview and quick links
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
+- **[Security Best Practices](docs/BestPractice.md)** - Security guidelines and recommendations
+- **[Testing Guide](docs/README-TESTING.md)** - Testing procedures and guidelines
+- **[Development Guidelines](.cursor/rules/)** - Detailed development documentation
+- **[Troubleshooting](docs/)** - Common issues and solutions
+
+## Security
+
+Security is a top priority for LocalCA. Please review our [Security Policy](SECURITY.md) for:
+- Vulnerability reporting procedures
+- Security best practices
+- Supported versions
+- Contact information
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 ## License
 
@@ -277,13 +358,53 @@ localca-go/
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions to LocalCA! Please read our contribution guidelines before submitting changes.
+
+### Development Setup
+
+1. **Prerequisites**:
+   - Go 1.23+ for backend development
+   - Node.js 18+ for frontend development
+   - Docker for containerized development
+
+2. **Local Development**:
+   ```bash
+   # Clone the repository
+   git clone https://github.com/Lazarev-Cloud/localca-go.git
+   cd localca-go
+   
+   # Backend development
+   go mod tidy
+   go run main.go
+   
+   # Frontend development (separate terminal)
+   npm install --legacy-peer-deps
+   npm run dev
+   ```
+
+3. **Development Scripts**:
+   - Linux/macOS: `./run-dev.sh`
+   - Windows: `run-dev.bat`
+
+### Contribution Process
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Write tests for your changes
+4. Ensure all tests pass (`go test ./...` and `npm test`)
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Code Standards
+
+- Follow Go best practices and conventions
+- Use TypeScript for all frontend code
+- Write comprehensive tests for new features
+- Update documentation for user-facing changes
+- Follow the existing code style and patterns
+
+For detailed development guidelines, see our [development documentation](docs/).
 
 ## Acknowledgments
 

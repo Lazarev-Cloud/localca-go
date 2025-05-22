@@ -1,0 +1,260 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Endpoints and Data Flow
+
+This document outlines the API endpoints, data flow patterns, and integration between frontend and backend components.
+
+## API Architecture
+
+The LocalCA project uses a hybrid API approach:
+
+1. **Direct Backend API**: Go backend serves REST API on port 8080
+2. **Next.js API Routes**: Frontend proxy routes in [app/api](mdc:app/api)
+3. **ACME Protocol**: Dedicated ACME server on port 8555
+
+## Backend API Endpoints
+
+The main API endpoints are defined in [pkg/handlers](mdc:pkg/handlers) and registered in [main.go](mdc:main.go).
+
+### Authentication Endpoints
+
+- `POST /api/setup` - Complete initial setup
+- `POST /api/login` - User authentication
+- `POST /api/logout` - User logout
+- `GET /api/auth/status` - Check authentication status
+
+### Certificate Management
+
+- `GET /api/certificates` - List all certificates
+- `POST /api/certificates` - Create new certificate
+- `GET /api/certificates/{id}` - Get certificate details
+- `PUT /api/certificates/{id}/renew` - Renew certificate
+- `DELETE /api/certificates/{id}` - Delete certificate
+- `POST /api/certificates/{id}/revoke` - Revoke certificate
+
+### Certificate Authority
+
+- `GET /api/ca` - Get CA certificate information
+- `GET /api/ca/download` - Download CA certificate
+- `GET /api/crl` - Get Certificate Revocation List
+
+### System Information
+
+- `GET /api/status` - System status and health check
+- `GET /api/config` - Get system configuration
+- `POST /api/config` - Update system configuration
+
+## Frontend API Integration
+
+### API Proxy Routes
+
+The frontend uses Next.js API routes as proxies to the backend:
+
+```
+app/api/
+├── proxy/
+│   └── [...path]/route.ts    # Generic proxy for all backend routes
+├── auth/
+│   └── route.ts              # Authentication handling
+└── certificates/
+    └── route.ts              # Certificate operations
+```
+
+### Data Flow Pattern
+
+1. **Frontend Component** → 2. **Next.js API Route** → 3. **Go Backend** → 4. **Storage Layer**
+
+Example flow for certificate creation:
+1. User submits form in [app/create/page.tsx](mdc:app/create/page.tsx)
+2. Form data sent to [app/api/proxy/certificates/route.ts](mdc:app/api/proxy/certificates/route.ts)
+3. Proxy forwards to Go backend `/api/certificates`
+4. Backend processes request in [pkg/handlers](mdc:pkg/handlers)
+5. Certificate service creates certificate via [pkg/certificates](mdc:pkg/certificates)
+6. Data persisted through [pkg/storage](mdc:pkg/storage)
+
+## API Configuration
+
+### Backend Configuration
+
+API configuration is managed in [pkg/config](mdc:pkg/config):
+
+```go
+type Config struct {
+    ListenAddr string // Backend API address (:8080)
+    TLSEnabled bool   // Enable HTTPS
+    DataDir    string // Storage directory
+    // ... other config options
+}
+```
+
+### Frontend Configuration
+
+Frontend API configuration in [lib/config.ts](mdc:lib/config.ts):
+
+```typescript
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+```
+
+URL rewriting configured in [next.config.mjs](mdc:next.config.mjs):
+
+```javascript
+async rewrites() {
+  return [
+    {
+      source: '/api/:path*',
+      destination: `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`
+    }
+  ]
+}
+```
+
+## ACME Protocol Integration
+
+### ACME Server
+
+The ACME server runs on port 8555 and implements the ACME protocol for automated certificate issuance:
+
+- `GET /.well-known/acme-challenge/{token}` - Challenge verification
+- `POST /acme/new-account` - Create ACME account
+- `POST /acme/new-order` - Create certificate order
+- `POST /acme/authz/{id}` - Authorization handling
+- `POST /acme/cert/{id}` - Certificate issuance
+
+### ACME Implementation
+
+ACME protocol implementation is in [pkg/acme](mdc:pkg/acme):
+
+- Challenge validation
+- Account management
+- Order processing
+- Certificate issuance
+
+## Error Handling
+
+### Backend Error Responses
+
+Standard error response format:
+
+```json
+{
+  "error": "Error message",
+  "code": "ERROR_CODE",
+  "details": "Additional details"
+}
+```
+
+HTTP status codes:
+- `200` - Success
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `500` - Internal Server Error
+
+### Frontend Error Handling
+
+Error handling patterns in frontend:
+
+1. **API Error Boundaries**: Catch and display API errors
+2. **Form Validation**: Client-side validation with Zod schemas
+3. **Loading States**: Show loading indicators during API calls
+4. **Toast Notifications**: User feedback for operations
+
+## Authentication Flow
+
+### Session Management
+
+1. User logs in via [app/login/page.tsx](mdc:app/login/page.tsx)
+2. Backend validates credentials and creates session
+3. Session token stored in HTTP-only cookie
+4. Subsequent requests include session cookie
+5. Backend validates session for protected routes
+
+### Setup Flow
+
+1. Initial access redirects to [app/setup/page.tsx](mdc:app/setup/page.tsx)
+2. Setup token generated by backend on startup
+3. User completes setup with admin credentials
+4. Setup token invalidated after use
+
+## Data Models
+
+### Certificate Model
+
+```typescript
+interface Certificate {
+  id: string
+  commonName: string
+  subjectAltNames: string[]
+  issuedAt: string
+  expiresAt: string
+  isRevoked: boolean
+  isClientCert: boolean
+  serialNumber: string
+}
+```
+
+### CA Information
+
+```typescript
+interface CAInfo {
+  commonName: string
+  organization: string
+  country: string
+  issuedAt: string
+  expiresAt: string
+  serialNumber: string
+}
+```
+
+## Security Considerations
+
+### API Security
+
+1. **CSRF Protection**: Implemented in backend handlers
+2. **Input Validation**: All inputs validated on backend
+3. **Rate Limiting**: Prevent abuse of API endpoints
+4. **Secure Headers**: Security headers for all responses
+
+### Authentication Security
+
+1. **Session Security**: HTTP-only cookies, secure flags
+2. **Password Security**: Proper hashing and validation
+3. **Token Security**: Time-limited setup tokens
+
+### Certificate Security
+
+1. **Private Key Protection**: Secure storage and access
+2. **Certificate Validation**: Proper validation of certificate requests
+3. **Revocation Handling**: Proper CRL management
+
+## Performance Optimization
+
+### Caching Strategy
+
+1. **Certificate Metadata**: Cache frequently accessed data
+2. **Static Assets**: Proper caching headers
+3. **API Responses**: Cache appropriate responses
+
+### Database Optimization
+
+1. **File-based Storage**: Efficient file I/O operations
+2. **Indexing**: Quick certificate lookups
+3. **Cleanup**: Regular cleanup of expired certificates
+
+## Monitoring and Logging
+
+### API Monitoring
+
+1. **Health Checks**: `/api/status` endpoint for monitoring
+2. **Request Logging**: Log all API requests
+3. **Error Tracking**: Comprehensive error logging
+
+### Performance Metrics
+
+1. **Response Times**: Track API response times
+2. **Certificate Operations**: Monitor certificate lifecycle operations
+3. **System Resources**: Monitor memory and CPU usage

@@ -1,0 +1,376 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Troubleshooting and Debugging Guide
+
+This guide covers common issues, debugging techniques, and problem resolution strategies for the LocalCA project.
+
+## Common Issues and Solutions
+
+### Setup and Installation Issues
+
+#### Issue: "Failed to load configuration"
+**Symptoms**: Application fails to start with configuration error
+**Causes**:
+- Missing or invalid environment variables
+- Incorrect file permissions
+- Missing [cakey.txt](mdc:cakey.txt) file
+
+**Solutions**:
+1. Check environment variables in [pkg/config](mdc:pkg/config)
+2. Ensure [cakey.txt](mdc:cakey.txt) exists with proper password
+3. Verify file permissions on data directory
+4. Check logs for specific configuration errors
+
+#### Issue: "Setup token not found"
+**Symptoms**: Cannot access setup page, token errors
+**Causes**:
+- Setup already completed
+- Token expired (24-hour limit)
+- Backend not running
+
+**Solutions**:
+1. Check if setup is already completed in [app/setup](mdc:app/setup)
+2. Restart backend to generate new setup token
+3. Check backend logs for token generation
+4. Verify backend is accessible on port 8080
+
+### Certificate Management Issues
+
+#### Issue: "Failed to create certificate"
+**Symptoms**: Certificate creation fails with errors
+**Causes**:
+- Invalid common name or SAN entries
+- CA certificate not found
+- Insufficient permissions
+- Storage issues
+
+**Solutions**:
+1. Validate certificate request parameters
+2. Check CA certificate exists in [pkg/certificates](mdc:pkg/certificates)
+3. Verify storage permissions in [pkg/storage](mdc:pkg/storage)
+4. Check certificate service logs
+
+#### Issue: "Certificate not trusted by browser"
+**Symptoms**: Browser shows certificate warnings
+**Causes**:
+- CA certificate not installed in trust store
+- Certificate doesn't match hostname
+- Certificate expired or revoked
+
+**Solutions**:
+1. Install CA certificate in browser/OS trust store
+2. Verify certificate common name matches hostname
+3. Check certificate expiration date
+4. Verify certificate not in CRL
+
+### Frontend Issues
+
+#### Issue: "API connection failed"
+**Symptoms**: Frontend cannot connect to backend
+**Causes**:
+- Backend not running
+- Incorrect API URL configuration
+- Network connectivity issues
+- CORS issues
+
+**Solutions**:
+1. Verify backend is running on port 8080
+2. Check [lib/config.ts](mdc:lib/config.ts) for correct API URL
+3. Verify [next.config.mjs](mdc:next.config.mjs) rewrites configuration
+4. Check browser network tab for specific errors
+
+#### Issue: "Authentication failures"
+**Symptoms**: Cannot login or session expires
+**Causes**:
+- Incorrect credentials
+- Session cookie issues
+- Backend authentication service problems
+
+**Solutions**:
+1. Verify credentials are correct
+2. Clear browser cookies and try again
+3. Check backend authentication logs
+4. Verify session management in [pkg/handlers](mdc:pkg/handlers)
+
+### ACME Protocol Issues
+
+#### Issue: "ACME challenges failing"
+**Symptoms**: Automated certificate issuance fails
+**Causes**:
+- ACME server not accessible
+- Challenge validation failures
+- Network connectivity issues
+
+**Solutions**:
+1. Verify ACME server running on port 8555
+2. Check challenge validation in [pkg/acme](mdc:pkg/acme)
+3. Verify network connectivity to ACME endpoints
+4. Check ACME client configuration
+
+## Debugging Techniques
+
+### Backend Debugging
+
+#### Logging Configuration
+Enable detailed logging by setting environment variables:
+```bash
+export GIN_MODE=debug
+export LOG_LEVEL=debug
+```
+
+#### Go Debugging
+1. **Add debug prints**:
+   ```go
+   log.Printf("Debug: %+v", variable)
+   ```
+
+2. **Use Go debugger (delve)**:
+   ```bash
+   go install github.com/go-delve/delve/cmd/dlv@latest
+   dlv debug main.go
+   ```
+
+3. **Check goroutine status**:
+   ```go
+   import "runtime"
+   log.Printf("Goroutines: %d", runtime.NumGoroutine())
+   ```
+
+#### Certificate Debugging
+1. **Verify certificate files**:
+   ```bash
+   openssl x509 -in certificate.pem -text -noout
+   ```
+
+2. **Check private key**:
+   ```bash
+   openssl rsa -in private.key -check
+   ```
+
+3. **Validate certificate chain**:
+   ```bash
+   openssl verify -CAfile ca.pem certificate.pem
+   ```
+
+### Frontend Debugging
+
+#### Browser Developer Tools
+1. **Network Tab**: Check API requests and responses
+2. **Console Tab**: Look for JavaScript errors
+3. **Application Tab**: Inspect cookies and local storage
+4. **Security Tab**: Check certificate information
+
+#### Next.js Debugging
+1. **Enable debug mode**:
+   ```bash
+   DEBUG=* npm run dev
+   ```
+
+2. **Check API routes**:
+   - Add console.log statements in [app/api](mdc:app/api) routes
+   - Verify request/response data
+
+3. **Component debugging**:
+   ```typescript
+   console.log('Component state:', state)
+   console.log('Props:', props)
+   ```
+
+### Docker Debugging
+
+#### Container Logs
+```bash
+docker-compose logs -f localca
+docker-compose logs -f frontend
+```
+
+#### Container Shell Access
+```bash
+docker-compose exec localca sh
+docker-compose exec frontend sh
+```
+
+#### Volume Inspection
+```bash
+docker volume inspect localca-go_data
+```
+
+## Performance Debugging
+
+### Memory Issues
+
+#### Go Memory Profiling
+1. **Enable pprof**:
+   ```go
+   import _ "net/http/pprof"
+   ```
+
+2. **Generate memory profile**:
+   ```bash
+   go tool pprof http://localhost:8080/debug/pprof/heap
+   ```
+
+#### Monitor Memory Usage
+```bash
+# Linux/macOS
+ps aux | grep localca-go
+top -p $(pgrep localca-go)
+
+# Docker
+docker stats
+```
+
+### Performance Monitoring
+
+#### Certificate Operations
+Monitor certificate creation/renewal times:
+```go
+start := time.Now()
+// Certificate operation
+duration := time.Since(start)
+log.Printf("Operation took: %v", duration)
+```
+
+#### API Response Times
+Add timing middleware to track API performance:
+```go
+func TimingMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        start := time.Now()
+        c.Next()
+        duration := time.Since(start)
+        log.Printf("API %s took: %v", c.Request.URL.Path, duration)
+    }
+}
+```
+
+## Security Debugging
+
+### Certificate Security
+1. **Check certificate validity**:
+   ```bash
+   openssl x509 -in cert.pem -dates -noout
+   ```
+
+2. **Verify certificate chain**:
+   ```bash
+   openssl verify -verbose -CAfile ca.pem cert.pem
+   ```
+
+3. **Check CRL status**:
+   ```bash
+   openssl crl -in crl.pem -text -noout
+   ```
+
+### Authentication Security
+1. **Session debugging**: Check session cookies in browser
+2. **Token validation**: Verify JWT tokens if used
+3. **CSRF protection**: Ensure CSRF tokens are present
+
+## Log Analysis
+
+### Backend Logs
+Key log patterns to look for:
+- `ERROR`: Critical errors requiring attention
+- `WARN`: Warnings that might indicate issues
+- `Certificate created`: Successful certificate operations
+- `Authentication failed`: Security-related events
+
+### Frontend Logs
+Browser console patterns:
+- Network errors (4xx, 5xx status codes)
+- JavaScript errors and stack traces
+- API response errors
+- Component rendering issues
+
+### System Logs
+Monitor system resources:
+```bash
+# Disk usage
+df -h
+
+# Memory usage
+free -h
+
+# CPU usage
+top
+
+# Network connections
+netstat -tulpn | grep :8080
+```
+
+## Emergency Procedures
+
+### Service Recovery
+
+#### Backend Recovery
+1. **Restart backend service**:
+   ```bash
+   # Docker
+   docker-compose restart localca
+   
+   # Direct
+   pkill localca-go
+   go run main.go
+   ```
+
+2. **Reset to clean state**:
+   - Backup data directory
+   - Remove corrupted files
+   - Restart with clean configuration
+
+#### Frontend Recovery
+1. **Clear browser cache and cookies**
+2. **Restart frontend service**:
+   ```bash
+   # Docker
+   docker-compose restart frontend
+   
+   # Direct
+   npm run dev
+   ```
+
+### Data Recovery
+
+#### Certificate Recovery
+1. **Backup certificate data**:
+   ```bash
+   cp -r data/ backup-$(date +%Y%m%d)/
+   ```
+
+2. **Restore from backup**:
+   ```bash
+   cp -r backup-20240101/ data/
+   ```
+
+#### Configuration Recovery
+1. **Reset to default configuration**
+2. **Restore from known good configuration**
+3. **Regenerate CA if necessary**
+
+## Getting Help
+
+### Log Collection
+When reporting issues, collect:
+1. Backend logs with debug enabled
+2. Frontend browser console logs
+3. Network request/response details
+4. System information (OS, versions)
+5. Configuration (sanitized)
+
+### Issue Reporting
+Include in issue reports:
+1. Steps to reproduce
+2. Expected vs actual behavior
+3. Log files and error messages
+4. Environment details
+5. Configuration details (without sensitive data)
+
+### Documentation References
+- [README.md](mdc:README.md): General setup and usage
+- [docs/BestPractice.md](mdc:docs/BestPractice.md): Security guidelines
+- [docs/DEPLOYMENT.md](mdc:docs/DEPLOYMENT.md): Deployment instructions
+- [.cursor/rules](mdc:.cursor/rules): Development guidelines
