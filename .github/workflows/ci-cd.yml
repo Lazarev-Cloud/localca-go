@@ -590,10 +590,12 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.go.coverage.reportPaths=coverage-merged.out
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**,**/.next/**,**/__mocks__/**
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/node_modules/**,**/.next/**,**/__mocks__/**,**/artifacts/**,**/*.sarif,**/*-report.json,**/nancy-results.json,**/*-audit.json,**/*.spdx.json,**/*.cyclonedx.json
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go,**/*.test.js,**/*.test.jsx,**/*.test.ts,**/*.test.tsx
             -Dsonar.eslint.reportPaths=eslint-report.json
             -Dsonar.javascript.node.maxspace=4096
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.typescript.tsconfigPaths=tsconfig.json
+            -Dsonar.scm.provider=git
+            -Dsonar.scm.forceReloadAll=true
