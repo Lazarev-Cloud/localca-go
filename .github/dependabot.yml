@@ -1,129 +1,19 @@
 version: 2
 updates:
-  # Go dependencies
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "Lazarev-Cloud"
-    assignees:
-      - "Lazarev-Cloud"
-    commit-message:
-      prefix: "deps(go)"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "go"
-    allow:
-      - dependency-type: "all"
-    ignore:
-      # Ignore patch updates for stable packages
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
-    groups:
-      go-security:
-        patterns:
-          - "*security*"
-          - "*crypto*"
-          - "*tls*"
-        update-types:
-          - "minor"
-          - "patch"
-      go-testing:
-        patterns:
-          - "*test*"
-          - "*mock*"
-          - "*assert*"
+    open-pull-requests-limit: 3
 
-  # NPM dependencies
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "10:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "Lazarev-Cloud"
-    assignees:
-      - "Lazarev-Cloud"
-    commit-message:
-      prefix: "deps(npm)"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "npm"
-    allow:
-      - dependency-type: "all"
-    ignore:
-      # Ignore patch updates for stable packages
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
-      # Ignore specific problematic packages
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-    groups:
-      react-ecosystem:
-        patterns:
-          - "react*"
-          - "@types/react*"
-        update-types:
-          - "minor"
-          - "patch"
-      nextjs-ecosystem:
-        patterns:
-          - "next*"
-          - "@next/*"
-        update-types:
-          - "minor"
-          - "patch"
-      ui-components:
-        patterns:
-          - "@radix-ui/*"
-          - "lucide-react"
-          - "class-variance-authority"
-          - "clsx"
-          - "tailwind*"
-        update-types:
-          - "minor"
-          - "patch"
-      testing-tools:
-        patterns:
-          - "*test*"
-          - "jest*"
-          - "@testing-library/*"
-        update-types:
-          - "minor"
-          - "patch"
+    open-pull-requests-limit: 3
 
-  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-    open-pull-requests-limit: 3
-    reviewers:
-      - "Lazarev-Cloud"
-    assignees:
-      - "Lazarev-Cloud"
-    commit-message:
-      prefix: "ci"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "github-actions"
-    groups:
-      actions-security:
-        patterns:
-          - "*security*"
-          - "*codeql*"
-          - "*trivy*"
-        update-types:
-          - "minor"
-          - "patch"
+      interval: "monthly"
+    open-pull-requests-limit: 2
