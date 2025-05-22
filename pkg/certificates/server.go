@@ -241,22 +241,39 @@ func (c *CertificateService) RenewServerCertificate(commonName string) error {
 		return fmt.Errorf("failed to sign certificate: %w", err)
 	}
 
-	// Update bundle
-	cmd = exec.Command(
-		"bash", "-c",
-		fmt.Sprintf("cat %s %s > %s",
-			certPath,
-			c.storage.GetCAPublicKeyPath(),
-			c.storage.GetCertificateBundlePath(commonName),
-		),
-	)
-	if err := cmd.Run(); err != nil {
+	// Update bundle - use Go file operations instead of shell commands
+	bundlePath := c.storage.GetCertificateBundlePath(commonName)
+	if err := createCertificateBundle(certPath, c.storage.GetCAPublicKeyPath(), bundlePath); err != nil {
 		return fmt.Errorf("failed to create certificate bundle: %w", err)
 	}
 
 	// Cleanup
 	os.Remove(csrPath)
 	os.Remove(sanConfigPath)
+
+	return nil
+}
+// createCertificateBundle safely creates a certificate bundle by concatenating files
+func createCertificateBundle(certPath, caPath, bundlePath string) error {
+	// Read certificate file
+	certData, err := os.ReadFile(certPath)
+	if err \!= nil {
+		return fmt.Errorf("failed to read certificate file: %w", err)
+	}
+
+	// Read CA certificate file
+	caData, err := os.ReadFile(caPath)
+	if err \!= nil {
+		return fmt.Errorf("failed to read CA certificate file: %w", err)
+	}
+
+	// Create bundle by concatenating
+	bundleData := append(certData, caData...)
+
+	// Write bundle file
+	if err := os.WriteFile(bundlePath, bundleData, 0644); err \!= nil {
+		return fmt.Errorf("failed to write bundle file: %w", err)
+	}
 
 	return nil
 }

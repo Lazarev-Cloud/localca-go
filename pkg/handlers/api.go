@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/security"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -135,11 +136,11 @@ func apiGetCertificatesHandler(certSvc certificates.CertificateServiceInterface,
 // apiCreateCertificateHandler creates a new certificate via API
 func apiCreateCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get form data
-		commonName := c.PostForm("common_name")
-		password := c.PostForm("password")
+		// Get and validate form data
+		commonName := security.ValidateCommonName(c.PostForm("common_name"))
+		password := security.SanitizeInput(c.PostForm("password"))
 		isClient := c.PostForm("is_client") == "true"
-		additionalDomains := c.PostForm("additional_domains")
+		additionalDomains := security.SanitizeInput(c.PostForm("additional_domains"))
 
 		// Validate input
 		if commonName == "" {
@@ -216,8 +217,8 @@ func apiGetCAInfoHandler(certSvc certificates.CertificateServiceInterface, store
 // apiRevokeCertificateHandler revokes a certificate via API
 func apiRevokeCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get serial number
-		serialNumber := c.PostForm("serial_number")
+		// Get and validate serial number
+		serialNumber := security.ValidateSerialNumber(c.PostForm("serial_number"))
 		if serialNumber == "" {
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
@@ -257,8 +258,8 @@ func apiRevokeCertificateHandler(certSvc certificates.CertificateServiceInterfac
 // apiRenewCertificateHandler renews a certificate via API
 func apiRenewCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get serial number
-		serialNumber := c.PostForm("serial_number")
+		// Get and validate serial number
+		serialNumber := security.ValidateSerialNumber(c.PostForm("serial_number"))
 		if serialNumber == "" {
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,
@@ -311,8 +312,8 @@ func apiRenewCertificateHandler(certSvc certificates.CertificateServiceInterface
 // apiDeleteCertificateHandler deletes a certificate via API
 func apiDeleteCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get serial number
-		serialNumber := c.PostForm("serial_number")
+		// Get and validate serial number
+		serialNumber := security.ValidateSerialNumber(c.PostForm("serial_number"))
 		if serialNumber == "" {
 			c.JSON(http.StatusBadRequest, APIResponse{
 				Success: false,

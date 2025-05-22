@@ -51,7 +51,8 @@ func (e *EmailService) SendEmail(from, to, subject, body string) error {
 	}
 
 	// Format the message
-	// Sanitize inputs
+	// Sanitize all inputs to prevent injection attacks
+	safeFrom := SanitizeInput(from)
 	safeTo := SanitizeInput(to)
 	safeSubject := SanitizeInput(subject)
 	safeBody := SanitizeInput(body)
@@ -63,7 +64,7 @@ func (e *EmailService) SendEmail(from, to, subject, body string) error {
 			"MIME-Version: 1.0\r\n"+
 			"Content-Type: text/plain; charset=UTF-8\r\n"+
 			"\r\n"+
-			"%s", safeTo, from, safeSubject, safeBody))
+			"%s", safeTo, safeFrom, safeSubject, safeBody))
 
 	// Set authentication
 	auth := smtp.PlainAuth("", e.SMTPUser, e.SMTPPassword, e.SMTPServer)

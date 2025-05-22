@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
+	"github.com/Lazarev-Cloud/localca-go/pkg/security"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -57,8 +58,8 @@ func filesHandler(certSvc certificates.CertificateServiceInterface, store *stora
 			return
 		}
 
-		// Get the safe name (base name only)
-		safeName := filepath.Base(name)
+		// Validate and sanitize the certificate name
+		safeName := security.ValidateFileName(name)
 
 		// Check if certificate exists
 		certDir := store.GetCertificateDirectory(safeName)
