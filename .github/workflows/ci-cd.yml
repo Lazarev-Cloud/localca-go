@@ -260,7 +260,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Run Trivy vulnerability scanner on backend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.30.0
         if: always()
         with:
           image-ref: ${{ fromJSON(steps.meta-backend.outputs.json).tags[0] }}
@@ -269,7 +269,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Run Trivy vulnerability scanner on frontend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.30.0
         if: always()
         with:
           image-ref: ${{ fromJSON(steps.meta-frontend.outputs.json).tags[0] }}
