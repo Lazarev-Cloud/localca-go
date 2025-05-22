@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: localca-backend
     volumes:
-      - localca-data:/app/data
+      - ./data:/app/data
     ports:
       - "8080:8080"
       - "8443:8443"
@@ -15,6 +15,14 @@ services:
     environment:
       - LOCALCA_DATA_DIR=/app/data
       - LOCALCA_HOST=0.0.0.0
+      - CA_NAME=LocalCA in.lc
+      - ORGANIZATION=LocalCA
+      - COUNTRY=US
+      - TLS_ENABLED=true
+      - EMAIL_NOTIFY=false
+      - BASE_DOMAIN=in.lc
+      - DEBUG=true
+      - CA_KEY_FILE=/app/data/cakey.txt
     restart: unless-stopped
     networks:
       - localca-network
@@ -27,7 +35,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_BASE_DOMAIN=in.lc
     depends_on:
       - backend
     restart: unless-stopped

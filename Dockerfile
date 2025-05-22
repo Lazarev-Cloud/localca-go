@@ -15,8 +15,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o localca-go
 # Use a smaller image for the final container
 FROM alpine:latest
 
-# Install CA certificates for HTTPS connections
-RUN apk --no-cache add ca-certificates
+# Install CA certificates and OpenSSL for HTTPS connections and key operations
+RUN apk --no-cache add ca-certificates openssl
 
 WORKDIR /app
 
