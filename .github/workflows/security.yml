@@ -18,18 +18,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Trivy
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy.sarif'
+          severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+
+      - name: Run gosec security scanner
+        uses: securego/gosec@v2.21.4
+        with:
+          args: '-fmt sarif -out gosec-security.sarif ./...'
+        continue-on-error: true
 
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: trivy.sarif
+
+      - name: Upload gosec results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-security.sarif
 
       - name: Run secret scan
         uses: gitleaks/gitleaks-action@v2

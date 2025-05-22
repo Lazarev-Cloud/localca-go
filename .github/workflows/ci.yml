@@ -42,10 +42,21 @@ jobs:
       - name: Run Go tests
         run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: Run Go security scan
+      - name: Run Go security scan (gosec)
         uses: securego/gosec@v2.21.4
         with:
           args: '-no-fail -fmt sarif -out gosec.sarif ./...'
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-ci.sarif'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true
 
       - name: Run Node tests
         run: npm test -- --coverage --watchAll=false || true
@@ -53,11 +64,17 @@ jobs:
       - name: Run Node linting
         run: npx eslint app components hooks lib || true
 
-      - name: Upload security results
+      - name: Upload gosec security results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: gosec.sarif
+
+      - name: Upload Trivy security results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-ci.sarif
 
   build:
     name: Build

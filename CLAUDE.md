@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Essential Commands
 
 ### Development
+
 ```bash
 # Go backend (starts on :8080)
 go run main.go
@@ -21,6 +22,7 @@ run-dev.bat     # Windows
 ```
 
 ### Testing
+
 ```bash
 # Run all Go tests with coverage
 ./run-tests.sh  # Linux/macOS
@@ -37,6 +39,7 @@ npm test
 ```
 
 ### Build & Lint
+
 ```bash
 # Build Go backend
 go build -o localca-go
@@ -54,6 +57,7 @@ docker build -t localca-go-backend .
 LocalCA is a dual-service application: Go backend with Gin + Next.js frontend.
 
 ### Go Backend Structure
+
 - **main.go**: Entry point, starts HTTP server (:8080), HTTPS server (:8443), and ACME server (:8555)
 - **pkg/certificates/**: Core CA and certificate operations (create, renew, revoke)
 - **pkg/handlers/**: HTTP handlers for both web UI and API endpoints
@@ -63,18 +67,21 @@ LocalCA is a dual-service application: Go backend with Gin + Next.js frontend.
 - **pkg/email/**: Certificate expiration notifications
 
 ### Next.js Frontend Structure
+
 - **app/**: Next.js 13+ app router structure
 - **app/api/**: API route handlers that proxy to Go backend
 - **components/**: React components using ShadcnUI + Tailwind
 - **hooks/**: Custom React hooks for API calls and state management
 
 ### Key Integration Points
+
 - Frontend proxies API calls through `/api/proxy/[...path]` to Go backend
 - Authentication via session cookies managed by Go backend
 - CSRF protection for all non-API routes
 - Setup flow: `/setup` → `/login` → dashboard
 
 ### Storage Structure
+
 - **data/**: Certificate storage directory
   - `ca.pem`, `ca-key.pem`: Root CA certificate and private key
   - `certificates/`: Individual certificate files
@@ -82,6 +89,7 @@ LocalCA is a dual-service application: Go backend with Gin + Next.js frontend.
 - Configuration via environment variables or `cakey.txt` file
 
 ### Security Features
+
 - CSRF tokens for web forms
 - Security headers middleware
 - TLS configuration with secure ciphers
@@ -91,16 +99,20 @@ LocalCA is a dual-service application: Go backend with Gin + Next.js frontend.
 ## Development Notes
 
 ### Environment Variables
+
 Key variables: `CA_KEY_FILE`, `DATA_DIR`, `LISTEN_ADDR`, `TLS_ENABLED`, `NEXT_PUBLIC_API_URL`
 
 ### Package Dependencies
+
 - Go: Gin framework, golang.org/x/crypto for cryptographic operations
 - Frontend: Next.js 15, ShadcnUI components, Tailwind CSS, React Hook Form with Zod validation
 
 ### Test Structure
+
 - Go: Unit tests for each package in `*_test.go` files
 - Frontend: Jest configuration with jsdom environment
 - Docker: Automated build testing in CI/CD pipeline
 
 ### Dual-License Model
+
 Free for personal use, paid license required for commercial use.
