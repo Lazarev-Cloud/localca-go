@@ -397,7 +397,7 @@ func TestAPILoginHandler(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.False(t, response.Success)
-	assert.Contains(t, response.Message, "Invalid request format")
+	assert.Contains(t, response.Message, "Invalid JSON format")
 
 	// Test 2: Missing credentials
 	loginData := map[string]string{}
