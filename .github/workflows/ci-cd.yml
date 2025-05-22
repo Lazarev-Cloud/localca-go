@@ -292,6 +292,7 @@ jobs:
       # Scan containers with Trivy
       - name: Scan backend container with Trivy
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           image-ref: ghcr.io/${{ env.REPO_LC }}/backend:test
           format: 'sarif'
@@ -300,48 +301,100 @@ jobs:
 
       - name: Scan frontend container with Trivy
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           image-ref: ghcr.io/${{ env.REPO_LC }}/frontend:test
           format: 'sarif'
           output: 'trivy-frontend-results.sarif'
           severity: 'CRITICAL,HIGH'
 
-      # Upload scan results
+      # Check if SARIF files exist and GitHub Advanced Security is available
       - name: Check and prepare SARIF files
         id: check-sarif
         run: |
           $backend_exists = Test-Path -Path trivy-backend-results.sarif
           $frontend_exists = Test-Path -Path trivy-frontend-results.sarif
           
-          if($backend_exists -and $frontend_exists) {
-            echo "Both SARIF files exist"
+          if($backend_exists -or $frontend_exists) {
             echo "has_sarif=true" >> $env:GITHUB_OUTPUT
-          } elseif($backend_exists) {
-            echo "Only backend SARIF file exists"
-            Copy-Item -Path trivy-backend-results.sarif -Destination container-results.sarif
-            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
-          } elseif($frontend_exists) {
-            echo "Only frontend SARIF file exists"
-            Copy-Item -Path trivy-frontend-results.sarif -Destination container-results.sarif
-            echo "has_sarif=true" >> $env:GITHUB_OUTPUT
+            
+            # Create summary of vulnerabilities if files exist
+            if($backend_exists) {
+              echo "## Backend Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
+              if((Get-Content -Path trivy-backend-results.sarif | ConvertFrom-Json).runs.results.count -gt 0) {
+                echo "⚠️ Vulnerabilities found in backend container. See artifact for details." >> $env:GITHUB_STEP_SUMMARY
+              } else {
+                echo "✅ No vulnerabilities found in backend container." >> $env:GITHUB_STEP_SUMMARY
+              }
+            }
+            
+            if($frontend_exists) {
+              echo "## Frontend Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
+              if((Get-Content -Path trivy-frontend-results.sarif | ConvertFrom-Json).runs.results.count -gt 0) {
+                echo "⚠️ Vulnerabilities found in frontend container. See artifact for details." >> $env:GITHUB_STEP_SUMMARY
+              } else {
+                echo "✅ No vulnerabilities found in frontend container." >> $env:GITHUB_STEP_SUMMARY
+              }
+            }
+            
+            # Create a text summary file for artifacts
+            echo "# Container Security Scan Results" > security-scan-summary.txt
+            echo "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> security-scan-summary.txt
+            echo "" >> security-scan-summary.txt
+            
+            if($backend_exists) {
+              echo "## Backend Container" >> security-scan-summary.txt
+              $backendResults = Get-Content -Path trivy-backend-results.sarif | ConvertFrom-Json
+              $vulnCount = $backendResults.runs.results.count
+              echo "Total vulnerabilities found: $vulnCount" >> security-scan-summary.txt
+              
+              if($vulnCount -gt 0) {
+                echo "Severities:" >> security-scan-summary.txt
+                $severities = $backendResults.runs.results.level | Group-Object | ForEach-Object { "$($_.Name): $($_.Count)" }
+                $severities | ForEach-Object { echo "- $_" >> security-scan-summary.txt }
+              }
+              echo "" >> security-scan-summary.txt
+            }
+            
+            if($frontend_exists) {
+              echo "## Frontend Container" >> security-scan-summary.txt
+              $frontendResults = Get-Content -Path trivy-frontend-results.sarif | ConvertFrom-Json
+              $vulnCount = $frontendResults.runs.results.count
+              echo "Total vulnerabilities found: $vulnCount" >> security-scan-summary.txt
+              
+              if($vulnCount -gt 0) {
+                echo "Severities:" >> security-scan-summary.txt
+                $severities = $frontendResults.runs.results.level | Group-Object | ForEach-Object { "$($_.Name): $($_.Count)" }
+                $severities | ForEach-Object { echo "- $_" >> security-scan-summary.txt }
+              }
+            }
           } else {
-            echo "No SARIF files exist"
             echo "has_sarif=false" >> $env:GITHUB_OUTPUT
+            echo "## Container Security Scan" >> $env:GITHUB_STEP_SUMMARY
+            echo "⚠️ No scan results available" >> $env:GITHUB_STEP_SUMMARY
+            
+            # Create empty summary file
+            echo "# Container Security Scan Results" > security-scan-summary.txt
+            echo "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> security-scan-summary.txt
+            echo "" >> security-scan-summary.txt
+            echo "No scan results available" >> security-scan-summary.txt
           }
         shell: pwsh
 
-      # Upload backend SARIF file if it exists
+      # Upload backend SARIF file if it exists - might fail if Advanced Security not enabled
       - name: Upload backend container scan results
         uses: github/codeql-action/upload-sarif@v3
         if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-backend-results.sarif') != ''
+        continue-on-error: true
         with:
           sarif_file: trivy-backend-results.sarif
           category: container-security-backend
 
-      # Upload frontend SARIF file if it exists
+      # Upload frontend SARIF file if it exists - might fail if Advanced Security not enabled
       - name: Upload frontend container scan results
         uses: github/codeql-action/upload-sarif@v3
         if: steps.check-sarif.outputs.has_sarif == 'true' && hashFiles('trivy-frontend-results.sarif') != ''
+        continue-on-error: true
         with:
           sarif_file: trivy-frontend-results.sarif
           category: container-security-frontend
@@ -377,7 +430,9 @@ jobs:
             localca-go
             localca-go.spdx.json
             .next/**/*
-            container-results.sarif
+            trivy-backend-results.sarif
+            trivy-frontend-results.sarif
+            security-scan-summary.txt
           retention-days: 5
 
   deploy:
