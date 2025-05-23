@@ -38,6 +38,9 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		// CA info endpoint
 		api.GET("/ca-info", apiGetCAInfoHandler(certSvc, store))
 
+		// System statistics endpoint
+		api.GET("/statistics", apiGetStatisticsHandler(certSvc, store))
+
 		// Certificate operations
 		api.POST("/revoke", apiRevokeCertificateHandler(certSvc, store))
 		api.POST("/renew", apiRenewCertificateHandler(certSvc, store))
@@ -641,5 +644,98 @@ func apiLogoutHandler(store *storage.Storage) gin.HandlerFunc {
 			Success: true,
 			Message: "Logout successful",
 		})
+	}
+}
+
+// apiGetStatisticsHandler handles GET /api/statistics
+func apiGetStatisticsHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get all certificates
+		certNames, err := store.ListCertificates()
+		if err != nil {
+			log.Printf("Failed to list certificates: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to get statistics",
+			})
+			return
+		}
+
+		// Calculate statistics
+		stats := map[string]interface{}{
+			"total_certificates":  len(certNames),
+			"active_certificates": 0,
+			"expiring_soon":       0,
+			"expired":             0,
+			"revoked":             0,
+			"client_certificates": 0,
+			"server_certificates": 0,
+		}
+
+		// Count certificates by status
+		for _, name := range certNames {
+			certInfo, err := getCertificateInfo(store, name)
+			if err != nil {
+				log.Printf("Failed to get certificate info for %s: %v", name, err)
+				continue
+			}
+
+			if certInfo.IsRevoked {
+				stats["revoked"] = stats["revoked"].(int) + 1
+			} else if certInfo.IsExpired {
+				stats["expired"] = stats["expired"].(int) + 1
+			} else if certInfo.IsExpiringSoon {
+				stats["expiring_soon"] = stats["expiring_soon"].(int) + 1
+			} else {
+				stats["active_certificates"] = stats["active_certificates"].(int) + 1
+			}
+
+			if certInfo.IsClient {
+				stats["client_certificates"] = stats["client_certificates"].(int) + 1
+			} else {
+				stats["server_certificates"] = stats["server_certificates"].(int) + 1
+			}
+		}
+
+		// Get storage statistics
+		storageStats := getStorageStatistics(store)
+		stats["storage"] = storageStats
+
+		// Get system uptime (mock for now)
+		stats["uptime_percentage"] = 99.9
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Statistics retrieved successfully",
+			Data:    stats,
+		})
+	}
+}
+
+// Helper function to get storage statistics
+func getStorageStatistics(store *storage.Storage) map[string]interface{} {
+	basePath := store.GetBasePath()
+
+	// Calculate directory size
+	var totalSize int64
+	filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			totalSize += info.Size()
+		}
+		return nil
+	})
+
+	// Convert to MB
+	totalSizeMB := float64(totalSize) / (1024 * 1024)
+
+	// Calculate usage percentage (assuming 1GB limit for example)
+	usagePercentage := (totalSizeMB / 1024) * 100
+	if usagePercentage > 100 {
+		usagePercentage = 100
+	}
+
+	return map[string]interface{}{
+		"total_size_mb":    totalSizeMB,
+		"usage_percentage": usagePercentage,
 	}
 }

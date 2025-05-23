@@ -1,0 +1,93 @@
+coverage:
+  precision: 2
+  round: down
+  range: "60...80"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+        base: auto
+      backend:
+        target: 60%
+        threshold: 5%
+        paths:
+          - "pkg/**/*"
+          - "main.go"
+        flags:
+          - backend
+      frontend:
+        target: 40%
+        threshold: 5%
+        paths:
+          - "app/**/*"
+          - "components/**/*"
+          - "hooks/**/*"
+        flags:
+          - frontend
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        base: auto
+
+comment:
+  layout: "reach, diff, flags, files, components"
+  behavior: default
+  require_changes: false
+  require_base: no
+  require_head: yes
+
+flag_management:
+  default_rules:
+    carryforward: true
+    
+component_management:
+  individual_components:
+    - component_id: acme
+      name: ACME
+      paths:
+        - pkg/acme/
+    - component_id: certificates
+      name: Certificates
+      paths:
+        - pkg/certificates/
+    - component_id: config
+      name: Configuration
+      paths:
+        - pkg/config/
+    - component_id: email
+      name: Email
+      paths:
+        - pkg/email/
+    - component_id: handlers
+      name: Handlers
+      paths:
+        - pkg/handlers/
+    - component_id: storage
+      name: Storage
+      paths:
+        - pkg/storage/
+    - component_id: frontend_app
+      name: Frontend App
+      paths:
+        - app/
+    - component_id: frontend_components
+      name: Frontend Components
+      paths:
+        - components/
+    - component_id: frontend_hooks
+      name: Frontend Hooks
+      paths:
+        - hooks/
+
+ignore:
+  - "**/*.test.js"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*_test.go"
+  - "**/vendor/**"
+  - "**/node_modules/**"
+  - "**/testdata/**"
+  - "**/__mocks__/**"
+  - "**/.next/**" 
