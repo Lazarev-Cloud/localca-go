@@ -453,5 +453,10 @@ func getContentTypeForFile(filename string) string {
 	}
 }
 
+// GetDatabase returns the database instance if available
+func (e *EnhancedStorage) GetDatabase() *database.Database {
+	return e.database
+}
+
 // Ensure EnhancedStorage implements StorageInterface
 var _ StorageInterface = (*EnhancedStorage)(nil)

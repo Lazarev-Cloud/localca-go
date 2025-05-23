@@ -23,7 +23,7 @@ export default function Home() {
         
         // Try the direct proxy endpoint for best cookie forwarding
         console.log('Trying proxy endpoint for CA info...')
-        const proxyResponse = await fetch('/api/proxy/api/ca-info', {
+        const proxyResponse = await fetch('/api/proxy/ca-info', {
           method: 'GET',
           credentials: 'include',
           headers: {

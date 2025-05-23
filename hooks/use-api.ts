@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 // Define API response type
@@ -40,7 +40,7 @@ export function useApi() {
     }
   }, [error, router])
 
-  const fetchApi = async <T>(
+  const fetchApi = useCallback(async <T>(
     endpoint: string, 
     options?: RequestInit,
     retries = 2
@@ -171,9 +171,9 @@ export function useApi() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const postFormData = async <T>(
+  const postFormData = useCallback(async <T>(
     endpoint: string,
     formData: FormData,
     retries = 2
@@ -238,12 +238,15 @@ export function useApi() {
           return postFormData(endpoint, formData, retries - 1)
         }
         
+        // Return error response
         return {
           success: false,
           message: errorMessage,
+          setupRequired
         }
       }
 
+      // Process successful response
       const data = await response.json()
       return data as ApiResponse<T>
     } catch (err) {
@@ -283,7 +286,7 @@ export function useApi() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   return {
     loading,
