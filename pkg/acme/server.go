@@ -25,14 +25,15 @@ import (
 
 // ACMEServer implements an ACME server for automated certificate issuance
 type ACMEServer struct {
-	certSvc    *certificates.CertificateService
-	storage    *storage.Storage
-	domains    map[string]bool
-	challenges map[string]string
-	nonces     map[string]time.Time // Changed to track nonce expiration time
-	accounts   map[string]*Account
-	mutex      sync.RWMutex
-	keyPair    *ecdsa.PrivateKey
+	certSvc     *certificates.CertificateService
+	storage     *storage.Storage
+	acmeStorage *ACMEStorage
+	domains     map[string]bool
+	challenges  map[string]string
+	nonces      map[string]time.Time // Changed to track nonce expiration time
+	accounts    map[string]*Account
+	mutex       sync.RWMutex
+	keyPair     *ecdsa.PrivateKey
 	// Rate limiting
 	ipRateLimits      map[string]*RateLimit
 	accountRateLimits map[string]*RateLimit
@@ -76,6 +77,12 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 	acmeDir := filepath.Join(store.GetBasePath(), "acme")
 	if err := os.MkdirAll(acmeDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create ACME directory: %w", err)
+	}
+
+	// Initialize ACME storage
+	acmeStorage, err := NewACMEStorage(store.GetBasePath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ACME storage: %w", err)
 	}
 
 	// Generate or load server key
@@ -123,33 +130,15 @@ func NewACMEServer(certSvc *certificates.CertificateService, store *storage.Stor
 		}
 	}
 
-	// Load accounts if they exist
-	accounts := make(map[string]*Account)
-	accountsPath := filepath.Join(acmeDir, "accounts.json")
-	if _, err := os.Stat(accountsPath); err == nil {
-		accountsData, err := os.ReadFile(accountsPath)
-		if err == nil {
-			// Try to unmarshal accounts
-			var accountsRaw map[string]json.RawMessage
-			if err := json.Unmarshal(accountsData, &accountsRaw); err == nil {
-				for id, rawAccount := range accountsRaw {
-					var account Account
-					if err := json.Unmarshal(rawAccount, &account); err == nil {
-						accounts[id] = &account
-					}
-				}
-			}
-		}
-	}
-
 	// Start a goroutine to clean up expired nonces periodically
 	server := &ACMEServer{
 		certSvc:           certSvc,
 		storage:           store,
+		acmeStorage:       acmeStorage,
 		domains:           make(map[string]bool),
 		challenges:        make(map[string]string),
 		nonces:            make(map[string]time.Time),
-		accounts:          accounts,
+		accounts:          make(map[string]*Account),
 		keyPair:           keyPair,
 		ipRateLimits:      make(map[string]*RateLimit),
 		accountRateLimits: make(map[string]*RateLimit),
@@ -206,88 +195,78 @@ func (s *ACMEServer) cleanupRateLimits() {
 	}
 }
 
-// checkRateLimit checks if a request is within rate limits
+// checkRateLimit checks if a request should be rate limited
 func (s *ACMEServer) checkRateLimit(r *http.Request, accountID string) bool {
-	ip := getClientIP(r)
-	now := time.Now()
-
-	// Check IP-based rate limit
 	s.rateLimitMutex.Lock()
 	defer s.rateLimitMutex.Unlock()
 
-	ipLimit, ok := s.ipRateLimits[ip]
-	if !ok {
+	now := time.Now()
+	clientIP := getClientIP(r)
+
+	// Check IP-based rate limit
+	ipLimit, exists := s.ipRateLimits[clientIP]
+	if !exists {
 		ipLimit = &RateLimit{
-			Count:      1,
+			Count:      0,
 			ResetTime:  now.Add(RateLimitWindow),
 			LastAccess: now,
 		}
-		s.ipRateLimits[ip] = ipLimit
-		return true
+		s.ipRateLimits[clientIP] = ipLimit
 	}
 
-	// Reset if window has expired
+	// Reset counter if window has passed
 	if now.After(ipLimit.ResetTime) {
-		ipLimit.Count = 1
+		ipLimit.Count = 0
 		ipLimit.ResetTime = now.Add(RateLimitWindow)
-		ipLimit.LastAccess = now
-		return true
 	}
 
-	// Check if limit exceeded
+	// Check burst rate limit
+	if now.Sub(ipLimit.LastAccess) < RateLimitBurstWindow {
+		if ipLimit.Count >= RateLimitBurst {
+			return false
+		}
+	}
+
+	// Check overall rate limit
 	if ipLimit.Count >= RateLimitMax {
 		return false
 	}
 
-	// Check for burst rate limiting - if too many requests in a short time
-	if now.Sub(ipLimit.LastAccess) < RateLimitBurstWindow && ipLimit.Count > RateLimitBurst {
-		return false
-	}
-
-	// Increment counter and update time
+	// Update counters
 	ipLimit.Count++
 	ipLimit.LastAccess = now
 
-	// If we have an account ID, also check account-based rate limit
+	// Check account-based rate limit if account ID is provided
 	if accountID != "" {
-		acctLimit, ok := s.accountRateLimits[accountID]
-		if !ok {
-			acctLimit = &RateLimit{
-				Count:      1,
+		accountLimit, exists := s.accountRateLimits[accountID]
+		if !exists {
+			accountLimit = &RateLimit{
+				Count:      0,
 				ResetTime:  now.Add(RateLimitWindow),
 				LastAccess: now,
 			}
-			s.accountRateLimits[accountID] = acctLimit
-			return true
+			s.accountRateLimits[accountID] = accountLimit
 		}
 
-		// Reset if window has expired
-		if now.After(acctLimit.ResetTime) {
-			acctLimit.Count = 1
-			acctLimit.ResetTime = now.Add(RateLimitWindow)
-			acctLimit.LastAccess = now
-			return true
+		// Reset counter if window has passed
+		if now.After(accountLimit.ResetTime) {
+			accountLimit.Count = 0
+			accountLimit.ResetTime = now.Add(RateLimitWindow)
 		}
 
-		// Check if limit exceeded
-		if acctLimit.Count >= RateLimitMax {
+		// Check account rate limit
+		if accountLimit.Count >= RateLimitMax {
 			return false
 		}
 
-		// Check for burst rate limiting for account
-		if now.Sub(acctLimit.LastAccess) < RateLimitBurstWindow && acctLimit.Count > RateLimitBurst {
-			return false
-		}
-
-		// Increment counter and update time
-		acctLimit.Count++
-		acctLimit.LastAccess = now
+		// Update counter
+		accountLimit.Count++
+		accountLimit.LastAccess = now
 	}
 
 	return true
 }
 
-// getClientIP gets the client IP address from a request
 func getClientIP(r *http.Request) string {
 	// Check for X-Forwarded-For header
 	forwardedFor := r.Header.Get("X-Forwarded-For")
@@ -330,6 +309,9 @@ func (s *ACMEServer) SetupRoutes(router *http.ServeMux) {
 
 	// Revocation endpoint
 	router.HandleFunc("/acme/revoke-cert", s.securityMiddleware(s.handleRevocation))
+
+	// Finalize endpoint
+	router.HandleFunc("/acme/finalize/", s.securityMiddleware(s.handleFinalize))
 }
 
 // securityMiddleware adds security headers and rate limiting
@@ -415,69 +397,12 @@ func (s *ACMEServer) validateNonce(nonce string) bool {
 	return true
 }
 
-// handleNewAccount handles the ACME new-account endpoint
-func (s *ACMEServer) handleNewAccount(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// TODO: Implement account creation
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Creating a new account
-	// 3. Storing the account information
-
-	// For now, return a placeholder response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "valid",
-		"orders": fmt.Sprintf("%s://%s/acme/orders", schemeFromRequest(r), r.Host),
-	})
-}
-
-// handleNewOrder handles the ACME new-order endpoint
-func (s *ACMEServer) handleNewOrder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// TODO: Implement order creation
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Creating a new order
-	// 3. Creating authorizations for each domain
-
-	// For now, return a placeholder response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "pending",
-		"expires": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-		"identifiers": []map[string]string{
-			{"type": "dns", "value": "example.com"},
-		},
-		"authorizations": []string{
-			fmt.Sprintf("%s://%s/acme/authz/example", schemeFromRequest(r), r.Host),
-		},
-		"finalize": fmt.Sprintf("%s://%s/acme/finalize/example", schemeFromRequest(r), r.Host),
-	})
-}
-
 // handleAccount handles the ACME account endpoint
 func (s *ACMEServer) handleAccount(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// TODO: Implement account management
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the account
-	// 3. Updating the account if necessary
 
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
@@ -494,12 +419,6 @@ func (s *ACMEServer) handleOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// TODO: Implement order management
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the order
-	// 3. Updating the order if necessary
 
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
@@ -522,12 +441,6 @@ func (s *ACMEServer) handleAuthorization(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// TODO: Implement authorization management
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the authorization
-	// 3. Updating the authorization if necessary
 
 	// For now, return a placeholder response
 	w.Header().Set("Content-Type", "application/json")
@@ -553,29 +466,15 @@ func (s *ACMEServer) handleAuthorization(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// handleChallenge handles the ACME challenge endpoint
-func (s *ACMEServer) handleChallenge(w http.ResponseWriter, r *http.Request) {
+// handleRevocation handles the ACME certificate revocation endpoint
+func (s *ACMEServer) handleRevocation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// TODO: Implement challenge validation
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the challenge
-	// 3. Validating the challenge
-	// 4. Updating the challenge status
-
-	// For now, return a placeholder response
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":    "valid",
-		"type":      "http-01",
-		"url":       fmt.Sprintf("%s://%s/acme/challenge/http01/example", schemeFromRequest(r), r.Host),
-		"token":     "token",
-		"validated": time.Now().Format(time.RFC3339),
-	})
+	// For now, return a success response
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleCertificate handles the ACME certificate endpoint
@@ -585,34 +484,11 @@ func (s *ACMEServer) handleCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement certificate issuance
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the order
-	// 3. Verifying that all authorizations are valid
-	// 4. Issuing the certificate
-
 	// For now, return a placeholder response
-	w.Header().Set("Content-Type", "application/pem-certificate-chain")
-	w.Write([]byte("-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUJlK7RCseiIHMJvTQRFNSGr11lPwwDQYJKoZIhvcNAQEL\n-----END CERTIFICATE-----"))
-}
-
-// handleRevocation handles the ACME certificate revocation endpoint
-func (s *ACMEServer) handleRevocation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// TODO: Implement certificate revocation
-	// This will require:
-	// 1. Validating the JWS signature
-	// 2. Retrieving the certificate
-	// 3. Verifying that the requester is authorized to revoke the certificate
-	// 4. Revoking the certificate
-
-	// For now, return a success response
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "pending",
+	})
 }
 
 // Helper functions
