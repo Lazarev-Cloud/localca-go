@@ -56,8 +56,8 @@ export function SystemStatus({ className }: SystemStatusProps) {
       
       // Fetch statistics and certificates in parallel
       const [statsResponse, certsResponse] = await Promise.all([
-        fetchApi<SystemStats>('/statistics'),
-        fetchApi<{ certificates: Certificate[] }>('/certificates')
+            fetchApi<SystemStats>('/api/statistics'),
+    fetchApi<{ certificates: Certificate[] }>('/api/certificates')
       ])
       
       if (statsResponse.success && statsResponse.data) {

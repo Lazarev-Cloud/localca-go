@@ -40,7 +40,7 @@ export function DashboardHeader() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/logout', {
+      const response = await fetch('/api/proxy/api/logout', {
         method: 'POST',
         credentials: 'include',
       })

@@ -19,7 +19,7 @@ export default function LoginPage() {
       try {
         setChecking(true)
         // Try to access ca-info endpoint which requires authentication
-        const response = await fetch('/api/ca-info', {
+        const response = await fetch('/api/proxy/api/ca-info', {
           credentials: 'include',
           cache: 'no-store',
           headers: {
@@ -61,7 +61,7 @@ export default function LoginPage() {
 
     try {
       // Use the proxy endpoint for login
-      const response = await fetch(`/api/login`, {
+      const response = await fetch(`/api/proxy/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

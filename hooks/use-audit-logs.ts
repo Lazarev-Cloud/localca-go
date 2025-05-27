@@ -70,7 +70,7 @@ export function useAuditLogs(limit: number = 10, offset: number = 0) {
       setError(null)
       lastRequestRef.current = now
 
-      const response = await fetchApi<AuditLogsResponse>(`/audit-logs?limit=50&offset=0`)
+      const response = await fetchApi<AuditLogsResponse>(`/api/audit-logs?limit=50&offset=0`)
       
       if (response.success && response.data) {
         globalCache.data = response.data.audit_logs || []

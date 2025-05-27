@@ -88,9 +88,12 @@ async function proxyRequest(
 
     // Make the request to the backend
     // For server-side proxy, always use the internal Docker network URL
+    // Note: apiPath already includes 'api/' from the frontend request, so we don't add it again
     const backendUrl = process.env.NEXT_PUBLIC_API_URL 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/api/${apiPath}` 
-      : `http://localhost:8080/api/${apiPath}`;
+      ? `${process.env.NEXT_PUBLIC_API_URL}/${apiPath}` 
+      : `http://localhost:8080/${apiPath}`;
+    
+    console.log(`[Proxy] ${method} ${backendUrl}`)
     
     const response = await fetch(backendUrl, {
       method,
@@ -101,6 +104,8 @@ async function proxyRequest(
       signal: controller.signal,
     })
     
+    console.log(`[Proxy] Response: ${response.status} ${response.statusText}`)
+    
     // Clear timeout
     clearTimeout(timeoutId)
 
@@ -108,17 +113,31 @@ async function proxyRequest(
     const contentType = response.headers.get('content-type')
     let responseData: any
     
+    // Handle different response types
     if (contentType?.includes('application/json')) {
       responseData = await response.json()
+    } else if (contentType?.includes('application/octet-stream') || 
+               contentType?.includes('application/x-pem-file') ||
+               apiPath.includes('download/')) {
+      // Handle file downloads as binary data
+      responseData = await response.arrayBuffer()
     } else {
       responseData = await response.text()
     }
 
-    // Create the NextResponse - handle both JSON and non-JSON responses
+    // Create the NextResponse - handle different response types
     let nextResponse
     if (contentType?.includes('application/json')) {
       nextResponse = NextResponse.json(responseData, {
         status: response.status,
+      })
+    } else if (responseData instanceof ArrayBuffer) {
+      // Handle binary file downloads
+      nextResponse = new NextResponse(responseData, {
+        status: response.status,
+        headers: {
+          'Content-Type': contentType || 'application/octet-stream'
+        }
       })
     } else {
       nextResponse = new NextResponse(responseData, {

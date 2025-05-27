@@ -38,7 +38,7 @@ export function CertificateActions({ id }: CertificateActionsProps) {
     try {
       setActionLoading(`download-${format}`)
       // Use the proxy endpoint to download certificate
-      const response = await fetch(`/api/proxy/download/${encodeURIComponent(certificate.common_name)}/${format}`, {
+      const response = await fetch(`/api/proxy/api/download/${encodeURIComponent(certificate.common_name)}/${format}`, {
         credentials: 'include'
       })
       

@@ -27,21 +27,21 @@ export function useCertificates() {
   const { loading, error, fetchApi, postFormData } = useApi()
 
   const fetchCertificates = async () => {
-    const response = await fetchApi<{ certificates: Certificate[] }>('/certificates')
+    const response = await fetchApi<{ certificates: Certificate[] }>('/api/certificates')
     if (response.success && response.data) {
       setCertificates(response.data.certificates || [])
     }
   }
 
   const fetchCAInfo = async () => {
-    const response = await fetchApi<CAInfo>('/ca-info')
+    const response = await fetchApi<CAInfo>('/api/ca-info')
     if (response.success && response.data) {
       setCAInfo(response.data)
     }
   }
 
   const createCertificate = async (formData: FormData) => {
-    const response = await postFormData<any>('/certificates', formData)
+    const response = await postFormData<any>('/api/certificates', formData)
     if (response.success) {
       // Refresh the certificates list
       fetchCertificates()
@@ -53,7 +53,7 @@ export function useCertificates() {
     const formData = new FormData()
     formData.append('serial_number', serialNumber)
     
-    const response = await postFormData<any>('/revoke', formData)
+    const response = await postFormData<any>('/api/revoke', formData)
     if (response.success) {
       // Refresh the certificates list
       fetchCertificates()
@@ -65,7 +65,7 @@ export function useCertificates() {
     const formData = new FormData()
     formData.append('serial_number', serialNumber)
     
-    const response = await postFormData<any>('/renew', formData)
+    const response = await postFormData<any>('/api/renew', formData)
     if (response.success) {
       // Refresh the certificates list
       fetchCertificates()
@@ -77,7 +77,7 @@ export function useCertificates() {
     const formData = new FormData()
     formData.append('serial_number', serialNumber)
     
-    const response = await postFormData<any>('/delete', formData)
+    const response = await postFormData<any>('/api/delete', formData)
     if (response.success) {
       // Refresh the certificates list
       fetchCertificates()

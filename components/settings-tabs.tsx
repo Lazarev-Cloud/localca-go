@@ -78,7 +78,7 @@ export function SettingsTabs() {
 
   const loadSettings = async () => {
     try {
-      const response = await fetch('/api/proxy/settings', {
+      const response = await fetch('/api/proxy/api/settings', {
         credentials: 'include',
       })
       if (response.ok) {
@@ -95,7 +95,7 @@ export function SettingsTabs() {
   const saveSettings = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/proxy/settings', {
+      const response = await fetch('/api/proxy/api/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ export function SettingsTabs() {
   const testEmailConfig = async () => {
     setIsTesting(true)
     try {
-      const response = await fetch('/api/proxy/test-email', {
+      const response = await fetch('/api/proxy/api/test-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

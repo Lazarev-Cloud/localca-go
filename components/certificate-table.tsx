@@ -80,7 +80,7 @@ export function CertificateTable() {
     try {
       setActionLoading(`download-${serialNumber}`)
       // Use the proxy endpoint to download certificate
-      const response = await fetch(`/api/proxy/api/download/${encodeURIComponent(commonName)}/pem`, {
+      const response = await fetch(`/api/proxy/api/download/${encodeURIComponent(commonName)}/crt`, {
         credentials: 'include'
       })
       
