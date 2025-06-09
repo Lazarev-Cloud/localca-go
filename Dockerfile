@@ -23,10 +23,6 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /app/localca-go .
 
-# Copy static files
-COPY --from=builder /app/static /app/static
-COPY --from=builder /app/templates /app/templates
-
 # Create data directory
 RUN mkdir -p /app/data
 

@@ -3,68 +3,240 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Frontend Architecture
+# Frontend Architecture and Implementation
 
-The LocalCA frontend is built with Next.js and React, providing a modern, responsive user interface for certificate management.
+The LocalCA frontend is built with Next.js 15 using the App Router, React 18, and modern web technologies to provide a responsive and intuitive certificate management interface.
+
+## Technology Stack
+
+### Core Framework
+- **Next.js 15**: React framework with App Router for modern web applications
+- **React 18**: Component library with hooks and concurrent features
+- **TypeScript**: Type-safe JavaScript for better development experience
+- **Tailwind CSS**: Utility-first CSS framework for rapid UI development
+
+### UI Components and Design System
+- **shadcn/ui**: High-quality, accessible React components built on Radix UI
+- **Radix UI**: Unstyled, accessible UI primitives for React
+- **Lucide React**: Beautiful and consistent icon library
+- **next-themes**: Dark/light theme support with system preference detection
+
+### Form Handling and Validation
+- **React Hook Form**: Performant forms with minimal re-renders
+- **Zod**: TypeScript-first schema validation library
+- **@hookform/resolvers**: Integration between React Hook Form and Zod
+
+### Data Visualization and UI Enhancements
+- **Recharts**: Composable charting library for certificate statistics
+- **date-fns**: Modern JavaScript date utility library
+- **Sonner**: Toast notifications with excellent UX
+- **cmdk**: Command palette component for quick actions
 
 ## Application Structure
 
-The application follows Next.js 13+ App Router structure:
+### App Router Architecture ([app](mdc:app))
 
-- [app](mdc:app): Main application directory
-  - [page.tsx](mdc:app/page.tsx): Homepage/dashboard
-  - [layout.tsx](mdc:app/layout.tsx): Root layout component
-  - [globals.css](mdc:app/globals.css): Global styles
-  - [api](mdc:app/api): API route handlers
-  - [login](mdc:app/login): Login page
-  - [setup](mdc:app/setup): Initial setup wizard
-  - [certificates](mdc:app/certificates): Certificate management pages
-  - [create](mdc:app/create): Certificate creation wizard
-  - [settings](mdc:app/settings): Application settings
+The application uses Next.js App Router with the following structure:
 
-## Component Architecture
+#### Core Pages
+- **[page.tsx](mdc:app/page.tsx)**: Main dashboard with system overview and statistics
+- **[layout.tsx](mdc:app/layout.tsx)**: Root layout with theme provider and global styles
+- **[loading.tsx](mdc:app/loading.tsx)**: Global loading UI component
+- **[error.tsx](mdc:app/error.tsx)**: Global error boundary component
 
-The UI uses a component-based architecture with reusable components:
+#### Feature Pages
+- **[certificates/page.tsx](mdc:app/certificates/page.tsx)**: Certificate listing and management
+- **[certificates/[id]/page.tsx](mdc:app/certificates/[id]/page.tsx)**: Individual certificate details
+- **[create/page.tsx](mdc:app/create/page.tsx)**: Certificate creation wizard
+- **[settings/page.tsx](mdc:app/settings/page.tsx)**: Application settings and configuration
+- **[login/page.tsx](mdc:app/login/page.tsx)**: User authentication
+- **[setup/page.tsx](mdc:app/setup/page.tsx)**: Initial application setup
 
-- [components](mdc:components): Reusable UI components
-  - Buttons, forms, modals, and other UI elements
-  - Layout components for consistent page structure
-  - Certificate visualization components
+### API Routes ([app/api](mdc:app/api))
 
-## UI Framework
+Next.js API routes providing backend integration:
 
-The application uses a combination of:
+#### Proxy Routes
+- **[proxy/[...path]/route.ts](mdc:app/api/proxy/[...path]/route.ts)**: Dynamic proxy to backend API
+- Handles authentication, CSRF tokens, and request forwarding
+- Provides error handling and response transformation
 
-- **TailwindCSS**: For styling and responsive design
-- **shadcn/ui**: For UI components based on Radix UI primitives
-- **React Hook Form**: For form handling
-- **Zod**: For form validation
+#### Direct API Routes
+- **[ca-info/route.ts](mdc:app/api/ca-info/route.ts)**: Certificate Authority information
+- **[certificates/route.ts](mdc:app/api/certificates/route.ts)**: Certificate CRUD operations
+- **[login/route.ts](mdc:app/api/login/route.ts)**: Authentication endpoints
+- **[setup/route.ts](mdc:app/api/setup/route.ts)**: Initial setup endpoints
 
-## State Management
+## Component Architecture ([components](mdc:components))
 
-State management is handled through:
+### UI Foundation ([components/ui](mdc:components/ui))
+Base components from shadcn/ui providing consistent design system:
+- **Button, Input, Select**: Form controls with variants and states
+- **Dialog, Sheet, Popover**: Modal and overlay components
+- **Table, Card, Badge**: Data display components
+- **Toast, Alert**: Notification and feedback components
+- **Tabs, Accordion**: Navigation and content organization
 
-- React's built-in hooks (useState, useContext)
-- Custom hooks in the [hooks](mdc:hooks) directory for shared logic
+### Feature Components
 
-## API Integration
+#### Certificate Management
+- **[certificate-list.tsx](mdc:components/certificate-list.tsx)**: Certificate table with filtering and sorting
+- **[certificate-card.tsx](mdc:components/certificate-card.tsx)**: Individual certificate display
+- **[certificate-form.tsx](mdc:components/certificate-form.tsx)**: Certificate creation and editing forms
+- **[certificate-details.tsx](mdc:components/certificate-details.tsx)**: Detailed certificate information
 
-The frontend communicates with the backend through:
+#### Dashboard Components
+- **[dashboard-stats.tsx](mdc:components/dashboard-stats.tsx)**: System statistics overview
+- **[system-status.tsx](mdc:components/system-status.tsx)**: Real-time system health monitoring
+- **[recent-activity.tsx](mdc:components/recent-activity.tsx)**: Recent certificate operations
 
-- REST API calls for CRUD operations
-- Server-side rendering for initial data loading
-- Client-side data fetching for dynamic updates
+#### Layout and Navigation
+- **[header.tsx](mdc:components/header.tsx)**: Application header with navigation
+- **[sidebar.tsx](mdc:components/sidebar.tsx)**: Side navigation menu
+- **[theme-toggle.tsx](mdc:components/theme-toggle.tsx)**: Dark/light theme switcher
+- **[user-menu.tsx](mdc:components/user-menu.tsx)**: User account dropdown
 
-## Key Pages
+## Custom Hooks ([hooks](mdc:hooks))
 
-- **Dashboard**: Overview of all certificates and their status
-- **Certificate Creation**: Wizard for creating new certificates
-- **Certificate Details**: Viewing and managing certificate details
-- **Settings**: Configuration of CA parameters
-- **Login/Auth**: Authentication interface
+React hooks for state management and API integration:
 
-## Frontend-Backend Integration
+### API Integration Hooks
+- **[use-api.ts](mdc:hooks/use-api.ts)**: Generic API client with error handling and loading states
+- **[use-certificates.ts](mdc:hooks/use-certificates.ts)**: Certificate data fetching and mutations
+- **[use-auth.ts](mdc:hooks/use-auth.ts)**: Authentication state management
+- **[use-system-status.ts](mdc:hooks/use-system-status.ts)**: Real-time system monitoring
 
-The frontend connects to the backend API defined in [pkg/handlers](mdc:pkg/handlers) through HTTP requests, configured via environment variables:
+### Utility Hooks
+- **[use-local-storage.ts](mdc:hooks/use-local-storage.ts)**: Persistent local storage state
+- **[use-debounce.ts](mdc:hooks/use-debounce.ts)**: Debounced value updates for search
+- **[use-toast.ts](mdc:hooks/use-toast.ts)**: Toast notification management
 
-- `NEXT_PUBLIC_API_URL`: Base URL for the backend API
+## State Management Strategy
+
+### Local State Management
+- **React useState**: Component-level state for UI interactions
+- **React useReducer**: Complex state logic with actions and reducers
+- **React useContext**: Shared state across component trees
+
+### Server State Management
+- **SWR Pattern**: Stale-while-revalidate for data fetching
+- **Optimistic Updates**: Immediate UI updates with rollback on error
+- **Cache Invalidation**: Smart cache management for data consistency
+
+### Form State Management
+- **React Hook Form**: Uncontrolled components for performance
+- **Zod Validation**: Schema-based validation with TypeScript integration
+- **Field Arrays**: Dynamic form fields for certificate SANs
+
+## Styling and Design System
+
+### Tailwind CSS Configuration ([tailwind.config.ts](mdc:tailwind.config.ts))
+- **Custom Color Palette**: Brand colors with dark/light mode variants
+- **Typography Scale**: Consistent text sizing and spacing
+- **Component Variants**: Reusable style patterns
+- **Responsive Breakpoints**: Mobile-first responsive design
+
+### Design Tokens
+- **Colors**: Primary, secondary, accent, and semantic colors
+- **Spacing**: Consistent spacing scale for layout
+- **Typography**: Font families, sizes, and line heights
+- **Shadows**: Elevation system for depth and hierarchy
+
+### Theme System
+- **CSS Variables**: Dynamic theming with CSS custom properties
+- **Dark Mode**: Automatic dark mode with system preference detection
+- **Theme Persistence**: User preference storage in localStorage
+
+## Performance Optimizations
+
+### Next.js Optimizations
+- **App Router**: Improved performance with React Server Components
+- **Image Optimization**: Automatic image optimization and lazy loading
+- **Bundle Splitting**: Automatic code splitting for optimal loading
+- **Static Generation**: Pre-rendered pages where possible
+
+### React Optimizations
+- **React.memo**: Memoized components to prevent unnecessary re-renders
+- **useMemo/useCallback**: Memoized values and functions
+- **Lazy Loading**: Dynamic imports for code splitting
+- **Suspense Boundaries**: Loading states with React Suspense
+
+### Data Loading Optimizations
+- **Parallel Data Fetching**: Concurrent API requests
+- **Request Deduplication**: Automatic request deduplication
+- **Background Revalidation**: Fresh data without blocking UI
+- **Optimistic Updates**: Immediate UI feedback
+
+## Security Implementation
+
+### Authentication and Authorization
+- **Session-based Auth**: Secure session management with HTTP-only cookies
+- **CSRF Protection**: Cross-site request forgery prevention
+- **Route Protection**: Protected routes with authentication checks
+- **Role-based Access**: User permission management
+
+### Input Validation and Sanitization
+- **Client-side Validation**: Immediate feedback with Zod schemas
+- **Server-side Validation**: Backend validation for security
+- **XSS Prevention**: Input sanitization and output encoding
+- **SQL Injection Prevention**: Parameterized queries and ORM usage
+
+## Testing Strategy
+
+### Component Testing
+- **Jest**: JavaScript testing framework with React support
+- **React Testing Library**: Testing utilities focused on user behavior
+- **User Event**: Realistic user interaction simulation
+- **Mock Service Worker**: API mocking for isolated testing
+
+### Integration Testing
+- **End-to-end Testing**: Full user workflow testing
+- **API Integration**: Backend API integration testing
+- **Authentication Flow**: Login and session management testing
+- **Form Validation**: Complex form interaction testing
+
+### Accessibility Testing
+- **ARIA Compliance**: Screen reader and keyboard navigation support
+- **Color Contrast**: WCAG compliance for visual accessibility
+- **Focus Management**: Proper focus handling for keyboard users
+- **Semantic HTML**: Meaningful markup for assistive technologies
+
+## Build and Deployment
+
+### Development Workflow
+- **Hot Reloading**: Instant feedback during development
+- **TypeScript Checking**: Real-time type checking and error reporting
+- **ESLint Integration**: Code quality and consistency enforcement
+- **Prettier Formatting**: Automatic code formatting
+
+### Production Build
+- **Static Optimization**: Pre-rendered pages and assets
+- **Bundle Analysis**: Bundle size monitoring and optimization
+- **Asset Optimization**: Minification and compression
+- **Service Worker**: Offline support and caching strategies
+
+### Deployment Configuration
+- **Environment Variables**: Runtime configuration management
+- **API Proxy**: Backend API integration in production
+- **Static Assets**: CDN-ready static asset serving
+- **Health Checks**: Application health monitoring endpoints
+
+## User Experience Features
+
+### Responsive Design
+- **Mobile-first**: Optimized for mobile devices
+- **Tablet Support**: Intermediate screen size optimization
+- **Desktop Enhancement**: Full-featured desktop experience
+- **Touch Support**: Touch-friendly interactions
+
+### Accessibility Features
+- **Keyboard Navigation**: Full keyboard accessibility
+- **Screen Reader Support**: ARIA labels and descriptions
+- **High Contrast**: Support for high contrast mode
+- **Reduced Motion**: Respect for user motion preferences
+
+### Progressive Enhancement
+- **Core Functionality**: Works without JavaScript
+- **Enhanced Experience**: JavaScript-enhanced interactions
+- **Offline Support**: Basic offline functionality
+- **Performance Monitoring**: Real user monitoring integration

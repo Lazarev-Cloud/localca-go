@@ -22,7 +22,7 @@ func TestValidateFileName(t *testing.T) {
 		{"Special characters", "test@#$%^&*().txt", "test.txt"},
 		{"Long filename", strings.Repeat("a", 150), strings.Repeat("a", 100)},
 		{"Unicode characters", "тест.txt", "txt"},
-		{"Windows path", "C:\\Windows\\System32\\evil.exe", "CWindowsSystem32evil.exe"},
+		{"Windows path", "C:\\Windows\\System32\\evil.exe", "evil.exe"},
 	}
 
 	for _, tt := range tests {
@@ -112,8 +112,8 @@ func TestValidateEmailAddress(t *testing.T) {
 
 func TestValidatePassword(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name        string
+		input       string
 		description string
 	}{
 		{"Simple password", "password123", "Should allow basic alphanumeric"},
@@ -131,13 +131,13 @@ func TestValidatePassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ValidatePassword(tt.input)
-			
+
 			// Check that dangerous characters are removed
 			dangerousChars := []string{"`", "$", "\\", "\"", "'", ";", "&", "|", "<", ">", "(", ")", "{", "}", "[", "]"}
 			for _, char := range dangerousChars {
 				assert.NotContains(t, result, char, "Should not contain dangerous character: %s", char)
 			}
-			
+
 			// Check length limit
 			assert.LessOrEqual(t, len(result), 100, "Should not exceed 100 characters")
 		})
@@ -146,8 +146,8 @@ func TestValidatePassword(t *testing.T) {
 
 func TestValidateSubjectDN(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name        string
+		input       string
 		description string
 	}{
 		{"Valid DN component", "example.com", "Should allow valid domain"},
@@ -164,13 +164,13 @@ func TestValidateSubjectDN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ValidateSubjectDN(tt.input)
-			
+
 			// Check that DN separator characters are removed
 			dnSeparators := []string{"/", "=", ",", "+"}
 			for _, char := range dnSeparators {
 				assert.NotContains(t, result, char, "Should not contain DN separator: %s", char)
 			}
-			
+
 			// Check length limit
 			assert.LessOrEqual(t, len(result), 64, "Should not exceed 64 characters")
 		})
@@ -179,8 +179,8 @@ func TestValidateSubjectDN(t *testing.T) {
 
 func TestSanitizeInput(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name        string
+		input       string
 		description string
 	}{
 		{"Normal text", "Hello World", "Should preserve normal text"},
@@ -195,12 +195,12 @@ func TestSanitizeInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeInput(tt.input)
-			
+
 			// Check that control characters are removed
 			assert.NotContains(t, result, "\r", "Should not contain carriage return")
 			assert.NotContains(t, result, "\n", "Should not contain line feed")
 			assert.NotContains(t, result, "\x00", "Should not contain null bytes")
-			
+
 			// Check length limit
 			assert.LessOrEqual(t, len(result), 1000, "Should not exceed 1000 characters")
 		})

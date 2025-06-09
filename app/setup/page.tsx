@@ -135,10 +135,11 @@ export default function SetupPage() {
               
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
                     Username
                   </label>
                   <input
+                    id="username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -147,10 +148,11 @@ export default function SetupPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                     Password
                   </label>
                   <input
+                    id="password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -159,10 +161,11 @@ export default function SetupPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                     Confirm Password
                   </label>
                   <input
+                    id="confirmPassword"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -171,10 +174,11 @@ export default function SetupPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="setupToken" className="block text-sm font-medium text-gray-700">
                     Setup Token
                   </label>
                   <input
+                    id="setupToken"
                     type="text"
                     value={setupToken}
                     onChange={(e) => setSetupToken(e.target.value)}

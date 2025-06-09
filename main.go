@@ -57,7 +57,7 @@ func main() {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
-	logger.Info("Starting LocalCA server with enhanced storage and logging")
+	logger.Info("Starting LocalCA API server")
 
 	// Initialize cache
 	cacheInstance, err := cache.NewCache(cfg)
@@ -150,25 +150,17 @@ func main() {
 	} else if !authConfig.SetupCompleted {
 		log.Println("==========================================================")
 		log.Println("INITIAL SETUP REQUIRED")
-		log.Println("Please visit /setup to complete the initial configuration")
+		log.Println("Please visit the frontend setup page to complete configuration")
 		log.Println("Setup Token:", authConfig.SetupToken)
 		log.Println("This token will expire in 24 hours")
 		log.Println("==========================================================")
 	}
 
-	// Initialize router
+	// Initialize API-only router
 	router := gin.Default()
 
-	// Configure static file serving
-	router.Static("/static", "./static")
-	router.LoadHTMLGlob("templates/*")
-
-	// Setup routes - pass cachedStore if caching is enabled, otherwise baseStore
-	if cfg.CacheEnabled && cachedStore != nil {
-		handlers.SetupRoutes(router, certSvc, baseStore, cfg)
-	} else {
-		handlers.SetupRoutes(router, certSvc, baseStore, cfg)
-	}
+	// Setup API-only routes (no web UI)
+	handlers.SetupAPIOnlyRoutes(router, certSvc, baseStore)
 
 	// Configure server
 	server := &http.Server{
@@ -190,7 +182,7 @@ func main() {
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
 
-		log.Println("Shutting down server...")
+		log.Println("Shutting down API server...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 
@@ -246,7 +238,7 @@ func main() {
 						IdleTimeout:  120 * time.Second,
 					}
 
-					log.Println("HTTPS server starting on port 8443...")
+					log.Println("HTTPS API server starting on port 8443...")
 					if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 						log.Printf("HTTPS server error: %v", err)
 					}
@@ -265,7 +257,7 @@ func main() {
 					IdleTimeout:  120 * time.Second,
 				}
 
-				log.Println("HTTPS server starting on port 8443...")
+				log.Println("HTTPS API server starting on port 8443...")
 				if err := httpsServer.ListenAndServeTLS(serviceCert, serviceKey); err != nil && err != http.ErrServerClosed {
 					log.Printf("HTTPS server error: %v", err)
 				}
@@ -273,8 +265,8 @@ func main() {
 		}
 	}
 
-	// Start HTTP server
-	log.Printf("HTTP server starting on %s...", cfg.ListenAddr)
+	// Start HTTP API server
+	log.Printf("HTTP API server starting on %s...", cfg.ListenAddr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}

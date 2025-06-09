@@ -1,0 +1,518 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Comprehensive LocalCA Project Guide
+
+This is the master reference guide for the LocalCA project, providing a complete overview of the architecture, features, and development workflow.
+
+## Project Overview
+
+LocalCA is a self-hosted Certificate Authority solution built with Go and Next.js, designed for managing SSL/TLS certificates in local networks and development environments.
+
+### Key Features
+- **Complete CA Management**: Create, manage, and operate your own Certificate Authority
+- **Multi-Certificate Support**: Server certificates, client certificates, and PKCS#12 bundles
+- **Modern Web Interface**: React-based dashboard with real-time statistics
+- **Enhanced Storage**: Multi-backend storage with PostgreSQL, S3/MinIO, and Redis caching
+- **Security First**: Comprehensive security features and audit logging
+- **ACME Protocol**: Automated certificate issuance (experimental)
+- **Production Ready**: Docker deployment with monitoring and backup capabilities
+
+## Architecture Overview
+
+### Technology Stack
+
+#### Backend (Go 1.23+)
+- **Framework**: Gin web framework for HTTP handling
+- **Database**: GORM with PostgreSQL for enhanced storage
+- **Cache**: Redis/KeyDB for performance optimization
+- **Storage**: MinIO SDK for S3-compatible object storage
+- **Logging**: Logrus for structured logging
+- **Security**: bcrypt, CSRF protection, secure sessions
+
+#### Frontend (Next.js 15)
+- **Framework**: Next.js with App Router
+- **UI Library**: shadcn/ui + Radix UI components
+- **Styling**: Tailwind CSS with custom design system
+- **Forms**: React Hook Form with Zod validation
+- **State**: React hooks and context patterns
+- **Testing**: Jest with React Testing Library
+
+#### Infrastructure
+- **Containerization**: Docker with multi-stage builds
+- **Orchestration**: Docker Compose for development and production
+- **Reverse Proxy**: Nginx for SSL termination and load balancing
+- **Monitoring**: Prometheus metrics and health checks
+
+### Core Components
+
+#### 1. Certificate Management ([pkg/certificates](mdc:pkg/certificates))
+The heart of LocalCA, handling all cryptographic operations:
+
+**Key Files:**
+- [ca.go](mdc:pkg/certificates/ca.go): Certificate Authority management
+- [server.go](mdc:pkg/certificates/server.go): Server certificate operations
+- [client.go](mdc:pkg/certificates/client.go): Client certificate operations
+- [service.go](mdc:pkg/certificates/service.go): Main service orchestration
+
+**Features:**
+- RSA and ECDSA key generation
+- X.509 certificate creation with proper extensions
+- Subject Alternative Name (SAN) support
+- Certificate revocation and CRL generation
+- PKCS#12 bundle creation
+
+#### 2. Enhanced Storage System ([pkg/storage](mdc:pkg/storage))
+Multi-backend storage architecture:
+
+**Key Files:**
+- [enhanced.go](mdc:pkg/storage/enhanced.go): Multi-backend coordinator
+- [cached.go](mdc:pkg/storage/cached.go): Caching layer implementation
+- [interface.go](mdc:pkg/storage/interface.go): Storage interface definitions
+
+**Backends:**
+- **File Storage**: Traditional file-based storage
+- **PostgreSQL**: Relational database with GORM
+- **S3/MinIO**: Object storage for scalability
+- **Redis/KeyDB**: Caching for performance
+
+#### 3. Web Interface ([app](mdc:app) + [components](mdc:components))
+Modern React-based interface:
+
+**Key Directories:**
+- [app/](mdc:app): Next.js App Router pages and API routes
+- [components/](mdc:components): Reusable React components
+- [hooks/](mdc:hooks): Custom React hooks for API integration
+
+**Features:**
+- Real-time dashboard with system statistics
+- Certificate lifecycle management
+- Advanced filtering and search
+- Responsive design with dark/light themes
+- Form validation and error handling
+
+#### 4. API Integration ([app/api](mdc:app/api) + [pkg/handlers](mdc:pkg/handlers))
+Comprehensive API layer:
+
+**Frontend API Routes:**
+- [proxy/[...path]](mdc:app/api/proxy/[...path]): Dynamic proxy to backend
+- [ca-info](mdc:app/api/ca-info): Certificate Authority information
+- [certificates](mdc:app/api/certificates): Certificate operations
+
+**Backend Handlers:**
+- [handlers/](mdc:pkg/handlers): HTTP request handlers
+- [auth.go](mdc:pkg/handlers/auth.go): Authentication system
+
+#### 5. Security Implementation ([pkg/security](mdc:pkg/security))
+Comprehensive security features:
+
+**Security Features:**
+- Session-based authentication with secure cookies
+- CSRF protection with double-submit pattern
+- Input validation and sanitization
+- Rate limiting for API endpoints
+- Comprehensive security headers
+
+#### 6. ACME Protocol ([pkg/acme](mdc:pkg/acme))
+Automated certificate management:
+
+**ACME Features:**
+- Directory endpoint for service discovery
+- Account management and key rollover
+- Order processing and lifecycle management
+- HTTP-01 challenge validation
+- Certificate issuance and delivery
+
+## Development Workflow
+
+### Getting Started
+
+1. **Clone and Setup**:
+```bash
+git clone https://github.com/Lazarev-Cloud/localca-go.git
+cd localca-go
+go mod download
+npm install
+```
+
+2. **Development Environment**:
+```bash
+# Option 1: Docker Compose (recommended)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Option 2: Manual development
+go run main.go  # Backend on :8080
+npm run dev     # Frontend on :3000
+```
+
+3. **Access Application**:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+- Setup: Complete initial setup via web interface
+
+### Development Standards
+
+#### Go Backend Standards
+- Use structured logging with context
+- Implement comprehensive error handling
+- Write table-driven tests
+- Follow Go naming conventions
+- Use interfaces for testability
+
+#### Frontend Standards
+- Use TypeScript for all components
+- Implement proper error boundaries
+- Use React Hook Form with Zod validation
+- Follow shadcn/ui design patterns
+- Write component tests with React Testing Library
+
+#### Security Standards
+- Validate all inputs on both client and server
+- Use parameterized queries to prevent SQL injection
+- Implement proper session management
+- Use HTTPS in production
+- Follow OWASP security guidelines
+
+### Testing Strategy
+
+#### Backend Testing
+```bash
+# Unit tests
+go test ./...
+
+# Integration tests
+go test -tags=integration ./...
+
+# Coverage report
+go test -cover ./...
+```
+
+#### Frontend Testing
+```bash
+# Component tests
+npm test
+
+# E2E tests (if implemented)
+npm run test:e2e
+
+# Coverage report
+npm run test:coverage
+```
+
+## Deployment Options
+
+### Development Deployment
+```bash
+# Quick start with Docker
+docker-compose up -d
+
+# Manual development
+./run-dev.sh
+```
+
+### Production Deployment
+
+#### Docker Compose Production
+```bash
+# Production configuration
+cp .env.example .env
+# Edit .env with production settings
+
+# Deploy with enhanced storage
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+#### Kubernetes Deployment
+```bash
+# Apply Kubernetes manifests
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+#### Standalone Deployment
+```bash
+# Build binaries
+go build -o localca-go main.go
+npm run build
+
+# Deploy with systemd
+sudo systemctl enable localca
+sudo systemctl start localca
+```
+
+## Configuration Management
+
+### Environment Variables
+
+#### Core Configuration
+```bash
+CA_NAME=LocalCA                    # Certificate Authority name
+CA_KEY_PASSWORD=secure-password    # CA private key password
+ORGANIZATION=LocalCA Organization  # Organization name
+COUNTRY=US                        # Country code
+DATA_DIR=./data                   # Data storage directory
+LISTEN_ADDR=:8080                 # HTTP server address
+```
+
+#### Enhanced Storage
+```bash
+DATABASE_ENABLED=true             # Enable PostgreSQL
+DATABASE_URL=postgres://...       # Database connection string
+S3_ENABLED=true                   # Enable S3/MinIO storage
+S3_ENDPOINT=http://minio:9000     # S3 endpoint URL
+CACHE_ENABLED=true                # Enable Redis caching
+REDIS_URL=redis://keydb:6379      # Redis connection URL
+```
+
+#### Security Configuration
+```bash
+TLS_ENABLED=true                  # Enable HTTPS
+SESSION_SECRET=secure-secret      # Session encryption key
+CSRF_ENABLED=true                 # Enable CSRF protection
+RATE_LIMIT_ENABLED=true          # Enable rate limiting
+```
+
+### Docker Configuration
+
+#### Development Docker Compose
+```yaml
+# docker-compose.dev.yml
+services:
+  backend:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      - LOG_LEVEL=debug
+      - TLS_ENABLED=false
+    volumes:
+      - ./data:/app/data
+
+  frontend:
+    build:
+      dockerfile: Dockerfile.frontend
+    ports: ["3000:3000"]
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+#### Production Docker Compose
+```yaml
+# docker-compose.prod.yml
+services:
+  backend:
+    image: localca/backend:latest
+    environment:
+      - DATABASE_ENABLED=true
+      - S3_ENABLED=true
+      - CACHE_ENABLED=true
+      - TLS_ENABLED=true
+    depends_on:
+      - postgres
+      - minio
+      - keydb
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: localca
+      POSTGRES_USER: localca
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+
+  keydb:
+    image: eqalpha/keydb
+    command: keydb-server --appendonly yes
+```
+
+## Security Considerations
+
+### Authentication and Authorization
+- Session-based authentication with HTTP-only cookies
+- CSRF protection with double-submit cookie pattern
+- Secure password hashing with bcrypt
+- Time-limited setup tokens for initial configuration
+
+### Data Protection
+- CA private key encryption with user-provided passwords
+- TLS encryption for all communications in production
+- Input validation and sanitization on all endpoints
+- SQL injection prevention with parameterized queries
+
+### Audit and Compliance
+- Comprehensive audit logging for all operations
+- Certificate lifecycle tracking
+- User action logging
+- Security event monitoring
+
+### Network Security
+- Rate limiting on API endpoints
+- Security headers (HSTS, CSP, X-Frame-Options)
+- Secure cookie configuration
+- CORS policy enforcement
+
+## Monitoring and Maintenance
+
+### Health Monitoring
+```bash
+# Health check endpoints
+curl http://localhost:8080/api/health
+curl http://localhost:3000/api/health
+
+# System statistics
+curl http://localhost:8080/api/statistics
+```
+
+### Performance Monitoring
+- Cache hit rates and performance metrics
+- Database query performance
+- Storage backend health checks
+- Certificate operation latency
+
+### Backup and Recovery
+```bash
+# Database backup
+pg_dump localca > backup.sql
+
+# Certificate backup
+tar -czf certificates.tar.gz data/
+
+# Automated backup script
+./tools/backup.sh
+```
+
+### Log Management
+```bash
+# View application logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Structured logging in JSON format
+LOG_FORMAT=json LOG_LEVEL=info ./localca-go
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Database Connection Issues
+```bash
+# Check database connectivity
+pg_isready -h localhost -p 5432 -U localca
+
+# Check database logs
+docker-compose logs postgres
+```
+
+#### Storage Issues
+```bash
+# Check MinIO connectivity
+curl -f http://localhost:9000/minio/health/live
+
+# Check file permissions
+ls -la data/
+```
+
+#### Cache Issues
+```bash
+# Check Redis connectivity
+redis-cli ping
+
+# Check cache statistics
+curl http://localhost:8080/api/statistics | jq '.cache'
+```
+
+#### Certificate Issues
+```bash
+# Verify CA certificate
+openssl x509 -in data/ca/ca-cert.pem -text -noout
+
+# Check certificate validity
+openssl verify -CAfile data/ca/ca-cert.pem data/certificates/server/cert.pem
+```
+
+### Debug Mode
+```bash
+# Enable debug logging
+LOG_LEVEL=debug ./localca-go
+
+# Frontend debug mode
+NODE_ENV=development npm run dev
+```
+
+## Contributing
+
+### Development Process
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Follow coding standards and write tests
+4. Submit pull request with clear description
+
+### Code Review Checklist
+- [ ] Code follows project standards
+- [ ] Tests are included and passing
+- [ ] Documentation is updated
+- [ ] Security considerations addressed
+- [ ] Performance impact evaluated
+
+### Release Process
+1. Update version numbers
+2. Update CHANGELOG.md
+3. Create release tag
+4. Build and publish Docker images
+5. Update documentation
+
+## Documentation Structure
+
+### Cursor Rules (.cursor/rules/)
+- [01-project-overview.mdc](mdc:.cursor/rules/01-project-overview.mdc): Project architecture and features
+- [02-backend-architecture.mdc](mdc:.cursor/rules/02-backend-architecture.mdc): Go backend implementation
+- [03-frontend-architecture.mdc](mdc:.cursor/rules/03-frontend-architecture.mdc): Next.js frontend implementation
+- [09-development-guide.mdc](mdc:.cursor/rules/09-development-guide.mdc): Development standards and workflow
+- [12-enhanced-storage-caching.mdc](mdc:.cursor/rules/12-enhanced-storage-caching.mdc): Storage and caching system
+- [13-api-integration-patterns.mdc](mdc:.cursor/rules/13-api-integration-patterns.mdc): API endpoints and integration
+
+### Documentation (docs/)
+- [DEPLOYMENT.md](mdc:docs/DEPLOYMENT.md): Comprehensive deployment guide
+- [development/DEVELOPMENT.md](mdc:docs/development/DEVELOPMENT.md): Development setup and workflow
+- [security/SECURITY.md](mdc:docs/security/SECURITY.md): Security best practices
+- [TROUBLESHOOTING.md](mdc:docs/TROUBLESHOOTING.md): Common issues and solutions
+
+### Project Files
+- [README.md](mdc:README.md): Main project documentation
+- [main.go](mdc:main.go): Application entry point
+- [package.json](mdc:package.json): Frontend dependencies and scripts
+- [go.mod](mdc:go.mod): Go dependencies and version
+- [docker-compose.yml](mdc:docker-compose.yml): Docker deployment configuration
+
+## Future Roadmap
+
+### Planned Features
+- **Enhanced ACME Support**: Full ACME v2 compliance with DNS-01 challenges
+- **Certificate Templates**: Predefined certificate templates for common use cases
+- **API Keys**: API key authentication for programmatic access
+- **Certificate Monitoring**: Advanced certificate monitoring and alerting
+- **Multi-CA Support**: Support for multiple Certificate Authorities
+- **Certificate Transparency**: CT log integration for transparency
+
+### Performance Improvements
+- **Database Optimization**: Query optimization and indexing improvements
+- **Caching Enhancements**: Advanced caching strategies and cache warming
+- **Async Processing**: Background processing for certificate operations
+- **Load Balancing**: Support for horizontal scaling
+
+### Security Enhancements
+- **Hardware Security Modules**: HSM integration for CA key protection
+- **Role-Based Access Control**: Fine-grained permission system
+- **Two-Factor Authentication**: 2FA support for enhanced security
+- **Certificate Pinning**: Certificate pinning for enhanced security
+
+This comprehensive guide serves as the master reference for understanding, developing, and deploying LocalCA. It ties together all aspects of the project and provides clear guidance for contributors and users.

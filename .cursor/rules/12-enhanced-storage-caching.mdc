@@ -1,0 +1,303 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Enhanced Storage and Caching System
+
+LocalCA implements a sophisticated multi-backend storage system with caching capabilities to provide scalable, performant, and reliable certificate management.
+
+## Storage Architecture Overview
+
+The enhanced storage system supports multiple backends simultaneously:
+
+- **File Storage**: Traditional file-based storage for backward compatibility
+- **PostgreSQL Database**: Relational database for structured data and queries
+- **S3/MinIO Object Storage**: Scalable object storage for certificate files
+- **Redis/KeyDB Cache**: High-performance caching layer
+
+## Enhanced Storage Implementation ([pkg/storage/enhanced.go](mdc:pkg/storage/enhanced.go))
+
+### Multi-Backend Coordinator
+The enhanced storage acts as a coordinator between different storage backends:
+
+```go
+type EnhancedStorage struct {
+    fileStorage   StorageInterface
+    dbStorage     *database.DatabaseStorage
+    s3Storage     *s3storage.S3Storage
+    cache         cache.CacheInterface
+    logger        *logrus.Logger
+    config        *config.Config
+}
+```
+
+### Storage Operations
+- **Certificate Storage**: Stores certificates across multiple backends
+- **Metadata Management**: Maintains certificate metadata in database
+- **File Backup**: Automatic backup to object storage
+- **Audit Logging**: Comprehensive audit trail for all operations
+
+### Health Monitoring
+- **Backend Health Checks**: Monitors health of all storage backends
+- **Automatic Failover**: Falls back to available backends on failure
+- **Performance Metrics**: Tracks storage operation performance
+
+## Database Storage ([pkg/database](mdc:pkg/database))
+
+### PostgreSQL Integration
+Uses GORM ORM for database operations with PostgreSQL:
+
+#### Database Models
+- **Certificate**: Certificate metadata and status
+- **AuditLog**: Audit trail for all operations
+- **User**: User accounts and authentication
+- **Settings**: Application configuration storage
+
+#### Database Features
+- **Connection Pooling**: Configurable connection pool for performance
+- **Migrations**: Automatic database schema migrations
+- **Indexing**: Optimized indexes for query performance
+- **Transactions**: ACID compliance for data integrity
+
+### Configuration
+Database connection configured through environment variables:
+- `DATABASE_URL`: PostgreSQL connection string
+- `DATABASE_ENABLED`: Enable/disable database storage
+- `DATABASE_MAX_CONNECTIONS`: Maximum connection pool size
+- `DATABASE_SSL_MODE`: SSL connection mode
+
+## Object Storage ([pkg/s3storage](mdc:pkg/s3storage))
+
+### S3/MinIO Integration
+Compatible with Amazon S3 and MinIO for scalable object storage:
+
+#### Storage Features
+- **Bucket Management**: Automatic bucket creation and lifecycle policies
+- **Encryption**: Server-side encryption for sensitive data
+- **Versioning**: Object versioning for backup and recovery
+- **Access Control**: Fine-grained access control policies
+
+#### Configuration
+S3 storage configured through environment variables:
+- `S3_ENABLED`: Enable/disable S3 storage
+- `S3_ENDPOINT`: S3 endpoint URL (for MinIO)
+- `S3_ACCESS_KEY`: S3 access key ID
+- `S3_SECRET_KEY`: S3 secret access key
+- `S3_BUCKET`: S3 bucket name for certificate storage
+- `S3_REGION`: S3 region
+- `S3_SSL`: Enable/disable SSL for S3 connections
+
+### Object Organization
+```
+certificates/
+├── ca/
+│   ├── ca-cert.pem
+│   └── ca-key.pem
+├── server/
+│   ├── {cert-id}/
+│   │   ├── cert.pem
+│   │   └── key.pem
+└── client/
+    ├── {cert-id}/
+    │   ├── cert.pem
+    │   ├── key.pem
+    │   └── cert.p12
+```
+
+## Caching Layer ([pkg/cache](mdc:pkg/cache))
+
+### Redis/KeyDB Integration
+High-performance caching with Redis or KeyDB:
+
+#### Cache Features
+- **TTL Management**: Time-to-live for automatic cache expiration
+- **Cache Warming**: Proactive cache population
+- **Cache Invalidation**: Smart cache invalidation strategies
+- **Distributed Caching**: Support for Redis clusters
+
+#### Cached Data Types
+- **Certificate Metadata**: Certificate information with 1-hour TTL
+- **CA Information**: Certificate Authority data with 24-hour TTL
+- **User Sessions**: Session data for authentication
+- **System Statistics**: Dashboard statistics with 5-minute TTL
+- **API Responses**: Frequently accessed API responses
+
+### Cache Configuration
+Redis/KeyDB configured through environment variables:
+- `CACHE_ENABLED`: Enable/disable caching
+- `REDIS_URL`: Redis connection URL
+- `REDIS_PASSWORD`: Redis authentication password
+- `REDIS_DB`: Redis database number
+- `CACHE_TTL_DEFAULT`: Default cache TTL in seconds
+
+## Cached Storage Wrapper ([pkg/storage/cached.go](mdc:pkg/storage/cached.go))
+
+### Caching Strategy
+The cached storage wrapper implements intelligent caching:
+
+#### Read Operations
+1. **Cache Check**: First check cache for requested data
+2. **Cache Miss**: Fetch from underlying storage on cache miss
+3. **Cache Population**: Store fetched data in cache with appropriate TTL
+4. **Cache Hit**: Return cached data directly
+
+#### Write Operations
+1. **Write-Through**: Write to both cache and underlying storage
+2. **Cache Invalidation**: Invalidate related cache entries
+3. **Consistency**: Ensure cache-storage consistency
+
+#### Cache Warming
+- **Startup Warming**: Populate cache with frequently accessed data on startup
+- **Background Refresh**: Refresh cache entries before expiration
+- **Predictive Loading**: Load related data based on access patterns
+
+### Cache Keys and TTL
+```go
+// Cache key patterns
+const (
+    CertificateKey = "cert:%s"           // TTL: 1 hour
+    CAInfoKey     = "ca:info"            // TTL: 24 hours
+    StatsKey      = "stats:system"       // TTL: 5 minutes
+    UserKey       = "user:%s"            // TTL: 30 minutes
+)
+```
+
+## Audit Logging System
+
+### Audit Trail Implementation
+Comprehensive audit logging for compliance and security:
+
+#### Audit Events
+- **Certificate Operations**: Create, renew, revoke, delete
+- **User Actions**: Login, logout, configuration changes
+- **System Events**: Startup, shutdown, errors
+- **Security Events**: Authentication failures, access violations
+
+#### Audit Log Structure
+```go
+type AuditLog struct {
+    ID          uint      `json:"id"`
+    Timestamp   time.Time `json:"timestamp"`
+    Action      string    `json:"action"`
+    Resource    string    `json:"resource"`
+    ResourceID  string    `json:"resource_id"`
+    UserID      string    `json:"user_id"`
+    Source      string    `json:"source"`
+    Details     string    `json:"details"`
+    Success     bool      `json:"success"`
+    Error       string    `json:"error,omitempty"`
+}
+```
+
+### Audit Storage
+- **Database Storage**: Primary audit log storage in PostgreSQL
+- **File Backup**: Secondary audit log backup to files
+- **Log Rotation**: Automatic log rotation and archival
+- **Retention Policy**: Configurable audit log retention
+
+## Performance Optimizations
+
+### Storage Performance
+- **Connection Pooling**: Database connection pooling for concurrent access
+- **Batch Operations**: Bulk operations for improved throughput
+- **Async Operations**: Non-blocking operations where possible
+- **Read Replicas**: Support for read replica databases
+
+### Cache Performance
+- **Pipeline Operations**: Redis pipeline for batch operations
+- **Compression**: Data compression for large cache entries
+- **Memory Management**: Efficient memory usage with TTL
+- **Connection Pooling**: Redis connection pooling
+
+### Monitoring and Metrics
+- **Storage Metrics**: Track storage operation latency and throughput
+- **Cache Metrics**: Monitor cache hit rates and performance
+- **Health Metrics**: Storage backend health and availability
+- **Error Tracking**: Comprehensive error logging and alerting
+
+## Backup and Recovery
+
+### Backup Strategy
+- **Multi-Backend Backup**: Automatic backup across storage backends
+- **Incremental Backup**: Efficient incremental backup strategies
+- **Point-in-Time Recovery**: Database point-in-time recovery
+- **Cross-Region Backup**: Geographic backup distribution
+
+### Recovery Procedures
+- **Automatic Recovery**: Automatic failover to backup storage
+- **Manual Recovery**: Manual recovery procedures and tools
+- **Data Validation**: Backup integrity validation
+- **Disaster Recovery**: Complete disaster recovery procedures
+
+## Configuration Management
+
+### Storage Configuration
+Environment variables for storage configuration:
+
+```bash
+# Enhanced Storage
+DATABASE_ENABLED=true
+S3_ENABLED=true
+CACHE_ENABLED=true
+
+# Database Configuration
+DATABASE_URL=postgres://user:pass@localhost/localca
+DATABASE_MAX_CONNECTIONS=25
+DATABASE_SSL_MODE=require
+
+# S3 Configuration
+S3_ENDPOINT=http://localhost:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_BUCKET=localca-certificates
+S3_REGION=us-east-1
+
+# Cache Configuration
+REDIS_URL=redis://localhost:6379
+CACHE_TTL_DEFAULT=3600
+```
+
+### Docker Compose Integration
+Enhanced storage services in [docker-compose.yml](mdc:docker-compose.yml):
+
+```yaml
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: localca
+      POSTGRES_USER: localca
+      POSTGRES_PASSWORD: localca_password
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  keydb:
+    image: eqalpha/keydb
+    command: keydb-server --appendonly yes
+```
+
+## Troubleshooting and Maintenance
+
+### Common Issues
+- **Connection Failures**: Database and cache connection issues
+- **Storage Full**: Disk space and storage capacity issues
+- **Performance Degradation**: Slow storage operations
+- **Cache Misses**: High cache miss rates
+
+### Maintenance Tasks
+- **Database Maintenance**: Regular database maintenance and optimization
+- **Cache Cleanup**: Cache cleanup and memory management
+- **Backup Verification**: Regular backup integrity checks
+- **Performance Tuning**: Storage and cache performance optimization
+
+### Monitoring and Alerting
+- **Health Checks**: Regular health checks for all storage backends
+- **Performance Monitoring**: Continuous performance monitoring
+- **Error Alerting**: Automatic alerting for storage errors
+- **Capacity Monitoring**: Storage capacity and usage monitoring

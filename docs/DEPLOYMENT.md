@@ -1,306 +1,808 @@
 # LocalCA Deployment Guide
 
-This guide will walk you through setting up LocalCA, a self-hosted Certificate Authority for your local network.
+This guide covers all deployment options for LocalCA, from simple Docker setups to production deployments with enhanced storage and monitoring.
 
-## Prerequisites
+## Quick Start Deployment
 
-- Docker and Docker Compose installed on your server
-- Basic knowledge of SSL/TLS certificates
-- A dedicated machine or VM to run the service (recommended)
+### Docker Compose (Recommended)
 
-## Initial Setup
-
-### Step 1: Clone the Repository
+The fastest way to get LocalCA running is with Docker Compose:
 
 ```bash
+# Clone the repository
 git clone https://github.com/Lazarev-Cloud/localca-go.git
 cd localca-go
-```
 
-### Step 2: Create a Password for Your CA
-
-The CA private key needs to be protected with a strong password. Create a file named `cakey.txt` in the project root directory:
-
-```bash
-echo "your-secure-password" > cakey.txt
-chmod 600 cakey.txt  # Restrict permissions
-```
-
-Replace "your-secure-password" with a strong, unique password. This password will be used to encrypt and protect your CA private key.
-
-### Step 3: Configure the Service
-
-Review and modify the `docker-compose.yml` file to set up your CA properly:
-
-- **CA_NAME**: Set to your desired CA name (e.g., `ca.yourdomain.local`)
-- **ORGANIZATION**: Set to your organization name
-- **COUNTRY**: Set to your two-letter country code
-- **TLS_ENABLED**: Keep as `true` for secure HTTPS access
-- **EMAIL_NOTIFY**: Set to `true` if you want email notifications about expiring certificates
-
-### Step 4: Build and Start the Service
-
-```bash
+# Start with default configuration
 docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8080
 ```
 
-This will build the Docker image and start the LocalCA service in the background.
+### Environment Configuration
 
-### Step 5: Access the Web Interface
-
-Open your browser and navigate to:
-
-```
-https://your-server-ip:8443
-```
-
-You'll see a security warning because the browser doesn't trust the CA certificate yet. This is expected and normal. Proceed to the website.
-
-### Step 6: Download and Trust the CA Certificate
-
-1. From the web interface, click the **Download CA** button
-2. Install the CA certificate on your devices following the instructions below
-
-## Installing the CA Certificate
-
-### On Windows
-
-1. Double-click the downloaded `ca.pem` file
-2. Click "Install Certificate"
-3. Select "Local Machine" and click "Next"
-4. Select "Place all certificates in the following store"
-5. Click "Browse" and select "Trusted Root Certification Authorities"
-6. Click "Next" and then "Finish"
-
-### On macOS
-
-1. Double-click the downloaded `ca.pem` file
-2. This will open Keychain Access
-3. Locate the certificate in your login keychain
-4. Double-click it, expand "Trust," and set "When using this certificate" to "Always Trust"
-5. Close the window and enter your password to save changes
-
-### On Linux
-
-1. Copy the CA certificate to the trust store:
+Create a `.env` file for custom configuration:
 
 ```bash
-sudo cp ca.pem /usr/local/share/ca-certificates/localca.crt
-sudo update-ca-certificates
+# Copy example configuration
+cp .env.example .env
+
+# Edit configuration
+nano .env
 ```
 
-### In Firefox (uses its own certificate store)
+Basic `.env` configuration:
+```bash
+# Core Configuration
+CA_NAME=MyLocalCA
+CA_KEY_PASSWORD=secure-ca-password
+ORGANIZATION=My Organization
+COUNTRY=US
 
-1. Go to Preferences > Privacy & Security > Certificates > View Certificates
-2. Go to the "Authorities" tab
-3. Click "Import" and select the downloaded `ca.pem` file
-4. Check "Trust this CA to identify websites" and click "OK"
+# Network Configuration
+LISTEN_ADDR=:8080
+NEXT_PUBLIC_API_URL=http://localhost:8080
 
-### In Chrome/Edge on Windows
+# Security
+TLS_ENABLED=false
+SESSION_SECRET=your-secure-session-secret
+```
 
-These browsers use the Windows certificate store, so follow the Windows instructions above.
+## Production Deployment
 
-### In Chrome/Edge on macOS
+### Enhanced Storage Configuration
 
-These browsers use the macOS certificate store, so follow the macOS instructions above.
+For production deployments, enable enhanced storage features:
 
-### In Chrome/Edge on Linux
+```bash
+# Enhanced Storage Configuration
+DATABASE_ENABLED=true
+DATABASE_URL=postgres://localca:secure_password@postgres:5432/localca
+DATABASE_MAX_CONNECTIONS=25
+DATABASE_SSL_MODE=require
 
-These browsers use the Linux certificate store, so follow the Linux instructions above.
+# S3/MinIO Object Storage
+S3_ENABLED=true
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=secure_minio_password
+S3_BUCKET=localca-certificates
+S3_REGION=us-east-1
+S3_SSL=false
 
-### On Mobile Devices
+# Redis/KeyDB Caching
+CACHE_ENABLED=true
+REDIS_URL=redis://keydb:6379
+REDIS_PASSWORD=secure_redis_password
+CACHE_TTL_DEFAULT=3600
 
-#### Android
+# Email Notifications
+EMAIL_NOTIFY=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=noreply@yourdomain.com
 
-1. Go to Settings > Security > Install from Storage
-2. Select the downloaded `ca.pem` file
-3. Name the certificate and select "VPN and apps" for credential use
+# Logging
+LOG_FORMAT=json
+LOG_LEVEL=info
+AUDIT_ENABLED=true
 
-#### iOS
+# Security
+TLS_ENABLED=true
+TLS_CERT_FILE=/certs/server.crt
+TLS_KEY_FILE=/certs/server.key
+```
 
-1. Email the CA certificate to yourself or make it available for download
-2. Open the CA certificate file
-3. Go to Settings > Profile Downloaded
-4. Install the profile and trust it in Settings > General > About > Certificate Trust Settings
+### Production Docker Compose
 
-## Creating and Using Certificates
+Use the production Docker Compose configuration:
 
-### Creating a Server Certificate
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
 
-1. Log in to the LocalCA web interface
-2. In the "Create Certificate" form:
-   - Enter the server hostname in "Common Name" (e.g., `server.local`)
-   - Add alternative names in "Additional Domain Names" if needed (comma-separated)
-   - Ensure "Create client certificate" is NOT checked
-   - Click "Create Certificate"
-3. View the certificate details and download the files
-4. Use the `.crt` and `.key` files in your web server configuration
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_ENABLED=true
+      - DATABASE_URL=postgres://localca:${POSTGRES_PASSWORD}@postgres:5432/localca
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - CACHE_ENABLED=true
+      - REDIS_URL=redis://keydb:6379
+    volumes:
+      - ./data:/app/data
+      - ./certs:/certs:ro
+    depends_on:
+      - postgres
+      - minio
+      - keydb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### Creating a Client Certificate
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-1. Log in to the LocalCA web interface
-2. In the "Create Certificate" form:
-   - Enter a name in "Common Name" (e.g., `john.doe`)
-   - Check "Create client certificate"
-   - Enter a password for the P12 file
-   - Click "Create Certificate"
-3. Download the `.p12` file and import it into your browser or client application
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=localca
+      - POSTGRES_USER=localca
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localca"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### Certificate Renewal
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-1. Log in to the LocalCA web interface
-2. Find the certificate in the list
-3. Click the "Renew" button
-4. The certificate will be renewed with a new expiration date
-5. Re-deploy the renewed certificate to your services
+  keydb:
+    image: eqalpha/keydb:latest
+    command: keydb-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - keydb_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "keydb-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### Certificate Revocation
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
 
-1. Log in to the LocalCA web interface
-2. Find the certificate in the list
-3. Click the "Revoke" button
-4. Download the updated CRL and distribute it to your services
+volumes:
+  postgres_data:
+  minio_data:
+  keydb_data:
 
-## Web Server Configuration
+networks:
+  default:
+    driver: bridge
+```
 
-### NGINX Configuration
+### Nginx Configuration
+
+Create `nginx.conf` for reverse proxy and SSL termination:
 
 ```nginx
-server {
-    listen 443 ssl;
-    server_name your-server.local;
-    
-    ssl_certificate /path/to/your-server.local.bundle.crt;
-    ssl_certificate_key /path/to/your-server.local.key;
-    
-    # Enable certificate revocation checking
-    ssl_crl /path/to/ca.crl;
-    
-    # Optional: Enable client certificate authentication
-    ssl_client_certificate /path/to/ca.pem;
-    ssl_verify_client on;
-    
-    # Strong SSL settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:50m;
-    ssl_stapling off;  # OCSP stapling not needed for local CA
-    
-    # Rest of your server configuration...
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend {
+        server backend:8080;
+    }
+
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name your-domain.com;
+        return 301 https://$server_name$request_uri;
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl http2;
+        server_name your-domain.com;
+
+        ssl_certificate /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
+
+        # Security headers
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+
+        # Frontend
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Backend API
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # ACME server
+        location /.well-known/acme-challenge/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
 }
 ```
 
-### Apache Configuration
+## Kubernetes Deployment
 
-```apache
-<VirtualHost *:443>
-    ServerName your-server.local
-    
-    SSLEngine on
-    SSLCertificateFile /path/to/your-server.local.crt
-    SSLCertificateKeyFile /path/to/your-server.local.key
-    SSLCACertificateFile /path/to/ca.pem
-    
-    # Enable certificate revocation checking
-    SSLCARevocationPath /path/to/
-    SSLCARevocationFile /path/to/ca.crl
-    SSLVerifyDepth 1
-    
-    # Optional: Enable client certificate authentication
-    SSLVerifyClient require
-    
-    # Strong SSL settings
-    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
-    SSLHonorCipherOrder on
-    SSLCipherSuite EECDH+AESGCM:EDH+AESGCM
-    
-    # Rest of your server configuration...
-</VirtualHost>
+### Kubernetes Manifests
+
+Deploy LocalCA on Kubernetes with the following manifests:
+
+#### Namespace
+```yaml
+# namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: localca
 ```
 
-## Automated Certificate Deployment
+#### ConfigMap
+```yaml
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: localca-config
+  namespace: localca
+data:
+  CA_NAME: "LocalCA"
+  ORGANIZATION: "LocalCA Organization"
+  COUNTRY: "US"
+  DATABASE_ENABLED: "true"
+  S3_ENABLED: "true"
+  CACHE_ENABLED: "true"
+  EMAIL_NOTIFY: "true"
+  LOG_FORMAT: "json"
+  LOG_LEVEL: "info"
+```
 
-You can automate certificate deployment using simple scripts. Here's an example script that fetches a certificate from LocalCA and deploys it to an NGINX server:
+#### Secrets
+```yaml
+# secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: localca-secrets
+  namespace: localca
+type: Opaque
+data:
+  CA_KEY_PASSWORD: <base64-encoded-password>
+  DATABASE_URL: <base64-encoded-database-url>
+  S3_ACCESS_KEY: <base64-encoded-s3-access-key>
+  S3_SECRET_KEY: <base64-encoded-s3-secret-key>
+  REDIS_PASSWORD: <base64-encoded-redis-password>
+  SMTP_PASSWORD: <base64-encoded-smtp-password>
+```
+
+#### Deployment
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localca-backend
+  namespace: localca
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: localca-backend
+  template:
+    metadata:
+      labels:
+        app: localca-backend
+    spec:
+      containers:
+      - name: backend
+        image: localca/backend:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: localca-config
+        - secretRef:
+            name: localca-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: localca-data
+```
+
+#### Service
+```yaml
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: localca-backend
+  namespace: localca
+spec:
+  selector:
+    app: localca-backend
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP
+```
+
+#### Ingress
+```yaml
+# ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: localca-ingress
+  namespace: localca
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - localca.yourdomain.com
+    secretName: localca-tls
+  rules:
+  - host: localca.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: localca-frontend
+            port:
+              number: 3000
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: localca-backend
+            port:
+              number: 8080
+```
+
+## Standalone Deployment
+
+### Binary Deployment
+
+Build and deploy LocalCA as standalone binaries:
+
+```bash
+# Build backend
+go build -o localca-go main.go
+
+# Build frontend
+npm install
+npm run build
+
+# Create systemd service
+sudo tee /etc/systemd/system/localca.service > /dev/null <<EOF
+[Unit]
+Description=LocalCA Certificate Authority
+After=network.target
+
+[Service]
+Type=simple
+User=localca
+WorkingDirectory=/opt/localca
+ExecStart=/opt/localca/localca-go
+Restart=always
+RestartSec=5
+Environment=DATA_DIR=/var/lib/localca
+Environment=LISTEN_ADDR=:8080
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start service
+sudo systemctl enable localca
+sudo systemctl start localca
+```
+
+### Frontend Deployment
+
+Deploy the frontend separately:
+
+```bash
+# Build frontend for production
+npm run build
+
+# Serve with nginx
+sudo tee /etc/nginx/sites-available/localca > /dev/null <<EOF
+server {
+    listen 80;
+    server_name localca.yourdomain.com;
+
+    root /var/www/localca;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ @nextjs;
+    }
+
+    location @nextjs {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/localca /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Security Hardening
+
+### SSL/TLS Configuration
+
+Generate SSL certificates for production:
+
+```bash
+# Generate self-signed certificate for testing
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+
+# Or use Let's Encrypt with certbot
+sudo certbot certonly --nginx -d localca.yourdomain.com
+```
+
+### Firewall Configuration
+
+Configure firewall rules:
+
+```bash
+# UFW configuration
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
+sudo ufw enable
+
+# iptables configuration
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -j DROP
+```
+
+### User and Permissions
+
+Create dedicated user for LocalCA:
+
+```bash
+# Create localca user
+sudo useradd -r -s /bin/false localca
+
+# Create directories
+sudo mkdir -p /opt/localca /var/lib/localca /var/log/localca
+
+# Set permissions
+sudo chown -R localca:localca /opt/localca /var/lib/localca /var/log/localca
+sudo chmod 750 /opt/localca /var/lib/localca /var/log/localca
+```
+
+## Monitoring and Logging
+
+### Prometheus Monitoring
+
+Configure Prometheus monitoring:
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'localca'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+```
+
+### Log Aggregation
+
+Configure log aggregation with ELK stack:
+
+```yaml
+# filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/localca/*.log
+  fields:
+    service: localca
+  fields_under_root: true
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+
+setup.kibana:
+  host: "kibana:5601"
+```
+
+### Health Checks
+
+Implement health check monitoring:
 
 ```bash
 #!/bin/bash
+# health-check.sh
 
-# Configuration
-SERVER_NAME="your-server.local"
-LOCALCA_URL="https://localca:8443"
-NGINX_CONF_DIR="/etc/nginx"
-CERT_DIR="/etc/ssl/certs"
+# Check backend health
+if ! curl -f http://localhost:8080/api/health > /dev/null 2>&1; then
+    echo "Backend health check failed"
+    exit 1
+fi
 
-# Download certificates
-curl -k -o "$CERT_DIR/$SERVER_NAME.crt" "$LOCALCA_URL/download/$SERVER_NAME/crt"
-curl -k -o "$CERT_DIR/$SERVER_NAME.key" "$LOCALCA_URL/download/$SERVER_NAME/key"
-curl -k -o "$CERT_DIR/$SERVER_NAME.bundle.crt" "$LOCALCA_URL/download/$SERVER_NAME/bundle"
-curl -k -o "$CERT_DIR/ca.crl" "$LOCALCA_URL/download/crl"
+# Check frontend health
+if ! curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+    echo "Frontend health check failed"
+    exit 1
+fi
 
-# Set proper permissions
-chmod 644 "$CERT_DIR/$SERVER_NAME.crt"
-chmod 644 "$CERT_DIR/$SERVER_NAME.bundle.crt"
-chmod 600 "$CERT_DIR/$SERVER_NAME.key"
-chmod 644 "$CERT_DIR/ca.crl"
+# Check database connectivity
+if ! pg_isready -h localhost -p 5432 -U localca > /dev/null 2>&1; then
+    echo "Database health check failed"
+    exit 1
+fi
 
-# Reload NGINX
-systemctl reload nginx
+echo "All health checks passed"
 ```
 
-You can run this script via a cron job to regularly update certificates.
+## Backup and Recovery
 
-## Security Best Practices
+### Database Backup
 
-1. **Protect the CA Key**: The CA private key is the most sensitive component. Never share it, and ensure it's properly encrypted.
+Automated database backup:
 
-2. **Regular Backups**: Regularly back up the `data` directory containing all certificates and the CA.
+```bash
+#!/bin/bash
+# backup-database.sh
 
-3. **Certificate Lifecycle Management**: Establish a process for certificate issuance, renewal, and revocation.
+BACKUP_DIR="/var/backups/localca"
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="$BACKUP_DIR/localca_backup_$DATE.sql"
 
-4. **Internal Network Only**: Never expose the LocalCA service to the public internet.
+# Create backup directory
+mkdir -p $BACKUP_DIR
 
-5. **Access Control**: Restrict access to the LocalCA web interface to administrators only.
+# Backup database
+pg_dump -h localhost -U localca localca > $BACKUP_FILE
 
-6. **Certificate Visibility**: Maintain clear documentation of all issued certificates, their purposes, and expiration dates.
+# Compress backup
+gzip $BACKUP_FILE
 
-7. **Secure Web Interface**: Always use HTTPS (enabled by default) to access the web interface.
+# Remove old backups (keep 30 days)
+find $BACKUP_DIR -name "*.sql.gz" -mtime +30 -delete
 
-8. **Certificate Revocation**: Keep your CRLs up to date and ensure all services check the CRL.
+echo "Database backup completed: $BACKUP_FILE.gz"
+```
+
+### Certificate Backup
+
+Backup certificate data:
+
+```bash
+#!/bin/bash
+# backup-certificates.sh
+
+BACKUP_DIR="/var/backups/localca"
+DATE=$(date +%Y%m%d_%H%M%S)
+DATA_DIR="/var/lib/localca"
+
+# Create backup
+tar -czf "$BACKUP_DIR/certificates_backup_$DATE.tar.gz" -C "$DATA_DIR" .
+
+# Remove old backups
+find $BACKUP_DIR -name "certificates_backup_*.tar.gz" -mtime +30 -delete
+
+echo "Certificate backup completed: certificates_backup_$DATE.tar.gz"
+```
 
 ## Troubleshooting
 
-### Certificate Not Trusted
+### Common Issues
 
-If your browser shows a certificate warning even after installing the CA:
+1. **Database Connection Issues**
+   ```bash
+   # Check database connectivity
+   pg_isready -h localhost -p 5432 -U localca
+   
+   # Check database logs
+   docker-compose logs postgres
+   ```
 
-1. Verify the CA certificate is installed in the correct certificate store
-2. Restart your browser
-3. Clear browser cache and SSL state
-4. Ensure the hostname matches the certificate's Common Name or SAN
+2. **Storage Issues**
+   ```bash
+   # Check MinIO connectivity
+   curl -f http://localhost:9000/minio/health/live
+   
+   # Check storage permissions
+   ls -la /var/lib/localca
+   ```
 
-### Failed to Generate Certificate
+3. **Cache Issues**
+   ```bash
+   # Check Redis connectivity
+   redis-cli ping
+   
+   # Check cache statistics
+   curl http://localhost:8080/api/statistics
+   ```
 
-If certificate generation fails:
+### Log Analysis
 
-1. Check the Docker logs: `docker-compose logs localca`
-2. Ensure the CA password in `cakey.txt` is correct
-3. Verify OpenSSL is working correctly in the container
+Check application logs:
 
-### CRL Issues
+```bash
+# Backend logs
+docker-compose logs backend
 
-If certificate revocation checking isn't working:
+# Frontend logs
+docker-compose logs frontend
 
-1. Ensure the CRL file is accessible to your web server
-2. Verify the CRL is properly formatted: `openssl crl -in ca.crl -text -noout`
-3. Make sure the CRL hasn't expired
+# System logs
+journalctl -u localca -f
+```
 
-### Container Won't Start
+### Performance Tuning
 
-If the Docker container won't start:
+Optimize performance:
 
-1. Check logs: `docker-compose logs localca`
-2. Verify port 8080 and 8443 aren't in use by another service
-3. Ensure `cakey.txt` exists and is readable
-4. Check for disk space issues
+```bash
+# Database optimization
+# Increase shared_buffers in postgresql.conf
+shared_buffers = 256MB
+effective_cache_size = 1GB
+
+# Redis optimization
+# Increase maxmemory in redis.conf
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+```
+
+## Maintenance
+
+### Regular Maintenance Tasks
+
+1. **Update Dependencies**
+   ```bash
+   # Update Go dependencies
+   go mod tidy
+   go mod download
+   
+   # Update Node.js dependencies
+   npm update
+   ```
+
+2. **Certificate Rotation**
+   ```bash
+   # Rotate CA certificate (if needed)
+   # This should be done carefully and rarely
+   ```
+
+3. **Database Maintenance**
+   ```bash
+   # Vacuum database
+   psql -h localhost -U localca -c "VACUUM ANALYZE;"
+   
+   # Update statistics
+   psql -h localhost -U localca -c "ANALYZE;"
+   ```
+
+4. **Log Rotation**
+   ```bash
+   # Configure logrotate
+   sudo tee /etc/logrotate.d/localca > /dev/null <<EOF
+   /var/log/localca/*.log {
+       daily
+       rotate 30
+       compress
+       delaycompress
+       missingok
+       notifempty
+       create 644 localca localca
+   }
+   EOF
+   ```
+
+This deployment guide provides comprehensive instructions for deploying LocalCA in various environments, from development to production. Choose the deployment method that best fits your infrastructure and security requirements.

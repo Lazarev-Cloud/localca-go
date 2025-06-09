@@ -3,75 +3,238 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Backend Architecture
+# Backend Architecture and Implementation
 
-The backend of LocalCA is built with Go and follows a modular architecture. The system is composed of several key packages that work together to provide certificate management functionality.
+The LocalCA backend is built with Go 1.23+ using the Gin web framework, providing a robust and scalable API server for certificate management operations.
 
-## Main Application
+## Application Entry Point
 
-The main entry point is [main.go](mdc:main.go), which:
-- Initializes the configuration and storage
-- Creates the CA certificate if it doesn't exist
-- Sets up HTTP and HTTPS servers
-- Configures API routes
-- Starts the ACME server
+The main application starts in [main.go](mdc:main.go), which orchestrates the initialization of all core services:
 
-## Core Packages
+1. **Configuration Loading**: Loads environment variables and configuration through [pkg/config](mdc:pkg/config)
+2. **Structured Logging**: Initializes JSON/text logging with [pkg/logging](mdc:pkg/logging)
+3. **Enhanced Storage**: Sets up multi-backend storage with [pkg/storage](mdc:pkg/storage)
+4. **Caching Layer**: Initializes Redis/KeyDB caching with [pkg/cache](mdc:pkg/cache)
+5. **Certificate Service**: Creates the core certificate management service
+6. **HTTP Server**: Configures Gin router with security middleware
+7. **ACME Server**: Starts the ACME protocol server on port 8555
+8. **Graceful Shutdown**: Implements proper cleanup and shutdown procedures
 
-### Certificate Management
+## Core Package Structure
 
-The [pkg/certificates](mdc:pkg/certificates) package handles all certificate operations:
+### Certificate Management ([pkg/certificates](mdc:pkg/certificates))
+The certificate package handles all cryptographic operations:
 
-- **CA Management**: Creating and managing the root CA in [ca.go](mdc:pkg/certificates/ca.go)
-- **Server Certificates**: Generation of server-side TLS certificates in [server.go](mdc:pkg/certificates/server.go)
-- **Client Certificates**: Generation of client authentication certificates in [client.go](mdc:pkg/certificates/client.go)
-- **Certificate Revocation**: Maintains the Certificate Revocation List in [crl.go](mdc:pkg/certificates/crl.go)
+- **[ca.go](mdc:pkg/certificates/ca.go)**: Certificate Authority creation and management
+- **[server.go](mdc:pkg/certificates/server.go)**: Server certificate generation and validation
+- **[client.go](mdc:pkg/certificates/client.go)**: Client certificate creation and PKCS#12 export
+- **[service.go](mdc:pkg/certificates/service.go)**: Main certificate service orchestration
 
-### Storage
+Key features:
+- RSA and ECDSA key generation with configurable key sizes
+- X.509 certificate creation with proper extensions
+- Subject Alternative Name (SAN) support
+- Certificate revocation and CRL generation
+- PKCS#12 bundle creation for client certificates
 
-The [pkg/storage](mdc:pkg/storage) package provides persistent storage for certificates and metadata:
+### Enhanced Storage System ([pkg/storage](mdc:pkg/storage))
+Multi-backend storage architecture supporting:
 
-- File-based storage for all certificates
-- Methods for retrieving, storing, and managing certificate files
-- Path management for CA, server, and client certificates
+- **File Storage**: Traditional file-based storage for backward compatibility
+- **PostgreSQL**: Relational database storage with GORM ORM
+- **S3/MinIO**: Object storage for scalable certificate management
+- **Caching Layer**: Redis/KeyDB integration for performance optimization
 
-### Configuration
+Key components:
+- **[enhanced.go](mdc:pkg/storage/enhanced.go)**: Multi-backend storage coordinator
+- **[cached.go](mdc:pkg/storage/cached.go)**: Caching wrapper with TTL management
+- **[interface.go](mdc:pkg/storage/interface.go)**: Storage interface definitions
+- **[audit.go](mdc:pkg/storage/audit.go)**: Audit logging implementation
 
-The [pkg/config](mdc:pkg/config) package handles application configuration:
+### Database Integration ([pkg/database](mdc:pkg/database))
+PostgreSQL integration with GORM providing:
+- Certificate metadata storage
+- Audit log persistence
+- User session management
+- Configuration storage
+- Backup and recovery support
 
-- Loading configuration from environment variables
-- Default configuration values
-- Validation of configuration parameters
+### Object Storage ([pkg/s3storage](mdc:pkg/s3storage))
+S3-compatible storage implementation:
+- MinIO SDK integration
+- Bucket management and lifecycle policies
+- Encrypted certificate storage
+- Backup and replication support
 
-### API Handlers
+### Caching Layer ([pkg/cache](mdc:pkg/cache))
+Redis/KeyDB caching implementation:
+- Certificate metadata caching
+- Session storage
+- Rate limiting support
+- Cache warming and invalidation strategies
 
-The [pkg/handlers](mdc:pkg/handlers) package implements the HTTP API endpoints:
+## HTTP Handlers and Routing ([pkg/handlers](mdc:pkg/handlers))
 
-- Certificate creation, renewal, and revocation endpoints
-- Authentication and authorization
-- Web UI serving
+The handlers package implements all HTTP endpoints with comprehensive middleware:
 
-### ACME Protocol
+### API Endpoints
+- **Certificate Operations**: CRUD operations for certificates
+- **CA Management**: Certificate Authority information and operations
+- **Authentication**: Login, logout, and session management
+- **Statistics**: Real-time system and certificate statistics
+- **Settings**: Configuration management
+- **Health Checks**: Service health and readiness endpoints
 
-The [pkg/acme](mdc:pkg/acme) package implements the ACME protocol for automated certificate issuance:
+### Security Middleware
+- **CSRF Protection**: Token-based CSRF prevention
+- **Session Management**: Secure cookie-based sessions
+- **Rate Limiting**: Request rate limiting for ACME endpoints
+- **Security Headers**: Comprehensive HTTP security headers
+- **Input Validation**: Request validation and sanitization
 
-- ACME server implementation
-- Challenge verification
-- Integration with certificate service
+### Authentication System ([pkg/handlers/auth.go](mdc:pkg/handlers/auth.go))
+Implements secure authentication with:
+- Password hashing with bcrypt
+- Session-based authentication
+- Setup token generation for initial configuration
+- CSRF token management
+- Secure logout with session cleanup
 
-### Email Notifications
+## ACME Protocol Implementation ([pkg/acme](mdc:pkg/acme))
 
-The [pkg/email](mdc:pkg/email) package handles certificate expiration notifications:
+Full ACME (Automatic Certificate Management Environment) server implementation:
 
-- SMTP configuration
-- Email templates
-- Scheduled notifications for expiring certificates
+### ACME Server Features
+- **Directory Endpoint**: ACME service discovery
+- **Account Management**: ACME account creation and key rollover
+- **Order Processing**: Certificate order lifecycle management
+- **Challenge Validation**: HTTP-01 and DNS-01 challenge support
+- **Certificate Issuance**: Automated certificate generation and delivery
 
-## API Endpoints
+### Challenge Types
+- **HTTP-01**: Web-based domain validation
+- **DNS-01**: DNS TXT record validation (planned)
+- **TLS-ALPN-01**: TLS-based validation (planned)
 
-The API routes are defined in the [app/api](mdc:app/api) directory:
-- `/api/ca-info`: CA information endpoints
-- `/api/certificates`: Certificate management endpoints
-- `/api/delete`: Certificate deletion endpoints
-- `/api/renew`: Certificate renewal endpoints
-- `/api/revoke`: Certificate revocation endpoints
+## Security Implementation ([pkg/security](mdc:pkg/security))
+
+Comprehensive security utilities and middleware:
+
+### Cryptographic Security
+- **TLS Configuration**: Secure TLS 1.2/1.3 configuration with modern cipher suites
+- **Key Generation**: Secure random key generation for RSA and ECDSA
+- **Certificate Validation**: X.509 certificate chain validation
+- **Password Hashing**: bcrypt with configurable cost factors
+
+### Application Security
+- **CSRF Protection**: Double-submit cookie pattern
+- **Session Security**: Secure, HttpOnly, SameSite cookies
+- **Input Sanitization**: XSS and injection prevention
+- **Rate Limiting**: Configurable rate limiting for API endpoints
+
+## Configuration Management ([pkg/config](mdc:pkg/config))
+
+Centralized configuration system supporting:
+
+### Environment Variables
+- **CA Configuration**: CA name, organization, country settings
+- **Storage Configuration**: Database, S3, and cache settings
+- **Security Configuration**: TLS, authentication, and session settings
+- **Email Configuration**: SMTP settings for notifications
+- **Logging Configuration**: Log level and format settings
+
+### Configuration Validation
+- Required field validation
+- Type checking and conversion
+- Default value assignment
+- Environment-specific overrides
+
+## Logging and Monitoring ([pkg/logging](mdc:pkg/logging))
+
+Structured logging implementation with:
+
+### Log Formats
+- **JSON Logging**: Machine-readable structured logs
+- **Text Logging**: Human-readable console output
+- **Audit Logging**: Security and compliance audit trails
+
+### Log Levels
+- **Debug**: Detailed debugging information
+- **Info**: General operational information
+- **Warn**: Warning conditions and recoverable errors
+- **Error**: Error conditions requiring attention
+- **Fatal**: Critical errors causing application termination
+
+### Monitoring Integration
+- Structured fields for log aggregation
+- Request ID tracking for distributed tracing
+- Performance metrics and timing information
+- Error tracking and alerting support
+
+## Email Notifications ([pkg/email](mdc:pkg/email))
+
+Email notification service for:
+- Certificate expiration warnings
+- System alerts and notifications
+- User account notifications
+- Audit event notifications
+
+Features:
+- SMTP configuration with authentication
+- HTML and text email templates
+- Batch email processing
+- Delivery status tracking
+
+## Performance Optimizations
+
+### Caching Strategy
+- **Certificate Metadata**: Cached with 1-hour TTL
+- **CA Information**: Cached with 24-hour TTL
+- **User Sessions**: Stored in cache for fast access
+- **Statistics**: Cached with 5-minute TTL for dashboard performance
+
+### Database Optimizations
+- Connection pooling with configurable limits
+- Query optimization with proper indexing
+- Batch operations for bulk certificate operations
+- Read replicas support for scaling
+
+### Concurrent Processing
+- Goroutine pools for certificate generation
+- Async email sending
+- Background cache warming
+- Parallel health checks for storage backends
+
+## Error Handling and Recovery
+
+### Error Types
+- **Validation Errors**: Input validation and business rule violations
+- **Storage Errors**: Database and file system errors
+- **Cryptographic Errors**: Certificate generation and validation errors
+- **Network Errors**: HTTP client and server errors
+
+### Recovery Mechanisms
+- Automatic retry with exponential backoff
+- Circuit breaker pattern for external services
+- Graceful degradation for non-critical features
+- Health check endpoints for monitoring
+
+## Testing Strategy
+
+### Unit Tests
+- Package-level unit tests with table-driven patterns
+- Mock implementations for external dependencies
+- Cryptographic operation testing
+- Error condition testing
+
+### Integration Tests
+- End-to-end certificate lifecycle testing
+- Database integration testing
+- ACME protocol compliance testing
+- Security middleware testing
+
+### Performance Tests
+- Load testing for certificate generation
+- Concurrent request handling
+- Memory usage and leak detection
+- Cache performance validation

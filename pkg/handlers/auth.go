@@ -311,17 +311,28 @@ func checkPasswordHash(password, hash string) bool {
 
 // completeSetup completes the initial setup
 func completeSetup(username, password string, store *storage.Storage) error {
+	log.Printf("=== COMPLETE SETUP DEBUG ===")
+	log.Printf("Username: %s", username)
+	log.Printf("Password length: %d", len(password))
+
 	// Hash password
 	passwordHash, err := hashPassword(password)
 	if err != nil {
+		log.Printf("Failed to hash password: %v", err)
 		return err
 	}
+
+	log.Printf("Password hashed successfully")
+	log.Printf("Password hash: %s", passwordHash)
 
 	// Load config
 	config, err := LoadAuthConfig(store)
 	if err != nil {
+		log.Printf("Failed to load auth config: %v", err)
 		return err
 	}
+
+	log.Printf("Loaded auth config - Current setup completed: %v", config.SetupCompleted)
 
 	// Update config
 	config.AdminUsername = username
@@ -329,9 +340,30 @@ func completeSetup(username, password string, store *storage.Storage) error {
 	config.SetupCompleted = true
 	config.SetupToken = "" // Clear setup token
 
+	log.Printf("Updated config - Username: %s, Setup completed: %v", config.AdminUsername, config.SetupCompleted)
+
 	// Save config
 	if err := saveAuthConfig(config, store); err != nil {
+		log.Printf("Failed to save auth config: %v", err)
 		return err
+	}
+
+	log.Printf("Auth config saved successfully")
+
+	// Verify the saved config by reading it back
+	verifyConfig, err := LoadAuthConfig(store)
+	if err != nil {
+		log.Printf("Failed to verify saved config: %v", err)
+	} else {
+		log.Printf("Verification - Username: %s, Setup completed: %v", verifyConfig.AdminUsername, verifyConfig.SetupCompleted)
+		log.Printf("Verification - Password hash: %s", verifyConfig.AdminPasswordHash)
+
+		// Test the password hash
+		if checkPasswordHash(password, verifyConfig.AdminPasswordHash) {
+			log.Printf("✅ Password hash verification SUCCESS")
+		} else {
+			log.Printf("❌ Password hash verification FAILED")
+		}
 	}
 
 	return nil

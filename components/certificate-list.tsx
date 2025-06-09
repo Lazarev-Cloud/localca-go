@@ -34,7 +34,7 @@ export function CertificateList({ className }: CertificateListProps) {
 
         {error && (
           <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         )}
 

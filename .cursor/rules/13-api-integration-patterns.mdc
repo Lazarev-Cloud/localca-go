@@ -1,0 +1,615 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Integration Patterns and Endpoints
+
+LocalCA provides a comprehensive REST API for certificate management operations, with both direct backend endpoints and Next.js API routes for frontend integration.
+
+## API Architecture Overview
+
+### Backend API Server
+The Go backend serves as the primary API server on port 8080:
+- **Direct API Access**: RESTful endpoints for all certificate operations
+- **Authentication**: Session-based authentication with CSRF protection
+- **Rate Limiting**: Built-in rate limiting for ACME endpoints
+- **Security Headers**: Comprehensive security headers and middleware
+
+### Frontend API Integration
+Next.js provides multiple integration patterns:
+- **API Proxy Routes**: Dynamic proxy to backend API at [app/api/proxy/[...path]](mdc:app/api/proxy/[...path])
+- **Direct API Routes**: Next.js API routes for specific operations
+- **Server-Side Integration**: SSR/SSG with backend API calls
+- **Client-Side Integration**: Browser-based API calls with authentication
+
+## Backend API Endpoints
+
+### Authentication Endpoints
+
+#### POST /api/auth/login
+User authentication with credentials:
+```json
+{
+  "username": "admin",
+  "password": "password"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": {
+    "id": "admin",
+    "username": "admin"
+  }
+}
+```
+
+#### POST /api/auth/logout
+User logout and session cleanup:
+```json
+{
+  "success": true,
+  "message": "Logout successful"
+}
+```
+
+#### GET /api/auth/status
+Check authentication status:
+```json
+{
+  "authenticated": true,
+  "user": {
+    "id": "admin",
+    "username": "admin"
+  }
+}
+```
+
+### Certificate Authority Endpoints
+
+#### GET /api/ca-info
+Retrieve Certificate Authority information:
+```json
+{
+  "name": "LocalCA",
+  "organization": "LocalCA Organization",
+  "country": "US",
+  "validFrom": "2024-01-01T00:00:00Z",
+  "validTo": "2034-01-01T00:00:00Z",
+  "serialNumber": "1",
+  "keySize": 4096,
+  "algorithm": "RSA"
+}
+```
+
+#### GET /api/ca-cert
+Download CA certificate in PEM format:
+```
+-----BEGIN CERTIFICATE-----
+MIIFXzCCA0egAwIBAgIJAK...
+-----END CERTIFICATE-----
+```
+
+### Certificate Management Endpoints
+
+#### GET /api/certificates
+List all certificates with optional filtering:
+
+Query Parameters:
+- `type`: Filter by certificate type (server, client)
+- `status`: Filter by status (valid, expired, revoked)
+- `search`: Search in common name or subject
+- `limit`: Number of results per page
+- `offset`: Pagination offset
+
+Response:
+```json
+{
+  "certificates": [
+    {
+      "id": "cert-123",
+      "commonName": "example.com",
+      "type": "server",
+      "status": "valid",
+      "validFrom": "2024-01-01T00:00:00Z",
+      "validTo": "2025-01-01T00:00:00Z",
+      "serialNumber": "123456789",
+      "subjectAltNames": ["www.example.com", "api.example.com"]
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+#### GET /api/certificates/{id}
+Retrieve specific certificate details:
+```json
+{
+  "id": "cert-123",
+  "commonName": "example.com",
+  "type": "server",
+  "status": "valid",
+  "validFrom": "2024-01-01T00:00:00Z",
+  "validTo": "2025-01-01T00:00:00Z",
+  "serialNumber": "123456789",
+  "subject": "CN=example.com,O=LocalCA Organization,C=US",
+  "issuer": "CN=LocalCA,O=LocalCA Organization,C=US",
+  "subjectAltNames": ["www.example.com", "api.example.com"],
+  "keySize": 2048,
+  "algorithm": "RSA",
+  "fingerprint": "SHA256:abc123...",
+  "certificate": "-----BEGIN CERTIFICATE-----\n...",
+  "privateKey": "-----BEGIN PRIVATE KEY-----\n..."
+}
+```
+
+#### POST /api/certificates
+Create a new certificate:
+
+Request Body:
+```json
+{
+  "type": "server",
+  "commonName": "example.com",
+  "subjectAltNames": ["www.example.com", "api.example.com"],
+  "organization": "Example Organization",
+  "country": "US",
+  "validityDays": 365,
+  "keySize": 2048,
+  "keyType": "RSA"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "certificate": {
+    "id": "cert-124",
+    "commonName": "example.com",
+    "type": "server",
+    "status": "valid",
+    "validFrom": "2024-01-01T00:00:00Z",
+    "validTo": "2025-01-01T00:00:00Z",
+    "serialNumber": "123456790"
+  }
+}
+```
+
+#### PUT /api/certificates/{id}/renew
+Renew an existing certificate:
+```json
+{
+  "validityDays": 365
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Certificate renewed successfully",
+  "certificate": {
+    "id": "cert-123",
+    "validFrom": "2024-01-01T00:00:00Z",
+    "validTo": "2025-01-01T00:00:00Z"
+  }
+}
+```
+
+#### PUT /api/certificates/{id}/revoke
+Revoke a certificate:
+```json
+{
+  "reason": "keyCompromise"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Certificate revoked successfully"
+}
+```
+
+#### DELETE /api/certificates/{id}
+Delete a certificate:
+```json
+{
+  "success": true,
+  "message": "Certificate deleted successfully"
+}
+```
+
+### System Information Endpoints
+
+#### GET /api/statistics
+Retrieve system statistics:
+```json
+{
+  "certificates": {
+    "total": 25,
+    "valid": 20,
+    "expired": 3,
+    "revoked": 2,
+    "expiringSoon": 1
+  },
+  "storage": {
+    "totalSize": "1.2MB",
+    "certificateCount": 25,
+    "backupStatus": "healthy"
+  },
+  "system": {
+    "uptime": "72h30m",
+    "version": "1.0.0",
+    "goVersion": "1.23.0"
+  },
+  "cache": {
+    "enabled": true,
+    "hitRate": 0.85,
+    "memoryUsage": "45MB"
+  }
+}
+```
+
+#### GET /api/health
+Health check endpoint:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "services": {
+    "database": "healthy",
+    "cache": "healthy",
+    "storage": "healthy"
+  }
+}
+```
+
+### Setup and Configuration Endpoints
+
+#### POST /api/setup
+Initial application setup:
+```json
+{
+  "setupToken": "setup-token-123",
+  "adminPassword": "secure-password",
+  "caName": "My LocalCA",
+  "organization": "My Organization",
+  "country": "US"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Setup completed successfully"
+}
+```
+
+#### GET /api/settings
+Retrieve application settings:
+```json
+{
+  "caName": "LocalCA",
+  "organization": "LocalCA Organization",
+  "country": "US",
+  "emailNotifications": true,
+  "smtpServer": "smtp.example.com",
+  "smtpPort": 587
+}
+```
+
+#### PUT /api/settings
+Update application settings:
+```json
+{
+  "emailNotifications": true,
+  "smtpServer": "smtp.example.com",
+  "smtpPort": 587,
+  "smtpUsername": "user@example.com",
+  "smtpPassword": "password"
+}
+```
+
+## Next.js API Routes
+
+### API Proxy ([app/api/proxy/[...path]/route.ts](mdc:app/api/proxy/[...path]/route.ts))
+
+Dynamic proxy that forwards requests to the backend API:
+
+#### Features
+- **Authentication Forwarding**: Forwards session cookies and CSRF tokens
+- **Error Handling**: Transforms backend errors for frontend consumption
+- **Request/Response Transformation**: Adapts data formats between frontend and backend
+- **Caching**: Implements response caching for performance
+
+#### Usage Pattern
+Frontend calls proxy endpoints that mirror backend API structure:
+```typescript
+// Frontend API call
+const response = await fetch('/api/proxy/certificates', {
+  method: 'GET',
+  credentials: 'include'
+});
+```
+
+### Direct API Routes
+
+#### Certificate Operations ([app/api/certificates/route.ts](mdc:app/api/certificates/route.ts))
+```typescript
+export async function GET(request: Request) {
+  // Server-side certificate fetching
+  const certificates = await fetchCertificatesFromBackend();
+  return Response.json(certificates);
+}
+
+export async function POST(request: Request) {
+  // Server-side certificate creation
+  const body = await request.json();
+  const result = await createCertificateOnBackend(body);
+  return Response.json(result);
+}
+```
+
+#### CA Information ([app/api/ca-info/route.ts](mdc:app/api/ca-info/route.ts))
+```typescript
+export async function GET() {
+  const caInfo = await fetchCAInfoFromBackend();
+  return Response.json(caInfo);
+}
+```
+
+#### Authentication ([app/api/login/route.ts](mdc:app/api/login/route.ts))
+```typescript
+export async function POST(request: Request) {
+  const credentials = await request.json();
+  const result = await authenticateWithBackend(credentials);
+  
+  if (result.success) {
+    // Set secure session cookies
+    const response = Response.json(result);
+    response.cookies.set('session', result.sessionId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict'
+    });
+    return response;
+  }
+  
+  return Response.json(result, { status: 401 });
+}
+```
+
+## Frontend API Integration Patterns
+
+### Custom Hooks for API Integration
+
+#### useApi Hook ([hooks/use-api.ts](mdc:hooks/use-api.ts))
+Generic API client with error handling and loading states:
+```typescript
+export function useApi<T>(endpoint: string, options?: RequestInit) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, [endpoint]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(endpoint, {
+        credentials: 'include',
+        ...options
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { data, loading, error, refetch: fetchData };
+}
+```
+
+#### useCertificates Hook ([hooks/use-certificates.ts](mdc:hooks/use-certificates.ts))
+Certificate-specific API operations:
+```typescript
+export function useCertificates() {
+  const { data, loading, error, refetch } = useApi<CertificateList>('/api/proxy/certificates');
+
+  const createCertificate = async (certificateData: CreateCertificateRequest) => {
+    const response = await fetch('/api/proxy/certificates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(certificateData)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create certificate');
+    }
+    
+    await refetch(); // Refresh the list
+    return response.json();
+  };
+
+  const renewCertificate = async (id: string) => {
+    const response = await fetch(`/api/proxy/certificates/${id}/renew`, {
+      method: 'PUT',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to renew certificate');
+    }
+    
+    await refetch();
+    return response.json();
+  };
+
+  return {
+    certificates: data?.certificates || [],
+    loading,
+    error,
+    createCertificate,
+    renewCertificate,
+    refetch
+  };
+}
+```
+
+### Error Handling Patterns
+
+#### API Error Types
+```typescript
+interface ApiError {
+  message: string;
+  code?: string;
+  details?: Record<string, any>;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: ApiError;
+}
+```
+
+#### Error Boundary Component
+```typescript
+export function ApiErrorBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary
+      fallback={({ error }) => (
+        <div className="error-container">
+          <h2>API Error</h2>
+          <p>{error.message}</p>
+          <button onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      )}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+```
+
+## Authentication and Security
+
+### Session Management
+- **HTTP-Only Cookies**: Secure session storage
+- **CSRF Protection**: Double-submit cookie pattern
+- **Session Expiration**: Automatic session timeout
+- **Secure Headers**: Comprehensive security headers
+
+### API Security Middleware
+```go
+func AuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        session := getSessionFromCookie(c)
+        if session == nil {
+            c.JSON(401, gin.H{"error": "Unauthorized"})
+            c.Abort()
+            return
+        }
+        
+        c.Set("user", session.User)
+        c.Next()
+    }
+}
+
+func CSRFMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        if c.Request.Method != "GET" {
+            token := c.GetHeader("X-CSRF-Token")
+            if !validateCSRFToken(token, c) {
+                c.JSON(403, gin.H{"error": "CSRF token invalid"})
+                c.Abort()
+                return
+            }
+        }
+        c.Next()
+    }
+}
+```
+
+## Performance Optimization
+
+### Caching Strategies
+- **API Response Caching**: Cache frequently accessed data
+- **Browser Caching**: Appropriate cache headers for static data
+- **CDN Integration**: Static asset caching
+- **Database Query Caching**: Cache expensive database queries
+
+### Request Optimization
+- **Batch Requests**: Combine multiple API calls
+- **Pagination**: Limit response sizes
+- **Compression**: Gzip compression for responses
+- **Connection Pooling**: Efficient connection management
+
+## Testing API Integration
+
+### Backend API Testing
+```go
+func TestCertificateAPI(t *testing.T) {
+    router := setupTestRouter()
+    
+    // Test certificate creation
+    w := httptest.NewRecorder()
+    req, _ := http.NewRequest("POST", "/api/certificates", strings.NewReader(`{
+        "commonName": "test.example.com",
+        "type": "server"
+    }`))
+    req.Header.Set("Content-Type", "application/json")
+    
+    router.ServeHTTP(w, req)
+    
+    assert.Equal(t, 200, w.Code)
+    
+    var response map[string]interface{}
+    json.Unmarshal(w.Body.Bytes(), &response)
+    assert.True(t, response["success"].(bool))
+}
+```
+
+### Frontend API Testing
+```typescript
+// Mock API responses for testing
+jest.mock('../hooks/use-api', () => ({
+  useApi: jest.fn(() => ({
+    data: mockCertificateData,
+    loading: false,
+    error: null,
+    refetch: jest.fn()
+  }))
+}));
+
+test('certificate list displays correctly', async () => {
+  render(<CertificateList />);
+  
+  await waitFor(() => {
+    expect(screen.getByText('test.example.com')).toBeInTheDocument();
+  });
+});
+```

@@ -2,12 +2,16 @@ package handlers
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -138,31 +142,42 @@ func apiSecurityMiddleware() gin.HandlerFunc {
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
 
-		// Rate limiting for API endpoints (basic implementation)
-		// In production, you'd want a more sophisticated rate limiter
-		userAgent := c.GetHeader("User-Agent")
-		if userAgent == "" {
-			c.JSON(http.StatusBadRequest, APIResponse{
-				Success: false,
-				Message: "User-Agent header is required",
-			})
-			c.Abort()
-			return
-		}
+		// Get path for endpoint-specific logic
+		path := c.Request.URL.Path
 
-		// Validate Content-Type for POST requests
-		if c.Request.Method == "POST" {
-			contentType := c.GetHeader("Content-Type")
-			if contentType != "" &&
-				!strings.Contains(contentType, "application/json") &&
-				!strings.Contains(contentType, "application/x-www-form-urlencoded") &&
-				!strings.Contains(contentType, "multipart/form-data") {
+		// Allow all authentication and setup endpoints without strict validation
+		isAuthEndpoint := strings.HasSuffix(path, "/login") ||
+			strings.HasSuffix(path, "/setup") ||
+			strings.HasSuffix(path, "/auth/status")
+
+		// Only require User-Agent for non-auth endpoints
+		if !isAuthEndpoint {
+			userAgent := c.GetHeader("User-Agent")
+			if userAgent == "" {
 				c.JSON(http.StatusBadRequest, APIResponse{
 					Success: false,
-					Message: "Unsupported Content-Type",
+					Message: "User-Agent header is required",
 				})
 				c.Abort()
 				return
+			}
+		}
+
+		// Relaxed Content-Type validation for POST requests
+		if c.Request.Method == "POST" {
+			contentType := c.GetHeader("Content-Type")
+			// Allow empty content-type for auth endpoints
+			if contentType != "" && !isAuthEndpoint {
+				if !strings.Contains(contentType, "application/json") &&
+					!strings.Contains(contentType, "application/x-www-form-urlencoded") &&
+					!strings.Contains(contentType, "multipart/form-data") {
+					c.JSON(http.StatusBadRequest, APIResponse{
+						Success: false,
+						Message: "Unsupported Content-Type",
+					})
+					c.Abort()
+					return
+				}
 			}
 		}
 
@@ -1126,4 +1141,577 @@ func writeAuditLog(store *storage.Storage, action, resource, resourceID, userIP,
 	if _, err := file.WriteString(string(jsonData) + "\n"); err != nil {
 		log.Printf("Failed to write audit log entry: %v", err)
 	}
+}
+
+// Download handlers for API
+
+// downloadCAHandler handles CA certificate download
+func downloadCAHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		caPath := store.GetCAPublicKeyPath()
+		if _, err := os.Stat(caPath); os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Success: false,
+				Message: "CA certificate not found",
+			})
+			return
+		}
+		c.FileAttachment(caPath, "ca.crt")
+	}
+}
+
+// downloadCRLHandler handles CRL download
+func downloadCRLHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		crlPath := filepath.Join(store.GetBasePath(), "ca.crl")
+		if _, err := os.Stat(crlPath); os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Success: false,
+				Message: "CRL not found",
+			})
+			return
+		}
+		c.FileAttachment(crlPath, "ca.crl")
+	}
+}
+
+// downloadCertificateHandler handles certificate file downloads
+func downloadCertificateHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		fileType := c.Param("type")
+
+		// Validate certificate name
+		if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid certificate name",
+			})
+			return
+		}
+
+		var filePath, fileName string
+		switch fileType {
+		case "crt":
+			filePath = store.GetCertificatePath(name)
+			fileName = name + ".crt"
+		case "key":
+			filePath = store.GetCertificateKeyPath(name)
+			fileName = name + ".key"
+		case "p12":
+			filePath = store.GetCertificateP12Path(name)
+			fileName = name + ".p12"
+		case "bundle":
+			filePath = store.GetCertificateBundlePath(name)
+			fileName = name + "-bundle.crt"
+		default:
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid file type",
+			})
+			return
+		}
+
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Success: false,
+				Message: "File not found",
+			})
+			return
+		}
+
+		c.FileAttachment(filePath, fileName)
+	}
+}
+
+// Missing authentication handlers
+
+// apiLoginHandler handles API login requests with comprehensive format support
+func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var loginRequest struct {
+			Username string `json:"username" form:"username"`
+			Password string `json:"password" form:"password"`
+		}
+
+		// Enhanced logging for debugging
+		log.Printf("=== LOGIN REQUEST DEBUG ===")
+		log.Printf("Method: %s", c.Request.Method)
+		log.Printf("Content-Type: %s", c.GetHeader("Content-Type"))
+		log.Printf("User-Agent: %s", c.GetHeader("User-Agent"))
+		log.Printf("Content-Length: %s", c.GetHeader("Content-Length"))
+
+		// Read raw body for debugging
+		var bodyBytes []byte
+		if c.Request.Body != nil {
+			var err error
+			bodyBytes, err = c.GetRawData()
+			if err == nil {
+				log.Printf("Raw body: %s", string(bodyBytes))
+				// Restore body for binding
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+		}
+
+		// Try multiple binding methods in order of preference
+		var bindingError error
+		contentType := c.GetHeader("Content-Type")
+
+		// Method 1: Try JSON binding for JSON content
+		if strings.Contains(contentType, "application/json") {
+			if err := c.ShouldBindJSON(&loginRequest); err == nil {
+				log.Printf("Successfully bound JSON data")
+			} else {
+				bindingError = err
+				log.Printf("JSON binding failed: %v", err)
+			}
+		} else if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+			// Method 2: Try form binding for form-encoded content
+			// Restore body for form parsing
+			if len(bodyBytes) > 0 {
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+
+			if err := c.ShouldBind(&loginRequest); err == nil {
+				log.Printf("Successfully bound form data")
+				bindingError = nil
+			} else {
+				log.Printf("Form binding failed: %v", err)
+
+				// Method 3: Manual form parsing as fallback
+				if len(bodyBytes) > 0 {
+					// Parse form data manually
+					formData, err := url.ParseQuery(string(bodyBytes))
+					if err == nil {
+						if username := formData.Get("username"); username != "" {
+							loginRequest.Username = username
+						}
+						if password := formData.Get("password"); password != "" {
+							loginRequest.Password = password
+						}
+						if loginRequest.Username != "" && loginRequest.Password != "" {
+							log.Printf("Successfully parsed form manually")
+							bindingError = nil
+						}
+					}
+				}
+			}
+		} else {
+			// Try both methods for unknown content types
+			if err := c.ShouldBindJSON(&loginRequest); err != nil {
+				bindingError = err
+				log.Printf("JSON binding failed: %v", err)
+
+				// Restore body and try form binding
+				if len(bodyBytes) > 0 {
+					c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				}
+
+				if err := c.ShouldBind(&loginRequest); err == nil {
+					log.Printf("Successfully bound form data")
+					bindingError = nil
+				} else {
+					log.Printf("Form binding failed: %v", err)
+
+					// Manual form parsing
+					loginRequest.Username = c.PostForm("username")
+					loginRequest.Password = c.PostForm("password")
+
+					if loginRequest.Username != "" || loginRequest.Password != "" {
+						log.Printf("Successfully parsed form manually")
+						bindingError = nil
+					} else {
+						log.Printf("Manual form parsing failed")
+					}
+				}
+			} else {
+				log.Printf("Successfully bound JSON data")
+			}
+		}
+
+		log.Printf("Final parsed data - Username: '%s', Password length: %d",
+			loginRequest.Username, len(loginRequest.Password))
+
+		// Validate that we got the required data
+		if loginRequest.Username == "" || loginRequest.Password == "" {
+			log.Printf("Missing credentials after all binding attempts")
+			errorMsg := "No binding error"
+			if bindingError != nil {
+				errorMsg = bindingError.Error()
+			}
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Username and password are required",
+				Data: map[string]interface{}{
+					"binding_error": errorMsg,
+					"debug":         "Failed to parse login credentials from request",
+				},
+			})
+			return
+		}
+
+		log.Printf("Processing login for username: %s", loginRequest.Username)
+
+		// Load auth config
+		authConfig, err := LoadAuthConfig(store)
+		if err != nil {
+			log.Printf("Failed to load auth config: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Internal server error",
+			})
+			return
+		}
+
+		// Check if setup is completed
+		if !authConfig.SetupCompleted {
+			log.Printf("Setup not completed")
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Setup required",
+				Data: map[string]interface{}{
+					"setup_required": true,
+				},
+			})
+			return
+		}
+
+		log.Printf("Validating credentials for user: %s", loginRequest.Username)
+		log.Printf("Expected username: %s", authConfig.AdminUsername)
+		log.Printf("Password hash in config: %s", authConfig.AdminPasswordHash)
+
+		// Validate credentials
+		if loginRequest.Username != authConfig.AdminUsername {
+			log.Printf("Username mismatch: got '%s', expected '%s'",
+				loginRequest.Username, authConfig.AdminUsername)
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Invalid credentials",
+			})
+			return
+		}
+
+		if !checkPasswordHash(loginRequest.Password, authConfig.AdminPasswordHash) {
+			log.Printf("Password validation failed for user: %s", loginRequest.Username)
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Invalid credentials",
+			})
+			return
+		}
+
+		log.Printf("Credentials validated successfully for user: %s", loginRequest.Username)
+
+		// Generate session token
+		sessionToken := generateSessionToken()
+		if sessionToken == "" {
+			log.Printf("Failed to generate session token")
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to create session",
+			})
+			return
+		}
+
+		// Save session
+		sessionPath := filepath.Join(store.GetBasePath(), "sessions", sessionToken)
+		if err := os.MkdirAll(filepath.Dir(sessionPath), 0700); err != nil {
+			log.Printf("Failed to create sessions directory: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to create session",
+			})
+			return
+		}
+
+		sessionData := map[string]interface{}{
+			"username":   loginRequest.Username,
+			"created_at": time.Now().Unix(),
+			"expires_at": time.Now().Add(24 * time.Hour).Unix(),
+		}
+
+		sessionBytes, _ := json.Marshal(sessionData)
+		if err := os.WriteFile(sessionPath, sessionBytes, 0600); err != nil {
+			log.Printf("Failed to save session file: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to save session",
+			})
+			return
+		}
+
+		// Set session cookie
+		c.SetCookie("session", sessionToken, 86400, "/", "", false, true)
+
+		log.Printf("Login successful for user: %s, session: %s", loginRequest.Username, sessionToken)
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Login successful",
+			Data: map[string]interface{}{
+				"username":        loginRequest.Username,
+				"session_expires": time.Now().Add(24 * time.Hour).Unix(),
+			},
+		})
+	}
+}
+
+// apiSetupHandler handles API setup requests
+func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == "GET" {
+			// Return setup status
+			authConfig, err := LoadAuthConfig(store)
+			if err != nil {
+				log.Printf("Failed to load auth config in setup GET: %v", err)
+				c.JSON(http.StatusInternalServerError, APIResponse{
+					Success: false,
+					Message: "Internal server error",
+				})
+				return
+			}
+
+			log.Printf("Setup GET request - Setup completed: %v", authConfig.SetupCompleted)
+			if !authConfig.SetupCompleted {
+				log.Printf("Setup token: %s", authConfig.SetupToken)
+				log.Printf("Setup token expiry: %v", authConfig.SetupTokenExpiry)
+			}
+
+			response := APIResponse{
+				Success: true,
+				Data: map[string]interface{}{
+					"setup_completed": authConfig.SetupCompleted,
+					"setup_required":  !authConfig.SetupCompleted,
+				},
+			}
+
+			// Include setup token if setup is not completed
+			if !authConfig.SetupCompleted {
+				response.Data.(map[string]interface{})["setup_token"] = authConfig.SetupToken
+				response.Data.(map[string]interface{})["setup_token_expiry"] = authConfig.SetupTokenExpiry
+			}
+
+			c.JSON(http.StatusOK, response)
+			return
+		}
+
+		// Handle POST request
+		var setupRequest struct {
+			Username   string `json:"username"`
+			Password   string `json:"password"`
+			SetupToken string `json:"setup_token"`
+		}
+
+		log.Printf("=== SETUP REQUEST DEBUG ===")
+		log.Printf("Method: %s", c.Request.Method)
+		log.Printf("Content-Type: %s", c.GetHeader("Content-Type"))
+
+		if err := c.ShouldBindJSON(&setupRequest); err != nil {
+			log.Printf("Setup JSON binding failed: %v", err)
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Invalid request format",
+			})
+			return
+		}
+
+		log.Printf("Setup request - Username: %s, Password length: %d, Token: %s",
+			setupRequest.Username, len(setupRequest.Password), setupRequest.SetupToken)
+
+		// Load auth config
+		authConfig, err := LoadAuthConfig(store)
+		if err != nil {
+			log.Printf("Failed to load auth config in setup POST: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Internal server error",
+			})
+			return
+		}
+
+		log.Printf("Current auth config - Setup completed: %v, Token: %s",
+			authConfig.SetupCompleted, authConfig.SetupToken)
+
+		// Check if setup is already completed
+		if authConfig.SetupCompleted {
+			log.Printf("Setup already completed")
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Setup already completed",
+			})
+			return
+		}
+
+		// Validate setup token
+		log.Printf("Validating setup token - Provided: %s, Expected: %s",
+			setupRequest.SetupToken, authConfig.SetupToken)
+		log.Printf("Token expiry: %v, Current time: %v", authConfig.SetupTokenExpiry, time.Now())
+
+		if !validateSetupToken(authConfig, setupRequest.SetupToken) {
+			log.Printf("Setup token validation failed")
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Invalid or expired setup token",
+			})
+			return
+		}
+
+		log.Printf("Setup token validated successfully")
+
+		// Validate input
+		if setupRequest.Username == "" || setupRequest.Password == "" {
+			log.Printf("Missing username or password")
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Message: "Username and password are required",
+			})
+			return
+		}
+
+		log.Printf("Completing setup for user: %s", setupRequest.Username)
+
+		// Complete setup
+		if err := completeSetup(setupRequest.Username, setupRequest.Password, store); err != nil {
+			log.Printf("Failed to complete setup: %v", err)
+			c.JSON(http.StatusInternalServerError, APIResponse{
+				Success: false,
+				Message: "Failed to complete setup",
+			})
+			return
+		}
+
+		log.Printf("Setup completed successfully for user: %s", setupRequest.Username)
+
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Setup completed successfully",
+		})
+	}
+}
+
+// Utility functions
+
+// getCAInfo retrieves CA certificate information
+func getCAInfo(store *storage.Storage) (CAInfo, error) {
+	var caInfo CAInfo
+
+	caPath := store.GetCAPublicKeyPath()
+	if _, err := os.Stat(caPath); os.IsNotExist(err) {
+		return caInfo, fmt.Errorf("CA certificate not found")
+	}
+
+	// Get CA certificate details using openssl
+	cmd := exec.Command("openssl", "x509", "-in", caPath, "-noout", "-text")
+	output, err := cmd.Output()
+	if err != nil {
+		return caInfo, fmt.Errorf("failed to get CA certificate details: %w", err)
+	}
+
+	outputStr := string(output)
+
+	// Parse certificate details
+	if idx := strings.Index(outputStr, "Subject:"); idx != -1 {
+		subjectLine := outputStr[idx:]
+		if endIdx := strings.Index(subjectLine, "\n"); endIdx != -1 {
+			subject := strings.TrimSpace(subjectLine[8:endIdx])
+			// Extract CN from subject
+			if cnIdx := strings.Index(subject, "CN="); cnIdx != -1 {
+				cnPart := subject[cnIdx+3:]
+				if commaIdx := strings.Index(cnPart, ","); commaIdx != -1 {
+					caInfo.CommonName = cnPart[:commaIdx]
+				} else {
+					caInfo.CommonName = cnPart
+				}
+			}
+			// Extract O from subject
+			if oIdx := strings.Index(subject, "O="); oIdx != -1 {
+				oPart := subject[oIdx+2:]
+				if commaIdx := strings.Index(oPart, ","); commaIdx != -1 {
+					caInfo.Organization = oPart[:commaIdx]
+				} else {
+					caInfo.Organization = oPart
+				}
+			}
+			// Extract C from subject
+			if cIdx := strings.Index(subject, "C="); cIdx != -1 {
+				cPart := subject[cIdx+2:]
+				if commaIdx := strings.Index(cPart, ","); commaIdx != -1 {
+					caInfo.Country = cPart[:commaIdx]
+				} else {
+					caInfo.Country = cPart
+				}
+			}
+		}
+	}
+
+	if idx := strings.Index(outputStr, "Not After :"); idx != -1 {
+		dateLine := outputStr[idx:]
+		if endIdx := strings.Index(dateLine, "\n"); endIdx != -1 {
+			caInfo.ExpiryDate = strings.TrimSpace(dateLine[11:endIdx])
+			// Check if expired
+			if expiryTime, err := time.Parse("Jan  2 15:04:05 2006 MST", caInfo.ExpiryDate); err == nil {
+				caInfo.IsExpired = expiryTime.Before(time.Now())
+			}
+		}
+	}
+
+	return caInfo, nil
+}
+
+// getCertificateInfo retrieves certificate information
+func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, error) {
+	var certInfo CertificateInfo
+	certInfo.CommonName = name
+
+	certPath := store.GetCertificatePath(name)
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return certInfo, fmt.Errorf("certificate not found")
+	}
+
+	// Check if it's a client certificate
+	p12Path := store.GetCertificateP12Path(name)
+	if _, err := os.Stat(p12Path); err == nil {
+		certInfo.IsClient = true
+	}
+
+	// Get certificate details using openssl
+	cmd := exec.Command("openssl", "x509", "-in", certPath, "-noout", "-text")
+	output, err := cmd.Output()
+	if err != nil {
+		return certInfo, fmt.Errorf("failed to get certificate details: %w", err)
+	}
+
+	outputStr := string(output)
+
+	// Parse certificate details
+	if idx := strings.Index(outputStr, "Serial Number:"); idx != -1 {
+		serialLine := outputStr[idx:]
+		if endIdx := strings.Index(serialLine, "\n"); endIdx != -1 {
+			certInfo.SerialNumber = strings.TrimSpace(serialLine[14:endIdx])
+		}
+	}
+
+	if idx := strings.Index(outputStr, "Not After :"); idx != -1 {
+		dateLine := outputStr[idx:]
+		if endIdx := strings.Index(dateLine, "\n"); endIdx != -1 {
+			certInfo.ExpiryDate = strings.TrimSpace(dateLine[11:endIdx])
+			// Check if certificate is expired or expiring soon
+			if expiryTime, err := time.Parse("Jan  2 15:04:05 2006 MST", certInfo.ExpiryDate); err == nil {
+				now := time.Now()
+				if expiryTime.Before(now) {
+					certInfo.IsExpired = true
+				} else if expiryTime.Before(now.Add(30 * 24 * time.Hour)) {
+					certInfo.IsExpiringSoon = true
+				}
+			}
+		}
+	}
+
+	// Check if certificate is revoked
+	revokedPath := filepath.Join(store.GetCertificateDirectory(name), "revoked")
+	if _, err := os.Stat(revokedPath); err == nil {
+		certInfo.IsRevoked = true
+	}
+
+	return certInfo, nil
 }

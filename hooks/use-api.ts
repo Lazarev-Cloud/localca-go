@@ -288,10 +288,36 @@ export function useApi() {
     }
   }, [])
 
+  const get = useCallback(async <T>(endpoint: string): Promise<ApiResponse<T>> => {
+    return fetchApi(endpoint, { method: 'GET' })
+  }, [fetchApi])
+
+  const post = useCallback(async <T>(endpoint: string, data?: any): Promise<ApiResponse<T>> => {
+    return fetchApi(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }, [fetchApi])
+
+  const put = useCallback(async <T>(endpoint: string, data?: any): Promise<ApiResponse<T>> => {
+    return fetchApi(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }, [fetchApi])
+
+  const del = useCallback(async <T>(endpoint: string): Promise<ApiResponse<T>> => {
+    return fetchApi(endpoint, { method: 'DELETE' })
+  }, [fetchApi])
+
   return {
     loading,
     error,
     fetchApi,
     postFormData,
+    get,
+    post,
+    put,
+    delete: del,
   }
 } 
