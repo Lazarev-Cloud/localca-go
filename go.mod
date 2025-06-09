@@ -7,7 +7,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.92
 	github.com/redis/go-redis/v9 v9.10.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.36.0
 	gorm.io/driver/postgres v1.5.4
 	gorm.io/gorm v1.25.5
