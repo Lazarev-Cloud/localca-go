@@ -10,7 +10,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.36.0
 	gorm.io/driver/postgres v1.5.4
-	gorm.io/gorm v1.25.5
+	gorm.io/gorm v1.30.0
 )
 
 require (
