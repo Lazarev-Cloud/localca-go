@@ -1,0 +1,387 @@
+---
+description: Security implementation and best practices for LocalCA
+globs: pkg/security/*,pkg/handlers/auth.go
+alwaysApply: false
+---
+# Security and Best Practices Guide
+
+This guide outlines security implementation patterns, best practices, and security considerations for the LocalCA API.
+
+## Authentication and Authorization
+
+### JWT Token-Based Authentication
+
+LocalCA uses JWT (JSON Web Tokens) for API authentication implemented in [pkg/handlers/auth.go](mdc:pkg/handlers/auth.go):
+
+```go
+// JWT token structure
+type JWTClaims struct {
+    UserID   string `json:"user_id"`
+    Username string `json:"username"`
+    Role     string `json:"role"`
+    jwt.RegisteredClaims
+}
+```
+
+### Authentication Flow
+
+1. **Login Request:**
+   ```
+   POST /api/auth/login
+   {
+     "username": "admin",
+     "password": "secure-password"
+   }
+   ```
+
+2. **Token Response:**
+   ```json
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "expires_at": "2024-01-01T12:00:00Z",
+     "user": {
+       "username": "admin",
+       "role": "admin"
+     }
+   }
+   ```
+
+3. **Authenticated Requests:**
+   ```
+   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+
+### Token Security
+
+- **Short expiration times** (default: 1 hour)
+- **Secure signing keys** (HS256 or RS256)
+- **Token refresh mechanism** for long-running applications
+- **Automatic token cleanup** for expired tokens
+
+## Input Validation and Sanitization
+
+### Request Validation
+
+All API endpoints implement comprehensive input validation:
+
+```go
+// Certificate creation validation
+type CreateCertRequest struct {
+    CommonName    string   `json:"common_name" binding:"required,max=64"`
+    SANs          []string `json:"sans" binding:"dive,fqdn"`
+    Organization  string   `json:"organization" binding:"required,max=64"`
+    Country       string   `json:"country" binding:"required,len=2"`
+    ValidityDays  int      `json:"validity_days" binding:"min=1,max=3650"`
+}
+```
+
+### Validation Rules
+
+1. **Common Name**: Required, max 64 characters, valid domain format
+2. **SANs**: Optional, must be valid FQDNs or IP addresses
+3. **Organization**: Required, max 64 characters, alphanumeric
+4. **Country**: Required, exactly 2 characters, ISO country code
+5. **Validity Days**: 1-3650 days (max 10 years)
+
+### Input Sanitization
+
+- **XSS Prevention**: HTML encoding of user inputs
+- **SQL Injection Prevention**: Parameterized queries only
+- **Path Traversal Prevention**: Path validation and sanitization
+- **Command Injection Prevention**: No direct shell execution
+
+## TLS and Encryption
+
+### TLS Configuration
+
+Production deployments should enable TLS:
+
+```yaml
+environment:
+  - TLS_ENABLED=true
+  - TLS_CERT_FILE=/app/certs/server.crt
+  - TLS_KEY_FILE=/app/certs/server.key
+  - TLS_MIN_VERSION=1.2
+```
+
+### Supported TLS Versions
+
+- **TLS 1.2**: Minimum supported version
+- **TLS 1.3**: Preferred version
+- **Cipher Suites**: Modern, secure cipher suites only
+
+### Certificate Security
+
+1. **CA Private Key Protection:**
+   - Password-protected private keys
+   - Secure file permissions (600)
+   - Environment variable for key password
+
+2. **Certificate Storage:**
+   - Encrypted at rest when using database storage
+   - Secure file permissions for file storage
+   - S3 server-side encryption when using object storage
+
+## Rate Limiting
+
+### API Rate Limits
+
+Rate limiting is implemented per IP address and endpoint category:
+
+```go
+// Rate limit configuration
+var RateLimits = map[string]RateLimit{
+    "general":     {Requests: 100, Window: time.Minute},
+    "auth":        {Requests: 10, Window: time.Minute},
+    "acme":        {Requests: 20, Window: time.Minute},
+    "certificates": {Requests: 50, Window: time.Minute},
+}
+```
+
+### Rate Limit Headers
+
+All responses include rate limit information:
+- `X-RateLimit-Limit`: Maximum requests allowed
+- `X-RateLimit-Remaining`: Requests remaining
+- `X-RateLimit-Reset`: Reset time (Unix timestamp)
+
+### Rate Limiting Bypass
+
+- **Whitelisted IPs**: Configure trusted IP addresses
+- **Service Accounts**: Special tokens with higher limits
+- **ACME Clients**: Separate rate limits for automated clients
+
+## Security Headers
+
+### HTTP Security Headers
+
+All API responses include comprehensive security headers:
+
+```go
+// Security headers implementation
+func SecurityHeadersMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        c.Header("X-Content-Type-Options", "nosniff")
+        c.Header("X-Frame-Options", "DENY")
+        c.Header("X-XSS-Protection", "1; mode=block")
+        c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        c.Header("Content-Security-Policy", "default-src 'self'")
+        c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+        c.Next()
+    }
+}
+```
+
+### CORS Configuration
+
+CORS is configured with secure defaults:
+
+```yaml
+environment:
+  - CORS_ALLOWED_ORIGINS=https://yourdomain.com
+  - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+  - CORS_ALLOWED_HEADERS=Content-Type,Authorization
+  - CORS_ALLOW_CREDENTIALS=true
+```
+
+## Audit Logging
+
+### Security Event Logging
+
+All security-relevant events are logged in structured format:
+
+```json
+{
+  "timestamp": "2024-01-01T12:00:00Z",
+  "level": "info",
+  "event": "certificate_created",
+  "user_id": "admin",
+  "ip_address": "192.168.1.1",
+  "details": {
+    "certificate_id": "cert-123",
+    "common_name": "example.com",
+    "type": "server"
+  }
+}
+```
+
+### Logged Events
+
+- Authentication attempts (success/failure)
+- Certificate creation, revocation, and deletion
+- Administrative actions
+- API access with authentication details
+- Rate limit violations
+- Security policy violations
+
+### Log Storage
+
+- **File-based**: Structured JSON logs to files
+- **Database**: Audit events stored in PostgreSQL
+- **External Systems**: Integration with SIEM systems
+
+## Secrets Management
+
+### Environment Variables
+
+Sensitive configuration is managed through environment variables:
+
+```bash
+# Database credentials
+DATABASE_PASSWORD=secure-database-password
+
+# Cache credentials  
+KEYDB_PASSWORD=secure-cache-password
+
+# S3 credentials
+S3_SECRET_KEY=secure-s3-secret-key
+
+# JWT signing key
+JWT_SECRET=secure-jwt-signing-key
+
+# CA key password
+CA_KEY_PASSWORD=secure-ca-key-password
+```
+
+### Docker Secrets
+
+For production deployments, use Docker secrets:
+
+```yaml
+secrets:
+  ca_key_password:
+    file: ./secrets/ca_key_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
+services:
+  localca:
+    secrets:
+      - ca_key_password
+      - jwt_secret
+```
+
+### Key Rotation
+
+1. **JWT Signing Keys**: Rotate every 90 days
+2. **Database Passwords**: Rotate every 180 days
+3. **API Keys**: Rotate every 365 days
+4. **CA Private Key**: Protect with strong password, rotate certificate if compromised
+
+## Secure Development Practices
+
+### Code Security
+
+1. **Input Validation**: Validate all inputs at API boundaries
+2. **Error Handling**: Don't expose internal details in error messages
+3. **Dependency Management**: Regularly update dependencies
+4. **Static Analysis**: Use security scanning tools
+
+### Testing Security
+
+```go
+// Security test example
+func TestCertificateCreationRequiresAuth(t *testing.T) {
+    router := setupTestRouter()
+    
+    // Test without authentication
+    req := httptest.NewRequest("POST", "/api/certificates/server", nil)
+    w := httptest.NewRecorder()
+    router.ServeHTTP(w, req)
+    
+    assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+```
+
+### Vulnerability Assessment
+
+1. **Regular Security Scans**: Automated vulnerability scanning
+2. **Penetration Testing**: Annual security assessments
+3. **Code Reviews**: Security-focused code reviews
+4. **Dependency Scanning**: Monitor for vulnerable dependencies
+
+## Deployment Security
+
+### Production Checklist
+
+- [ ] TLS enabled with valid certificates
+- [ ] Strong passwords for all services
+- [ ] Rate limiting configured
+- [ ] Security headers enabled
+- [ ] Audit logging configured
+- [ ] Network security configured
+- [ ] Regular backups enabled
+- [ ] Monitoring and alerting configured
+
+### Network Security
+
+1. **Firewall Rules**: Restrict access to necessary ports only
+2. **VPN Access**: Use VPN for administrative access
+3. **Network Segmentation**: Isolate CA services
+4. **Load Balancer**: Use SSL termination at load balancer
+
+### Monitoring and Alerting
+
+```yaml
+# Example alerts
+alerts:
+  - name: "High Rate Limit Violations"
+    condition: "rate_limit_violations > 100"
+    action: "notify security team"
+  
+  - name: "Multiple Failed Login Attempts"
+    condition: "failed_logins > 10 in 5m"
+    action: "temporary IP ban"
+  
+  - name: "Certificate Creation Anomaly"
+    condition: "certificates_created > 50 in 1h"
+    action: "review activity"
+```
+
+## Compliance and Standards
+
+### Security Standards
+
+- **OWASP API Security Top 10**: Complete compliance
+- **NIST Cybersecurity Framework**: Aligned implementation
+- **ISO 27001**: Security management practices
+- **SOC 2**: Security and availability controls
+
+### Certificate Standards
+
+- **X.509**: Full compliance with X.509 certificate format
+- **RFC 5280**: PKIX certificate and CRL profile
+- **RFC 8555**: ACME protocol implementation
+- **CA/Browser Forum**: Baseline requirements compliance
+
+### Privacy Considerations
+
+1. **Data Minimization**: Collect only necessary information
+2. **Data Retention**: Automatic cleanup of expired data
+3. **Access Logging**: Track all data access
+4. **Anonymization**: Remove PII from logs where possible
+
+## Incident Response
+
+### Security Incident Types
+
+1. **Authentication Bypass**: Unauthorized API access
+2. **Data Breach**: Unauthorized access to certificates
+3. **Service Disruption**: DoS attacks or system failures
+4. **Malware Detection**: Compromise of CA systems
+
+### Response Procedures
+
+1. **Detection**: Automated monitoring and alerting
+2. **Containment**: Immediate isolation of affected systems
+3. **Investigation**: Forensic analysis of security events
+4. **Recovery**: Restore services with security improvements
+5. **Lessons Learned**: Update security measures
+
+### Emergency Contacts
+
+- Security Team: security@yourorganization.com
+- System Administrators: admin@yourorganization.com
+- Legal/Compliance: legal@yourorganization.com
+
+This security guide ensures LocalCA follows industry best practices for certificate authority security and API protection.

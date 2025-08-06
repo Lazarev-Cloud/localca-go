@@ -13,19 +13,19 @@ Write-Host "Checking container status..." -ForegroundColor Yellow
 docker-compose ps
 
 Write-Host ""
-Write-Host "Checking backend logs for new debugging info..." -ForegroundColor Yellow
-docker-compose logs backend --tail=10
+Write-Host "Checking API logs for new debugging info..." -ForegroundColor Yellow
+docker-compose logs localca --tail=10
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "   Login fixes have been applied!" -ForegroundColor Green
+Write-Host "   LocalCA API service started!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Now try logging in at http://localhost:3000" -ForegroundColor Cyan
-Write-Host "Username: admin" -ForegroundColor White
-Write-Host "Password: 12345678" -ForegroundColor White
+Write-Host "API is now available at http://localhost:8080" -ForegroundColor Cyan
+Write-Host "Health check: http://localhost:8080/api/health" -ForegroundColor White
+Write-Host "API docs: http://localhost:8080/api/docs" -ForegroundColor White
 Write-Host ""
-Write-Host "The backend now has enhanced debugging and" -ForegroundColor Gray
-Write-Host "will accept both JSON and form data." -ForegroundColor Gray
+Write-Host "The API now has enhanced debugging and" -ForegroundColor Gray
+Write-Host "comprehensive RESTful endpoints." -ForegroundColor Gray
 Write-Host ""
 Read-Host "Press Enter to continue" 

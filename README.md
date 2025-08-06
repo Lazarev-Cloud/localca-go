@@ -2,10 +2,10 @@
 
 [![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg)](https://docker.com)
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8.svg)](https://golang.org)
-[![Next.js](https://img.shields.io/badge/Next.js-15.0+-000000.svg)](https://nextjs.org)
+[![REST API](https://img.shields.io/badge/REST-API-brightgreen.svg)](https://restfulapi.net/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-LocalCA is a complete solution for managing a private Certificate Authority within a local network. The project allows you to generate, manage, and deploy SSL/TLS certificates for internal services and clients with a modern web-based interface.
+LocalCA is a complete solution for managing a private Certificate Authority within a local network. The project provides a comprehensive RESTful API for generating, managing, and deploying SSL/TLS certificates for internal services and clients.
 
 ## ✨ Features
 
@@ -24,19 +24,19 @@ LocalCA is a complete solution for managing a private Certificate Authority with
 - ✅ **Backup Support**: Automated backup and recovery capabilities
 - ✅ **Data Encryption**: Encrypted sensitive data storage
 
-### Web Interface & API
-- ✅ **Modern Dashboard**: React-based responsive web interface with real-time statistics
-- ✅ **Certificate Management**: Create, view, renew, and revoke certificates
-- ✅ **Advanced Filtering**: Filter certificates by type, status, and search
-- ✅ **Dark/Light Theme**: Configurable UI themes with system preference detection
-- ✅ **Mobile Responsive**: Works on all device sizes
-- ✅ **REST API**: Complete API for all certificate operations
+### RESTful API
+- ✅ **Complete REST API**: Full HTTP API for all certificate operations
+- ✅ **OpenAPI/Swagger**: Comprehensive API documentation
+- ✅ **JSON Responses**: Standard JSON response format
+- ✅ **HTTP Standards**: Proper status codes and content negotiation
+- ✅ **Client Libraries**: Compatible with any HTTP client
+- ✅ **ACME Support**: Standard ACME protocol endpoints
 
 ### Security & Authentication
-- ✅ **Secure Authentication**: Session-based authentication with CSRF protection
-- ✅ **Initial Setup**: Secure setup process with time-limited tokens
+- ✅ **JWT Authentication**: Token-based API authentication
+- ✅ **API Security**: Rate limiting and security middleware
 - ✅ **Password Protection**: CA private key protection with secure storage
-- ✅ **Session Management**: Secure session handling with HTTP-only cookies
+- ✅ **Input Validation**: Comprehensive request validation
 - ✅ **Security Headers**: Comprehensive security headers and middleware
 
 ### Automation & Integration
@@ -51,7 +51,7 @@ LocalCA is a complete solution for managing a private Certificate Authority with
 
 - **Docker & Docker Compose** (recommended)
 - **Go 1.23+** (for local development)
-- **Node.js 18+** (for frontend development)
+- **HTTP Client** (curl, Postman, or any REST client)
 
 ### Docker Deployment (Recommended)
 
@@ -71,58 +71,31 @@ docker-compose -f docker-compose.dev.yml up -d
 ```
 
 3. **Access the application**:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080
+- **API Server**: http://localhost:8080
+- **API Documentation**: http://localhost:8080/api/docs
+- **Health Check**: http://localhost:8080/api/health
 - **MinIO Console**: http://localhost:9001 (admin/password123)
 
 ### Standalone Deployment
 
-1. **Build the backend**:
+1. **Build the API server**:
 ```bash
 go build -o localca-go
 ```
 
-2. **Build the frontend**:
-```bash
-npm install
-npm run build
-```
-
-3. **Run the application**:
+2. **Run the application**:
 ```bash
 ./localca-go
 ```
+
+3. **Access the API**:
+- API Server: http://localhost:8080
+- API Documentation: http://localhost:8080/api/docs
 
 ## 📁 Project Structure
 
 ```
 localca-go/
-├── app/                      # Next.js app directory
-│   ├── api/                 # API routes and proxy
-│   │   ├── proxy/[...path]/ # Dynamic API proxy to backend
-│   │   ├── ca-info/         # CA information endpoint
-│   │   ├── certificates/    # Certificate management endpoints
-│   │   ├── login/           # Authentication endpoints
-│   │   └── setup/           # Initial setup endpoints
-│   ├── certificates/        # Certificate management pages
-│   │   └── [id]/           # Individual certificate details
-│   ├── create/             # Certificate creation wizard
-│   ├── login/              # Authentication pages
-│   ├── settings/           # Settings and configuration
-│   └── setup/              # Initial application setup
-├── components/              # React components
-│   ├── ui/                 # Base UI components (shadcn/ui)
-│   ├── certificate-*.tsx  # Certificate-related components
-│   ├── dashboard-*.tsx    # Dashboard components
-│   └── system-status.tsx  # System monitoring components
-├── hooks/                   # React hooks
-│   ├── use-api.ts          # Generic API client hook
-│   ├── use-certificates.ts # Certificate management hook
-│   ├── use-auth.ts         # Authentication hook
-│   └── use-*.ts           # Other utility hooks
-├── lib/                     # Utility libraries
-│   ├── config.ts           # Frontend configuration
-│   └── utils.ts            # Utility functions
 ├── pkg/                     # Go backend packages
 │   ├── acme/               # ACME protocol implementation
 │   ├── cache/              # Redis/KeyDB caching layer
@@ -143,8 +116,7 @@ localca-go/
 │   └── rules/              # Comprehensive project rules
 ├── tools/                   # Utility scripts and tools
 ├── docker-compose.yml       # Production Docker setup
-├── Dockerfile              # Backend container
-├── Dockerfile.frontend     # Frontend container
+├── Dockerfile              # API server container
 └── main.go                 # Application entry point
 ```
 
@@ -237,26 +209,26 @@ SMTP_PASSWORD=your-app-password
 - **Backup & Recovery**: Automated backup and disaster recovery
 - **Health Monitoring**: Storage backend health checks and monitoring
 
-#### 3. Web Interface
-- **Modern Dashboard**: Real-time system statistics and certificate overview
-- **Certificate Management**: Complete certificate lifecycle management
-- **Advanced Search**: Filter and search certificates by multiple criteria
-- **Responsive Design**: Mobile-first responsive design
-- **Theme Support**: Dark/light theme with system preference detection
+#### 3. RESTful API
+- **Complete REST API**: Full HTTP API for all certificate operations
+- **OpenAPI Documentation**: Comprehensive API documentation and examples
+- **JSON Responses**: Standard JSON response format with proper HTTP codes
+- **Content Negotiation**: Support for JSON and XML content types
+- **Client Libraries**: Compatible with any HTTP client or library
 
-#### 4. API & Integration
+#### 4. API Integration
 - **REST API**: Complete RESTful API for all operations
-- **API Proxy**: Next.js API proxy for seamless frontend integration
-- **Authentication**: Secure session-based authentication
-- **CSRF Protection**: Cross-site request forgery prevention
+- **ACME Protocol**: Standard ACME endpoints for automated certificate issuance
+- **Authentication**: JWT-based API authentication
 - **Rate Limiting**: Built-in rate limiting for security
+- **API Versioning**: Versioned API endpoints for backward compatibility
 
 #### 5. Security Features
-- **Secure Authentication**: Password hashing with bcrypt
-- **Session Management**: HTTP-only cookies with secure attributes
+- **JWT Authentication**: Token-based API authentication
 - **Security Headers**: Comprehensive HTTP security headers
 - **Input Validation**: Server-side input validation and sanitization
 - **TLS Configuration**: Modern TLS 1.2/1.3 configuration
+- **Audit Logging**: Complete audit trail for all operations
 
 #### 6. Monitoring & Logging
 - **Structured Logging**: JSON and text logging formats
@@ -289,15 +261,15 @@ SMTP_PASSWORD=your-app-password
 - **Performance Optimization**: Improved storage operation performance
 - **Backup Capabilities**: Added automated backup and recovery features
 
-#### 2. Frontend Improvements
-- **Real-Time Data**: Replaced mock data with real API integration
-- **Enhanced UI**: Improved user interface with modern components
-- **Performance**: Optimized frontend performance and loading times
-- **Error Handling**: Better error handling and user feedback
+#### 2. API Improvements
+- **Enhanced Endpoints**: Comprehensive API endpoints for all operations
+- **OpenAPI Documentation**: Complete API documentation with examples
+- **Performance**: Optimized API response times and data handling
+- **Error Handling**: Standardized error responses and status codes
 
 #### 3. Security Enhancements
-- **Authentication System**: Improved session management and security
-- **CSRF Protection**: Enhanced CSRF protection implementation
+- **JWT Authentication**: Token-based API authentication system
+- **API Security**: Enhanced API security and rate limiting
 - **Input Validation**: Comprehensive input validation and sanitization
 - **Security Headers**: Added comprehensive security headers
 
@@ -306,11 +278,11 @@ SMTP_PASSWORD=your-app-password
 ### Run All Tests
 
 ```bash
-# Backend tests
+# API tests
 go test ./...
 
-# Frontend tests
-npm test
+# Integration tests
+go test -tags=integration ./...
 
 # Docker-based testing
 docker-compose -f docker-compose.test.yml up --abort-on-container-exit
@@ -377,8 +349,8 @@ docker-compose logs -f
 
 ### Security Features
 
-- **Authentication**: Session-based authentication with secure cookies
-- **CSRF Protection**: Built-in CSRF token validation
+- **Authentication**: JWT-based API authentication
+- **API Security**: Rate limiting and security middleware
 - **Security Headers**: Comprehensive HTTP security headers
 - **Input Validation**: Server-side input validation and sanitization
 - **Rate Limiting**: Built-in rate limiting for API endpoints
@@ -401,9 +373,9 @@ TLS_ENABLED=true
 TLS_CERT_FILE=/path/to/cert.pem
 TLS_KEY_FILE=/path/to/key.pem
 
-# Configure secure session settings
-SESSION_SECRET=your-secure-session-secret
-SESSION_TIMEOUT=3600
+# Configure JWT authentication
+JWT_SECRET=your-secure-jwt-secret
+JWT_EXPIRY=3600
 
 # Enable audit logging
 AUDIT_ENABLED=true
@@ -415,7 +387,7 @@ AUDIT_LOG_FILE=/var/log/localca/audit.log
 ### Comprehensive Documentation
 - **[Project Overview](.cursor/rules/01-project-overview.mdc)**: Complete project overview and architecture
 - **[Backend Architecture](.cursor/rules/02-backend-architecture.mdc)**: Go backend implementation details
-- **[Frontend Architecture](.cursor/rules/03-frontend-architecture.mdc)**: Next.js frontend implementation
+
 - **[Enhanced Storage](.cursor/rules/12-enhanced-storage-caching.mdc)**: Multi-backend storage and caching
 - **[API Integration](.cursor/rules/13-api-integration-patterns.mdc)**: API endpoints and integration patterns
 
@@ -464,8 +436,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🎉 Acknowledgments
 
 - Built with [Go](https://golang.org/) and [Gin](https://gin-gonic.com/)
-- Frontend powered by [Next.js](https://nextjs.org/) and [React](https://reactjs.org/)
-- UI components from [shadcn/ui](https://ui.shadcn.com/)
+- RESTful API with comprehensive documentation
 - Enhanced storage with [PostgreSQL](https://postgresql.org/) and [MinIO](https://min.io/)
 - Caching with [KeyDB](https://keydb.dev/)
 - Containerization with [Docker](https://docker.com/)

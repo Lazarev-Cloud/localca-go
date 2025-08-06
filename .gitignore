@@ -37,16 +37,8 @@ new_cookies.txt
 *.temp
 *.log
 
-# Next.js
-/node_modules
-/.next
-/.pnp
-.pnp.js
-.swc/
-
 # Testing
 /coverage
-/eslint-report.xml
 /govet-report.out
 /golint-report.out
 /golangci-lint-report.xml
@@ -62,9 +54,6 @@ new_cookies.txt
 .env.development.local
 .env.test.local
 .env.production.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # LocalCA binary
 localca-go

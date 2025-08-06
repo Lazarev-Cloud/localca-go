@@ -5,25 +5,26 @@ alwaysApply: false
 ---
 # API Integration Patterns and Endpoints
 
-LocalCA provides a comprehensive REST API for certificate management operations, with both direct backend endpoints and Next.js API routes for frontend integration.
+LocalCA provides a comprehensive REST API for certificate management operations, designed for easy integration with any client application or service.
 
 ## API Architecture Overview
 
-### Backend API Server
+### API Server Architecture
 The Go backend serves as the primary API server on port 8080:
-- **Direct API Access**: RESTful endpoints for all certificate operations
-- **Authentication**: Session-based authentication with CSRF protection
-- **Rate Limiting**: Built-in rate limiting for ACME endpoints
+- **RESTful Endpoints**: Complete REST API for all certificate operations
+- **JWT Authentication**: Token-based authentication for API access
+- **Rate Limiting**: Built-in rate limiting for security and performance
 - **Security Headers**: Comprehensive security headers and middleware
+- **OpenAPI Documentation**: Swagger/OpenAPI specification for easy integration
 
-### Frontend API Integration
-Next.js provides multiple integration patterns:
-- **API Proxy Routes**: Dynamic proxy to backend API at [app/api/proxy/[...path]](mdc:app/api/proxy/[...path])
-- **Direct API Routes**: Next.js API routes for specific operations
-- **Server-Side Integration**: SSR/SSG with backend API calls
-- **Client-Side Integration**: Browser-based API calls with authentication
+### API Integration Patterns
+LocalCA API supports multiple integration approaches:
+- **Direct HTTP Calls**: Standard REST API calls from any HTTP client
+- **ACME Protocol**: Automated certificate management with ACME clients
+- **Client Libraries**: Compatible with standard HTTP client libraries
+- **Authentication**: JWT token-based authentication for secure access
 
-## Backend API Endpoints
+## API Endpoints
 
 ### Authentication Endpoints
 

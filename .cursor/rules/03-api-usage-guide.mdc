@@ -1,0 +1,344 @@
+---
+description: API usage patterns and client integration guide
+globs: 
+alwaysApply: false
+---
+# LocalCA API Usage Guide
+
+This guide provides comprehensive information on how to use the LocalCA API for certificate management operations.
+
+## API Overview
+
+LocalCA provides a complete RESTful API for Certificate Authority operations:
+
+- **Base URL**: `http://localhost:8080` (development) or your configured domain
+- **Authentication**: JWT token-based authentication
+- **Content Type**: `application/json`
+- **Documentation**: Available at `/api/docs` (OpenAPI/Swagger)
+
+## Quick Start
+
+### 1. Health Check
+```bash
+curl http://localhost:8080/api/health
+```
+
+### 2. Get CA Information
+```bash
+curl http://localhost:8080/api/ca-info
+```
+
+### 3. Authentication (if required)
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
+```
+
+## Core API Endpoints
+
+### Certificate Authority Operations
+
+#### GET /api/ca-info
+Get Certificate Authority information and public key.
+
+**Response:**
+```json
+{
+  "ca_name": "LocalCA",
+  "organization": "LocalCA Organization",
+  "country": "US",
+  "ca_certificate": "-----BEGIN CERTIFICATE-----...",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+### Certificate Management
+
+#### GET /api/certificates
+List all certificates with optional filtering.
+
+**Query Parameters:**
+- `type`: Filter by certificate type (`server`, `client`)
+- `status`: Filter by status (`active`, `revoked`, `expired`)
+- `search`: Search by common name or serial number
+
+**Response:**
+```json
+{
+  "certificates": [
+    {
+      "id": "cert-123",
+      "common_name": "example.com",
+      "type": "server",
+      "status": "active",
+      "expires_at": "2025-01-01T00:00:00Z",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+#### POST /api/certificates/server
+Create a new server certificate.
+
+**Request Body:**
+```json
+{
+  "common_name": "example.com",
+  "sans": ["www.example.com", "api.example.com"],
+  "organization": "Example Corp",
+  "country": "US",
+  "validity_days": 365
+}
+```
+
+#### POST /api/certificates/client
+Create a new client certificate.
+
+**Request Body:**
+```json
+{
+  "common_name": "john.doe@example.com",
+  "organization": "Example Corp",
+  "country": "US",
+  "validity_days": 365
+}
+```
+
+#### GET /api/certificates/{id}
+Get detailed information about a specific certificate.
+
+#### GET /api/certificates/{id}/download
+Download certificate files (PEM format).
+
+#### GET /api/certificates/{id}/p12
+Download PKCS#12 bundle (client certificates only).
+
+#### DELETE /api/certificates/{id}
+Revoke and delete a certificate.
+
+### ACME Protocol Support
+
+#### GET /.well-known/acme-challenge/{token}
+ACME HTTP-01 challenge validation endpoint.
+
+#### POST /api/acme/directory
+Get ACME directory information for automated clients.
+
+## Authentication
+
+### JWT Token Authentication
+
+For protected endpoints, include the JWT token in the Authorization header:
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:8080/api/certificates
+```
+
+### Token Management
+
+- **Login**: `POST /api/auth/login` - Get JWT token
+- **Refresh**: `POST /api/auth/refresh` - Refresh existing token
+- **Logout**: `POST /api/auth/logout` - Invalidate token
+
+## Error Handling
+
+All API endpoints return standardized error responses:
+
+```json
+{
+  "error": "validation_failed",
+  "message": "Invalid certificate parameters",
+  "details": {
+    "field": "common_name",
+    "issue": "required field missing"
+  }
+}
+```
+
+### Common HTTP Status Codes
+
+- `200 OK` - Successful operation
+- `201 Created` - Resource created successfully
+- `400 Bad Request` - Invalid request parameters
+- `401 Unauthorized` - Authentication required
+- `403 Forbidden` - Insufficient permissions
+- `404 Not Found` - Resource not found
+- `409 Conflict` - Resource already exists
+- `500 Internal Server Error` - Server error
+
+## Client Integration Examples
+
+### cURL Examples
+
+**Create Server Certificate:**
+```bash
+curl -X POST http://localhost:8080/api/certificates/server \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "common_name": "example.com",
+    "sans": ["www.example.com"],
+    "organization": "Example Corp",
+    "country": "US",
+    "validity_days": 365
+  }'
+```
+
+**List Certificates:**
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/certificates?type=server&status=active"
+```
+
+### Python Example
+
+```python
+import requests
+
+class LocalCAClient:
+    def __init__(self, base_url, token=None):
+        self.base_url = base_url
+        self.token = token
+        self.session = requests.Session()
+        if token:
+            self.session.headers.update({'Authorization': f'Bearer {token}'})
+    
+    def get_ca_info(self):
+        response = self.session.get(f'{self.base_url}/api/ca-info')
+        response.raise_for_status()
+        return response.json()
+    
+    def create_server_cert(self, common_name, sans=None, **kwargs):
+        data = {
+            'common_name': common_name,
+            'sans': sans or [],
+            **kwargs
+        }
+        response = self.session.post(
+            f'{self.base_url}/api/certificates/server',
+            json=data
+        )
+        response.raise_for_status()
+        return response.json()
+
+# Usage
+client = LocalCAClient('http://localhost:8080', token='your-jwt-token')
+ca_info = client.get_ca_info()
+cert = client.create_server_cert('example.com', ['www.example.com'])
+```
+
+### Go Example
+
+```go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type LocalCAClient struct {
+    BaseURL string
+    Token   string
+    Client  *http.Client
+}
+
+type CertRequest struct {
+    CommonName   string   `json:"common_name"`
+    SANs         []string `json:"sans,omitempty"`
+    Organization string   `json:"organization"`
+    Country      string   `json:"country"`
+    ValidityDays int      `json:"validity_days"`
+}
+
+func (c *LocalCAClient) CreateServerCert(req CertRequest) error {
+    jsonData, _ := json.Marshal(req)
+    
+    httpReq, _ := http.NewRequest("POST", 
+        c.BaseURL+"/api/certificates/server", 
+        bytes.NewBuffer(jsonData))
+    
+    httpReq.Header.Set("Content-Type", "application/json")
+    httpReq.Header.Set("Authorization", "Bearer "+c.Token)
+    
+    resp, err := c.Client.Do(httpReq)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    
+    if resp.StatusCode != http.StatusCreated {
+        return fmt.Errorf("failed to create certificate: %s", resp.Status)
+    }
+    
+    return nil
+}
+```
+
+## ACME Client Integration
+
+LocalCA supports standard ACME clients for automated certificate management:
+
+### Certbot Example
+
+```bash
+# Register with LocalCA ACME server
+certbot register --server http://localhost:8080/api/acme/directory \
+  --email admin@example.com --agree-tos
+
+# Request certificate
+certbot certonly --server http://localhost:8080/api/acme/directory \
+  --standalone -d example.com
+```
+
+### acme.sh Example
+
+```bash
+# Set LocalCA as ACME server
+export ACME_DIRECTORY="http://localhost:8080/api/acme/directory"
+
+# Request certificate
+acme.sh --issue --standalone -d example.com \
+  --server $ACME_DIRECTORY
+```
+
+## Rate Limiting
+
+The API implements rate limiting to prevent abuse:
+
+- **General Endpoints**: 100 requests per minute per IP
+- **ACME Endpoints**: 20 requests per minute per account
+- **Authentication**: 10 login attempts per minute per IP
+
+Rate limit headers are included in responses:
+- `X-RateLimit-Limit`: Maximum requests allowed
+- `X-RateLimit-Remaining`: Requests remaining in current window
+- `X-RateLimit-Reset`: Time when rate limit resets
+
+## Best Practices
+
+### Security
+1. **Always use HTTPS** in production environments
+2. **Validate certificates** received from the API
+3. **Store JWT tokens securely** and implement proper token rotation
+4. **Use API versioning** to ensure compatibility
+
+### Performance
+1. **Cache CA certificate** information to reduce API calls
+2. **Implement retry logic** with exponential backoff
+3. **Use connection pooling** for high-volume applications
+4. **Monitor rate limits** and implement appropriate throttling
+
+### Error Handling
+1. **Handle all HTTP status codes** appropriately
+2. **Parse error responses** for detailed information
+3. **Implement logging** for debugging and monitoring
+4. **Graceful degradation** when API is unavailable
+
+This guide provides the foundation for integrating with the LocalCA API. For the most up-to-date API documentation, always refer to the OpenAPI specification at `/api/docs`.

@@ -5,7 +5,7 @@ alwaysApply: true
 ---
 # LocalCA: Self-Hosted Certificate Authority
 
-LocalCA is a complete solution for managing a private Certificate Authority within a local network. The project allows you to generate, manage, and deploy SSL/TLS certificates for internal services and clients with a modern web-based interface.
+LocalCA is a complete solution for managing a private Certificate Authority within a local network. The project provides a RESTful API server for generating, managing, and deploying SSL/TLS certificates for internal services and clients.
 
 ## Core Features
 
@@ -24,12 +24,11 @@ LocalCA is a complete solution for managing a private Certificate Authority with
 - Automated backup capabilities
 - Data encryption for sensitive information
 
-### Web Interface & API
-- Modern React-based responsive web interface
-- Real-time system statistics and monitoring
-- RESTful API for all certificate operations
+### RESTful API
+- Comprehensive RESTful API for all certificate operations
 - ACME protocol support for automated certificate issuance
-- Session-based authentication with CSRF protection
+- JWT-based authentication for API access
+- Rate limiting and security middleware
 
 ### Security & Monitoring
 - Secure CA private key protection with passwords
@@ -40,25 +39,25 @@ LocalCA is a complete solution for managing a private Certificate Authority with
 
 ## Project Architecture
 
-LocalCA follows a modern client-server architecture with enhanced storage capabilities:
+LocalCA follows a modern API-first architecture with enhanced storage capabilities:
 
-- **Backend**: Go-based API server with Gin framework ([main.go](mdc:main.go))
-- **Frontend**: Next.js 15 + React with App Router ([app/page.tsx](mdc:app/page.tsx))
+- **API Server**: Go-based REST API server with Gin framework ([main.go](mdc:main.go))
 - **Storage**: Multi-backend storage with caching ([pkg/storage](mdc:pkg/storage))
 - **Database**: Optional PostgreSQL for enhanced features
 - **Cache**: Redis/KeyDB for performance optimization
 - **Object Storage**: S3/MinIO for scalable certificate storage
 
-## Frontend-Backend Connectivity
+## API Architecture
 
-The frontend connects to the backend through multiple channels:
+The LocalCA API provides comprehensive endpoints for certificate management:
 
-1. **Direct API calls** from browser to backend API endpoints
-2. **Server-side API calls** during Next.js SSR/SSG
-3. **API proxy routes** at [app/api/proxy/[...path]](mdc:app/api/proxy/[...path]) for complex operations
-4. **Real-time updates** through polling and state management
+1. **Certificate Operations**: Create, list, revoke, and delete certificates
+2. **CA Management**: Certificate Authority information and configuration
+3. **ACME Protocol**: Automated certificate issuance endpoints
+4. **Authentication**: JWT-based API authentication
+5. **System Status**: Health checks and system statistics
 
-Configuration is managed in [lib/config.ts](mdc:lib/config.ts) with API rewrites in [next.config.mjs](mdc:next.config.mjs).
+API configuration is managed through environment variables and the Go configuration system.
 
 ## Key Components
 
@@ -75,11 +74,11 @@ Multi-backend storage with caching and audit capabilities:
 - [pkg/database](mdc:pkg/database): PostgreSQL integration
 - [pkg/s3storage](mdc:pkg/s3storage): S3/MinIO object storage
 
-### 3. Web Interface
-Modern Next.js application with comprehensive UI:
-- [app](mdc:app): Next.js app directory with pages and API routes
-- [components](mdc:components): Reusable React components with shadcn/ui
-- [hooks](mdc:hooks): Custom React hooks for API integration
+### 3. HTTP Handlers
+RESTful API endpoints for all operations:
+- [pkg/handlers](mdc:pkg/handlers): HTTP request handlers for all API endpoints
+- Authentication and authorization middleware
+- Request validation and response formatting
 
 ### 4. ACME Protocol Support
 Automated certificate issuance and management:
@@ -89,8 +88,8 @@ Automated certificate issuance and management:
 ### 5. Security & Authentication
 Comprehensive security implementation:
 - [pkg/security](mdc:pkg/security): Security utilities and middleware
-- [pkg/handlers/auth.go](mdc:pkg/handlers/auth.go): Authentication handlers
-- Session management with secure cookies and CSRF protection
+- [pkg/handlers/auth.go](mdc:pkg/handlers/auth.go): JWT authentication handlers
+- Rate limiting and security headers middleware
 
 ### 6. Configuration & Logging
 Centralized configuration and structured logging:
@@ -108,13 +107,11 @@ Centralized configuration and structured logging:
 - **Logging**: Logrus for structured logging
 - **Crypto**: Go's crypto/x509 and crypto/tls packages
 
-### Frontend (Next.js 15)
-- **Framework**: Next.js with App Router
-- **UI Library**: shadcn/ui + Radix UI components
-- **Styling**: Tailwind CSS with custom design system
-- **Forms**: React Hook Form with Zod validation
-- **State Management**: React hooks and context
-- **Testing**: Jest with React Testing Library
+### API Client Integration
+- **Standard HTTP**: RESTful API accessible via any HTTP client
+- **ACME Support**: Compatible with standard ACME clients (Certbot, acme.sh)
+- **Authentication**: JWT token-based authentication
+- **Documentation**: OpenAPI/Swagger specification
 
 ### Infrastructure
 - **Containerization**: Docker with multi-stage builds

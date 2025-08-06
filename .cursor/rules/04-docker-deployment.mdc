@@ -1,0 +1,435 @@
+---
+description: Docker deployment and container management guide
+globs: docker-compose.yml,Dockerfile
+alwaysApply: false
+---
+# Docker Deployment Guide
+
+This guide covers Docker-based deployment of LocalCA, including development and production configurations.
+
+## Container Architecture
+
+LocalCA uses a multi-container architecture with the following services:
+
+### Core Services
+- **localca**: Main API server (Go application)
+- **postgres**: PostgreSQL database for enhanced storage
+- **keydb**: KeyDB/Redis for caching layer
+- **minio**: S3-compatible object storage
+
+### Container Configuration
+
+The [docker-compose.yml](mdc:docker-compose.yml) file defines the complete stack:
+
+```yaml
+services:
+  localca:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: localca-api
+    ports:
+      - "8080:8080"    # API server
+      - "8443:8443"    # HTTPS (if enabled)
+      - "8555:8555"    # ACME server
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Core Configuration
+      - CA_NAME=LocalCA
+      - ORGANIZATION=LocalCA Organization
+      - COUNTRY=US
+      - TLS_ENABLED=true
+      
+      # Database Configuration
+      - DATABASE_ENABLED=true
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=localca
+      - DATABASE_USER=localca
+      - DATABASE_PASSWORD=localca_postgres_password
+      
+      # Cache Configuration
+      - CACHE_ENABLED=true
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=localca_keydb_password
+      
+      # S3 Storage Configuration
+      - S3_ENABLED=true
+      - S3_ENDPOINT=minio:9000
+      - S3_ACCESS_KEY=localca
+      - S3_SECRET_KEY=localca_minio_password
+      - S3_BUCKET_NAME=localca-certificates
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+```
+
+## Quick Start
+
+### Development Deployment
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/Lazarev-Cloud/localca-go.git
+cd localca-go
+```
+
+2. **Start the services:**
+```bash
+docker-compose up -d
+```
+
+3. **Access the API:**
+- API Server: http://localhost:8080
+- API Documentation: http://localhost:8080/api/docs
+- Health Check: http://localhost:8080/api/health
+- MinIO Console: http://localhost:9001
+
+### Production Deployment
+
+For production deployments, consider these additional configurations:
+
+1. **Use environment files:**
+```bash
+# Create .env file with production settings
+cp .env.example .env
+# Edit .env with your production values
+
+# Deploy with environment file
+docker-compose --env-file .env up -d
+```
+
+2. **Enable TLS:**
+```yaml
+environment:
+  - TLS_ENABLED=true
+  - TLS_CERT_FILE=/app/certs/server.crt
+  - TLS_KEY_FILE=/app/certs/server.key
+volumes:
+  - ./certs:/app/certs:ro
+```
+
+## Container Management
+
+### Starting Services
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Start specific service
+docker-compose up -d localca
+
+# Start with build
+docker-compose up --build -d
+```
+
+### Stopping Services
+
+```bash
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Stop specific service
+docker-compose stop localca
+```
+
+### Monitoring and Logs
+
+```bash
+# View logs for all services
+docker-compose logs
+
+# View logs for specific service
+docker-compose logs localca
+
+# Follow logs in real-time
+docker-compose logs -f localca
+
+# View service status
+docker-compose ps
+```
+
+### Updating Services
+
+```bash
+# Pull latest images
+docker-compose pull
+
+# Rebuild and restart
+docker-compose up --build -d
+
+# Restart specific service
+docker-compose restart localca
+```
+
+## Data Management
+
+### Persistent Volumes
+
+LocalCA uses named volumes for data persistence:
+
+```yaml
+volumes:
+  postgres-data:
+    name: postgres-data
+  minio-data:
+    name: minio-data
+  keydb-data:
+    name: keydb-data
+```
+
+### Backup and Restore
+
+**Backup PostgreSQL:**
+```bash
+docker-compose exec postgres pg_dump -U localca localca > backup.sql
+```
+
+**Restore PostgreSQL:**
+```bash
+docker-compose exec -T postgres psql -U localca localca < backup.sql
+```
+
+**Backup Certificate Data:**
+```bash
+# Local file storage backup
+tar -czf certificates-backup.tar.gz data/
+
+# MinIO backup using mc client
+docker run --rm --net localca-network \
+  -v $(pwd)/backup:/backup \
+  minio/mc:latest \
+  cp --recursive localca/localca-certificates /backup/
+```
+
+## Health Checks
+
+All services include health checks for proper dependency management:
+
+### PostgreSQL Health Check
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U localca -d localca"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+### MinIO Health Check
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+  interval: 30s
+  timeout: 20s
+  retries: 3
+```
+
+### KeyDB Health Check
+```yaml
+healthcheck:
+  test: ["CMD", "keydb-cli", "-a", "localca_keydb_password", "ping"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+## Environment Configuration
+
+### Required Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CA_NAME` | Certificate Authority name | "LocalCA" |
+| `CA_KEY_FILE` | Path to CA key password file | "/app/data/cakey.txt" |
+| `ORGANIZATION` | Organization name | "LocalCA Organization" |
+| `COUNTRY` | Country code | "US" |
+| `DATA_DIR` | Data storage directory | "/app/data" |
+
+### Database Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_ENABLED` | Enable PostgreSQL storage | "false" |
+| `DATABASE_HOST` | Database hostname | "localhost" |
+| `DATABASE_PORT` | Database port | "5432" |
+| `DATABASE_NAME` | Database name | "localca" |
+| `DATABASE_USER` | Database username | "localca" |
+| `DATABASE_PASSWORD` | Database password | "" |
+
+### Cache Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CACHE_ENABLED` | Enable Redis/KeyDB caching | "false" |
+| `KEYDB_HOST` | KeyDB hostname | "localhost" |
+| `KEYDB_PORT` | KeyDB port | "6379" |
+| `KEYDB_PASSWORD` | KeyDB password | "" |
+| `CACHE_TTL` | Cache TTL in seconds | "3600" |
+
+### S3 Storage Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `S3_ENABLED` | Enable S3/MinIO storage | "false" |
+| `S3_ENDPOINT` | S3 endpoint URL | "localhost:9000" |
+| `S3_ACCESS_KEY` | S3 access key | "" |
+| `S3_SECRET_KEY` | S3 secret key | "" |
+| `S3_BUCKET_NAME` | S3 bucket name | "localca-certificates" |
+| `S3_USE_SSL` | Use SSL for S3 connections | "false" |
+
+## Security Considerations
+
+### Network Security
+
+1. **Use custom networks:**
+```yaml
+networks:
+  localca-network:
+    name: localca-network
+    driver: bridge
+```
+
+2. **Limit exposed ports:**
+Only expose necessary ports to the host machine.
+
+3. **Use secrets for passwords:**
+```yaml
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  keydb_password:
+    file: ./secrets/keydb_password.txt
+```
+
+### Container Security
+
+1. **Run as non-root user:**
+```dockerfile
+USER 1000:1000
+```
+
+2. **Use read-only filesystems where possible:**
+```yaml
+read_only: true
+tmpfs:
+  - /tmp
+```
+
+3. **Limit container resources:**
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 512M
+      cpus: '0.5'
+```
+
+## Scaling and Performance
+
+### Horizontal Scaling
+
+For high-availability deployments:
+
+1. **Use external databases:**
+```yaml
+environment:
+  - DATABASE_HOST=external-postgres.example.com
+  - KEYDB_HOST=external-redis.example.com
+```
+
+2. **Load balancer configuration:**
+```yaml
+nginx:
+  image: nginx:alpine
+  ports:
+    - "80:80"
+    - "443:443"
+  depends_on:
+    - localca
+```
+
+### Performance Tuning
+
+1. **Database optimization:**
+```yaml
+postgres:
+  environment:
+    - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+    - POSTGRES_MAX_CONNECTIONS=200
+```
+
+2. **Cache optimization:**
+```yaml
+keydb:
+  command: keydb-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Service won't start:**
+```bash
+# Check service logs
+docker-compose logs localca
+
+# Check service status
+docker-compose ps
+
+# Restart service
+docker-compose restart localca
+```
+
+**Database connection issues:**
+```bash
+# Test database connectivity
+docker-compose exec localca ping postgres
+
+# Check database logs
+docker-compose logs postgres
+```
+
+**Volume mount issues:**
+```bash
+# Check volume permissions
+ls -la data/
+
+# Fix permissions
+sudo chown -R 1000:1000 data/
+```
+
+### Debug Mode
+
+Enable debug logging:
+```yaml
+environment:
+  - LOG_LEVEL=debug
+  - DEBUG=true
+```
+
+### Development vs Production
+
+**Development Features:**
+- Debug logging enabled
+- Hot-reload support
+- Development ports exposed
+- Simplified security settings
+
+**Production Features:**
+- TLS enabled by default
+- Restricted CORS settings
+- Production logging
+- Health checks enabled
+- Resource limits applied
+
+This guide provides comprehensive Docker deployment instructions for LocalCA. For specific deployment scenarios, refer to the main [README.md](mdc:README.md) documentation.

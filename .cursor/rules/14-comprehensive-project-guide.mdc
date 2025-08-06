@@ -9,12 +9,12 @@ This is the master reference guide for the LocalCA project, providing a complete
 
 ## Project Overview
 
-LocalCA is a self-hosted Certificate Authority solution built with Go and Next.js, designed for managing SSL/TLS certificates in local networks and development environments.
+LocalCA is a self-hosted Certificate Authority solution built with Go, designed for managing SSL/TLS certificates in local networks and development environments through a comprehensive RESTful API.
 
 ### Key Features
 - **Complete CA Management**: Create, manage, and operate your own Certificate Authority
 - **Multi-Certificate Support**: Server certificates, client certificates, and PKCS#12 bundles
-- **Modern Web Interface**: React-based dashboard with real-time statistics
+- **RESTful API**: Comprehensive HTTP API for all certificate operations
 - **Enhanced Storage**: Multi-backend storage with PostgreSQL, S3/MinIO, and Redis caching
 - **Security First**: Comprehensive security features and audit logging
 - **ACME Protocol**: Automated certificate issuance (experimental)
@@ -32,13 +32,11 @@ LocalCA is a self-hosted Certificate Authority solution built with Go and Next.j
 - **Logging**: Logrus for structured logging
 - **Security**: bcrypt, CSRF protection, secure sessions
 
-#### Frontend (Next.js 15)
-- **Framework**: Next.js with App Router
-- **UI Library**: shadcn/ui + Radix UI components
-- **Styling**: Tailwind CSS with custom design system
-- **Forms**: React Hook Form with Zod validation
-- **State**: React hooks and context patterns
-- **Testing**: Jest with React Testing Library
+#### API Clients
+- **HTTP Clients**: Compatible with any standard HTTP client library
+- **ACME Clients**: Supports Certbot, acme.sh, and other ACME v2 clients
+- **Authentication**: JWT token-based authentication
+- **Documentation**: OpenAPI/Swagger specification for API integration
 
 #### Infrastructure
 - **Containerization**: Docker with multi-stage builds
@@ -78,52 +76,62 @@ Multi-backend storage architecture:
 - **S3/MinIO**: Object storage for scalability
 - **Redis/KeyDB**: Caching for performance
 
-#### 3. Web Interface ([app](mdc:app) + [components](mdc:components))
-Modern React-based interface:
+#### 3. HTTP API Layer ([pkg/handlers](mdc:pkg/handlers))
+Comprehensive RESTful API endpoints:
 
-**Key Directories:**
-- [app/](mdc:app): Next.js App Router pages and API routes
-- [components/](mdc:components): Reusable React components
-- [hooks/](mdc:hooks): Custom React hooks for API integration
+**Key Components:**
+- HTTP request handlers for all API endpoints
+- Authentication and authorization middleware
+- Request validation and response formatting
+- Error handling and logging
 
 **Features:**
-- Real-time dashboard with system statistics
-- Certificate lifecycle management
-- Advanced filtering and search
-- Responsive design with dark/light themes
-- Form validation and error handling
+- Complete CRUD operations for certificates
+- JWT-based authentication
+- Rate limiting and security middleware
+- JSON response formatting
+- Comprehensive error handling
 
-#### 4. API Integration ([app/api](mdc:app/api) + [pkg/handlers](mdc:pkg/handlers))
-Comprehensive API layer:
+#### 4. ACME Protocol Implementation ([pkg/acme](mdc:pkg/acme))
+Automated certificate management protocol:
 
-**Frontend API Routes:**
-- [proxy/[...path]](mdc:app/api/proxy/[...path]): Dynamic proxy to backend
-- [ca-info](mdc:app/api/ca-info): Certificate Authority information
-- [certificates](mdc:app/api/certificates): Certificate operations
-
-**Backend Handlers:**
-- [handlers/](mdc:pkg/handlers): HTTP request handlers
-- [auth.go](mdc:pkg/handlers/auth.go): Authentication system
-
-#### 5. Security Implementation ([pkg/security](mdc:pkg/security))
-Comprehensive security features:
-
-**Security Features:**
-- Session-based authentication with secure cookies
-- CSRF protection with double-submit pattern
-- Input validation and sanitization
-- Rate limiting for API endpoints
-- Comprehensive security headers
-
-#### 6. ACME Protocol ([pkg/acme](mdc:pkg/acme))
-Automated certificate management:
-
-**ACME Features:**
+**ACME Components:**
 - Directory endpoint for service discovery
 - Account management and key rollover
 - Order processing and lifecycle management
 - HTTP-01 challenge validation
 - Certificate issuance and delivery
+
+**Features:**
+- Compatible with standard ACME clients
+- Automated certificate issuance
+- Challenge validation
+- Account management
+
+#### 5. Security Implementation ([pkg/security](mdc:pkg/security))
+Comprehensive security features:
+
+**Security Features:**
+- JWT-based authentication for API access
+- Input validation and sanitization
+- Rate limiting for API endpoints
+- Comprehensive security headers
+- Audit logging for all operations
+
+#### 6. Configuration & Logging ([pkg/config](mdc:pkg/config) + [pkg/logging](mdc:pkg/logging))
+Centralized configuration and structured logging:
+
+**Configuration Features:**
+- Environment-based configuration
+- Validation and defaults
+- Runtime configuration updates
+- Multi-backend storage configuration
+
+**Logging Features:**
+- Structured JSON logging
+- Multiple output targets
+- Log level management
+- Audit trail logging
 
 ## Development Workflow
 
@@ -134,7 +142,6 @@ Automated certificate management:
 git clone https://github.com/Lazarev-Cloud/localca-go.git
 cd localca-go
 go mod download
-npm install
 ```
 
 2. **Development Environment**:
@@ -143,14 +150,13 @@ npm install
 docker-compose -f docker-compose.dev.yml up -d
 
 # Option 2: Manual development
-go run main.go  # Backend on :8080
-npm run dev     # Frontend on :3000
+go run main.go  # API Server on :8080
 ```
 
 3. **Access Application**:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
-- Setup: Complete initial setup via web interface
+- API Server: http://localhost:8080
+- API Documentation: http://localhost:8080/api/docs
+- Health Check: http://localhost:8080/api/health
 
 ### Development Standards
 
@@ -161,19 +167,19 @@ npm run dev     # Frontend on :3000
 - Follow Go naming conventions
 - Use interfaces for testability
 
-#### Frontend Standards
-- Use TypeScript for all components
-- Implement proper error boundaries
-- Use React Hook Form with Zod validation
-- Follow shadcn/ui design patterns
-- Write component tests with React Testing Library
+#### API Standards
+- Follow RESTful design principles
+- Use proper HTTP status codes
+- Implement consistent error responses
+- Provide comprehensive API documentation
+- Support content negotiation (JSON/XML)
 
 #### Security Standards
-- Validate all inputs on both client and server
+- Validate all inputs on the server side
 - Use parameterized queries to prevent SQL injection
-- Implement proper session management
+- Implement proper JWT token management
 - Use HTTPS in production
-- Follow OWASP security guidelines
+- Follow OWASP API security guidelines
 
 ### Testing Strategy
 
@@ -189,16 +195,16 @@ go test -tags=integration ./...
 go test -cover ./...
 ```
 
-#### Frontend Testing
+#### API Testing
 ```bash
-# Component tests
-npm test
+# Unit tests for API endpoints
+go test ./pkg/handlers/...
 
-# E2E tests (if implemented)
-npm run test:e2e
+# Integration tests with database
+go test -tags=integration ./...
 
-# Coverage report
-npm run test:coverage
+# Load testing
+go test -tags=load ./...
 ```
 
 ## Deployment Options
@@ -292,21 +298,15 @@ services:
       - TLS_ENABLED=false
     volumes:
       - ./data:/app/data
-
-  frontend:
-    build:
-      dockerfile: Dockerfile.frontend
-    ports: ["3000:3000"]
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
 ```
 
 #### Production Docker Compose
 ```yaml
 # docker-compose.prod.yml
 services:
-  backend:
-    image: localca/backend:latest
+  localca:
+    image: localca/api:latest
+    ports: ["8080:8080"]
     environment:
       - DATABASE_ENABLED=true
       - S3_ENABLED=true
@@ -336,10 +336,10 @@ services:
 ## Security Considerations
 
 ### Authentication and Authorization
-- Session-based authentication with HTTP-only cookies
-- CSRF protection with double-submit cookie pattern
+- JWT-based authentication for API access
 - Secure password hashing with bcrypt
-- Time-limited setup tokens for initial configuration
+- Token expiration and refresh mechanisms
+- Role-based access control
 
 ### Data Protection
 - CA private key encryption with user-provided passwords
@@ -356,8 +356,8 @@ services:
 ### Network Security
 - Rate limiting on API endpoints
 - Security headers (HSTS, CSP, X-Frame-Options)
-- Secure cookie configuration
 - CORS policy enforcement
+- API endpoint protection
 
 ## Monitoring and Maintenance
 
@@ -365,10 +365,12 @@ services:
 ```bash
 # Health check endpoints
 curl http://localhost:8080/api/health
-curl http://localhost:3000/api/health
 
 # System statistics
 curl http://localhost:8080/api/statistics
+
+# API documentation
+curl http://localhost:8080/api/docs
 ```
 
 ### Performance Monitoring
@@ -392,8 +394,7 @@ tar -czf certificates.tar.gz data/
 ### Log Management
 ```bash
 # View application logs
-docker-compose logs backend
-docker-compose logs frontend
+docker-compose logs localca
 
 # Structured logging in JSON format
 LOG_FORMAT=json LOG_LEVEL=info ./localca-go
@@ -444,8 +445,8 @@ openssl verify -CAfile data/ca/ca-cert.pem data/certificates/server/cert.pem
 # Enable debug logging
 LOG_LEVEL=debug ./localca-go
 
-# Frontend debug mode
-NODE_ENV=development npm run dev
+# API debug mode with verbose logging
+DEBUG=true LOG_LEVEL=debug ./localca-go
 ```
 
 ## Contributing
@@ -475,7 +476,7 @@ NODE_ENV=development npm run dev
 ### Cursor Rules (.cursor/rules/)
 - [01-project-overview.mdc](mdc:.cursor/rules/01-project-overview.mdc): Project architecture and features
 - [02-backend-architecture.mdc](mdc:.cursor/rules/02-backend-architecture.mdc): Go backend implementation
-- [03-frontend-architecture.mdc](mdc:.cursor/rules/03-frontend-architecture.mdc): Next.js frontend implementation
+
 - [09-development-guide.mdc](mdc:.cursor/rules/09-development-guide.mdc): Development standards and workflow
 - [12-enhanced-storage-caching.mdc](mdc:.cursor/rules/12-enhanced-storage-caching.mdc): Storage and caching system
 - [13-api-integration-patterns.mdc](mdc:.cursor/rules/13-api-integration-patterns.mdc): API endpoints and integration
@@ -489,7 +490,6 @@ NODE_ENV=development npm run dev
 ### Project Files
 - [README.md](mdc:README.md): Main project documentation
 - [main.go](mdc:main.go): Application entry point
-- [package.json](mdc:package.json): Frontend dependencies and scripts
 - [go.mod](mdc:go.mod): Go dependencies and version
 - [docker-compose.yml](mdc:docker-compose.yml): Docker deployment configuration
 

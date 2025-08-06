@@ -17,42 +17,29 @@ This guide outlines the development standards, file organization, and best pract
   - `golang.org/x/crypto` - Cryptographic operations
   - `github.com/stretchr/testify` - Testing framework
 
-### Frontend (Next.js + React)
-- **Framework**: Next.js 15 with App Router ([app](mdc:app))
-- **UI Library**: ShadcnUI + Radix UI components ([components](mdc:components))
-- **Styling**: Tailwind CSS ([tailwind.config.ts](mdc:tailwind.config.ts))
-- **State Management**: React hooks and context
-- **Forms**: React Hook Form with Zod validation
+### API Development
+- **Architecture**: RESTful API design principles
+- **Authentication**: JWT token-based authentication
+- **Documentation**: OpenAPI/Swagger specification
+- **Testing**: Go testing framework with testify
+- **Client Integration**: Compatible with any HTTP client
 
 ## File Organization
 
-### Backend Structure
+### Project Structure
 ```
 pkg/
 ├── acme/           # ACME protocol implementation
 ├── certificates/   # Certificate management (CA, server, client)
 ├── config/         # Configuration management
+├── database/       # PostgreSQL integration
 ├── email/          # Email notification service
 ├── handlers/       # HTTP request handlers and routing
+├── logging/        # Structured logging
+├── s3storage/      # S3/MinIO object storage
 ├── security/       # Security utilities and middleware
-└── storage/        # File-based storage implementation
-```
+└── storage/        # Multi-backend storage implementation
 
-### Frontend Structure
-```
-app/
-├── api/            # API routes and proxy endpoints
-├── certificates/   # Certificate management pages
-├── create/         # Certificate creation flow
-├── login/          # Authentication pages
-├── settings/       # Application settings
-└── setup/          # Initial setup flow
-
-components/
-├── ui/             # Base UI components (ShadcnUI)
-├── forms/          # Form components
-├── layout/         # Layout components
-└── certificates/   # Certificate-specific components
 ```
 
 ## Coding Standards
@@ -79,36 +66,36 @@ components/
    - Validate all inputs
    - Use secure defaults for TLS configuration
 
-### Frontend Standards
+### API Standards
 
-1. **Component Structure**:
-   - Use functional components with hooks
-   - Keep components small and focused
-   - Use TypeScript for all components
+1. **Endpoint Design**:
+   - Follow RESTful conventions
+   - Use proper HTTP status codes
+   - Implement consistent response formats
 
-2. **State Management**:
-   - Use React hooks for local state
-   - Use context for shared state
-   - Avoid prop drilling
+2. **Authentication**:
+   - Use JWT tokens for API authentication
+   - Implement proper token validation
+   - Handle token expiration gracefully
 
-3. **API Integration**:
-   - Use the API proxy routes in [app/api](mdc:app/api)
-   - Handle loading and error states
-   - Implement proper error boundaries
+3. **Documentation**:
+   - Document all API endpoints with OpenAPI/Swagger
+   - Provide clear examples and error responses
+   - Keep documentation up to date
 
-4. **Styling**:
-   - Use Tailwind CSS classes
-   - Follow the design system in [components/ui](mdc:components/ui)
-   - Ensure responsive design
+4. **Error Handling**:
+   - Return consistent error response formats
+   - Use appropriate HTTP status codes
+   - Provide meaningful error messages
 
 ## Development Workflow
 
 ### Local Development Setup
 
 1. **Prerequisites**:
-   - Go 1.23+ for backend development
-   - Node.js 18+ for frontend development
+   - Go 1.23+ for API development
    - Docker for containerized development
+   - HTTP client (curl, Postman, etc.) for API testing
 
 2. **Environment Setup**:
    - Create [cakey.txt](mdc:cakey.txt) with a secure password
@@ -116,9 +103,9 @@ components/
    - Use development scripts: [run-dev.sh](mdc:run-dev.sh) or [run-dev.bat](mdc:run-dev.bat)
 
 3. **Running the Application**:
-   - Backend: `go run main.go` (starts on port 8080)
-   - Frontend: `npm run dev` (starts on port 3000)
+   - API Server: `go run main.go` (starts on port 8080)
    - ACME server: automatically starts on port 8555
+   - Access API documentation at: http://localhost:8080/api/docs
 
 ### Testing Guidelines
 
@@ -128,10 +115,10 @@ components/
    - Test error conditions and edge cases
    - Run tests with: `go test ./...`
 
-2. **Frontend Testing**:
-   - Write component tests using Jest and React Testing Library
-   - Test user interactions and API integration
-   - Run tests with: `npm test`
+2. **API Testing**:
+   - Write integration tests for API endpoints
+   - Test authentication and authorization
+   - Test error handling and edge cases
 
 3. **Integration Testing**:
    - Use Docker for integration testing
@@ -141,13 +128,13 @@ components/
 ### Security Considerations
 
 1. **Input Validation**:
-   - Validate all user inputs on both frontend and backend
-   - Use Zod schemas for TypeScript validation
+   - Validate all API inputs on the server side
+   - Use Go validation libraries for request validation
    - Sanitize inputs to prevent injection attacks
 
 2. **Authentication & Authorization**:
-   - Implement proper session management
-   - Use CSRF protection
+   - Implement JWT-based authentication
+   - Validate tokens for protected endpoints
    - Validate permissions for all operations
 
 3. **Certificate Security**:
@@ -180,10 +167,10 @@ components/
    - Implement proper caching strategies
    - Monitor memory usage for certificate operations
 
-2. **Frontend Performance**:
-   - Use Next.js optimization features
-   - Implement proper loading states
-   - Optimize bundle size
+2. **API Performance**:
+   - Implement response caching where appropriate
+   - Use efficient JSON serialization
+   - Optimize database queries
 
 3. **Certificate Operations**:
    - Cache certificate metadata

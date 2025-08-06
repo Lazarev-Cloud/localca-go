@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  backend-test:
+  localca-test:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: localca-backend-test
+    container_name: localca-api-test
     ports:
       - "8080:8080"
       - "8443:8443"

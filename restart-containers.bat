@@ -14,12 +14,9 @@ echo Checking container status...
 docker-compose ps
 
 echo.
-echo Containers restarted! 
-echo Frontend: http://localhost:3000
-echo Backend: http://localhost:8080
-echo.
-echo Login with:
-echo Username: admin
-echo Password: 12345678
+echo LocalCA API service started! 
+echo API: http://localhost:8080
+echo Health: http://localhost:8080/api/health
+echo API Docs: http://localhost:8080/api/docs
 echo.
 pause 
