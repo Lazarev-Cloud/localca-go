@@ -72,17 +72,16 @@ func authMiddleware(store *storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		// Check if user is authenticated
-		session, err := c.Cookie("session")
-		if err != nil || !validateSession(session, store) {
-			if strings.HasPrefix(path, "/api/") {
-				c.JSON(http.StatusUnauthorized, APIResponse{
-					Success: false,
-					Message: "Authentication required",
-				})
-			} else {
-				c.Redirect(http.StatusSeeOther, "/login")
+		// Check if user is authenticated via JWT only for API; non-API redirect to login
+		if strings.HasPrefix(path, "/api/") {
+			if !validateJWTFromRequest(c) {
+				c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Message: "Authentication required"})
+				c.Abort()
+				return
 			}
+		} else {
+			// UI flow (if present) would require login page; for first release we enforce API-only JWT
+			c.Redirect(http.StatusSeeOther, "/login")
 			c.Abort()
 			return
 		}
@@ -308,15 +307,21 @@ func parseAndValidateJWT(tokenStr, secret, expectedIssuer, expectedAudience, exp
 func validateJWTFromRequest(c *gin.Context) bool {
 	authz := c.GetHeader("Authorization")
 	if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+		log.Printf("JWT auth failed: missing or malformed Authorization header")
 		return false
 	}
 	tokenStr := strings.TrimSpace(authz[len("Bearer "):])
 	cfg, err := config.LoadConfig()
 	if err != nil || cfg.JWTSecret == "" {
+		log.Printf("JWT auth failed: configuration error or missing secret")
 		return false
 	}
 	_, _, err = parseAndValidateJWT(tokenStr, cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, "access")
-	return err == nil
+	if err != nil {
+		log.Printf("JWT auth failed: %v", err)
+		return false
+	}
+	return true
 }
 
 // issueAccessAndRefresh creates both tokens using config values

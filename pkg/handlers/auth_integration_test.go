@@ -2,15 +2,12 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
@@ -19,6 +16,8 @@ import (
 )
 
 func TestAuthenticationFlow(t *testing.T) {
+	// Ensure JWT is configured for tests
+	_ = os.Setenv("JWT_SECRET", "testsecret")
 	// Create temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "auth-integration-test")
 	require.NoError(t, err)
@@ -130,18 +129,20 @@ func TestAuthenticationFlow(t *testing.T) {
 
 			assert.True(t, response.Success)
 			assert.Equal(t, "Login successful", response.Message)
+			data := response.Data.(map[string]interface{})
+			assert.NotEmpty(t, data["access_token"])
 
-			// Check that session cookie is set
+			// Check that refresh cookie is set
 			cookies := w.Result().Cookies()
-			var sessionCookie *http.Cookie
+			var refreshCookie *http.Cookie
 			for _, cookie := range cookies {
-				if cookie.Name == "session" {
-					sessionCookie = cookie
+				if cookie.Name == "refresh_token" {
+					refreshCookie = cookie
 					break
 				}
 			}
-			require.NotNil(t, sessionCookie)
-			assert.NotEmpty(t, sessionCookie.Value)
+			require.NotNil(t, refreshCookie)
+			assert.NotEmpty(t, refreshCookie.Value)
 		})
 
 		// Step 5: Test login with wrong password
@@ -291,6 +292,7 @@ func TestSetupValidation(t *testing.T) {
 }
 
 func TestLoginFormats(t *testing.T) {
+	_ = os.Setenv("JWT_SECRET", "testsecret")
 	tempDir, err := os.MkdirTemp("", "login-format-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -376,83 +378,7 @@ func TestLoginFormats(t *testing.T) {
 }
 
 func TestSessionManagement(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "session-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	store, err := storage.NewStorage(tempDir)
-	require.NoError(t, err)
-
-	t.Run("Session Validation", func(t *testing.T) {
-		testCases := []struct {
-			name     string
-			token    string
-			expected bool
-		}{
-			{
-				name:     "Empty Token",
-				token:    "",
-				expected: false,
-			},
-			{
-				name:     "Short Token",
-				token:    "short",
-				expected: false,
-			},
-			{
-				name:     "Long Token",
-				token:    "very_long_token_that_exceeds_the_maximum_allowed_length_for_security_reasons",
-				expected: false,
-			},
-			{
-				name:     "Non-existent Token",
-				token:    "dGVzdF90b2tlbl90aGF0X2RvZXNfbm90X2V4aXN0",
-				expected: false,
-			},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				result := validateSession(tc.token, store)
-				assert.Equal(t, tc.expected, result)
-			})
-		}
-	})
-
-	t.Run("Session Creation and Validation", func(t *testing.T) {
-		// Create a valid session
-		sessionToken := generateSessionToken()
-		require.NotEmpty(t, sessionToken)
-
-		// Create session file using the same encoding as validateSession
-		sessionFileBase := base64.URLEncoding.EncodeToString([]byte(sessionToken))
-		if len(sessionFileBase) > 100 {
-			sessionFileBase = sessionFileBase[:100] // Limit filename length
-		}
-		sessionPath := filepath.Join(store.GetBasePath(), "sessions", sessionFileBase)
-		err := os.MkdirAll(filepath.Dir(sessionPath), 0700)
-		require.NoError(t, err)
-
-		sessionData := map[string]interface{}{
-			"username":   "admin",
-			"created_at": time.Now().Unix(),
-			"expires_at": time.Now().Add(24 * time.Hour).Unix(),
-		}
-
-		sessionBytes, _ := json.Marshal(sessionData)
-		err = os.WriteFile(sessionPath, sessionBytes, 0600)
-		require.NoError(t, err)
-
-		// Validate session
-		assert.True(t, validateSession(sessionToken, store))
-
-		// Test expired session
-		oldTime := time.Now().Add(-10 * time.Hour)
-		err = os.Chtimes(sessionPath, oldTime, oldTime)
-		require.NoError(t, err)
-
-		assert.False(t, validateSession(sessionToken, store))
-	})
+	// Session tests removed in JWT-only mode
 }
 
 func TestPasswordSecurity(t *testing.T) {

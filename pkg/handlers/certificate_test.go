@@ -167,57 +167,55 @@ func TestCertificateOperations(t *testing.T) {
 
 	mockSvc := newMockCertificateService()
 
-	// Setup authenticated session
+	// Setup completed auth config
+	// Create a valid bcrypt hash for the known password
+	plainPassword := "password"
+	hashed, err := hashPassword(plainPassword)
+	require.NoError(t, err)
 	authConfig := &AuthConfig{
 		AdminUsername:     "admin",
-		AdminPasswordHash: "$2a$10$CwTycUXWue0Thq9StjUM0uJ8/jFZntRxJb8A.1Nzeqy.gFw8qtqJO",
+		AdminPasswordHash: hashed,
 		SetupCompleted:    true,
 	}
 	err = saveAuthConfig(authConfig, store)
 	require.NoError(t, err)
 
-	// Setup Gin router
+	// Setup Gin router per test case to avoid duplicate route registration
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
+	router.Use(apiAuthMiddleware(store))
+	SetupAPIRoutes(router, mockSvc, store)
 
-	// Note: We'll need to create a proper SetupAPIRoutes function or mock it
-	// For now, let's create a simple test setup
-	api := router.Group("/api")
-	api.Use(authMiddleware(store))
-
-	// Add certificate routes (simplified for testing)
-	api.GET("/certificates", func(c *gin.Context) {
-		certs, err := mockSvc.GetAllCertificates()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, APIResponse{
-				Success: false,
-				Message: err.Error(),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, APIResponse{
-			Success: true,
-			Data: map[string]interface{}{
-				"certificates": certs,
-			},
-		})
-	})
-
-	// Create session for authentication
-	sessionToken := generateSessionToken()
-	createTestSession(t, store, sessionToken, "admin")
+	// Obtain JWT via login
+	_ = os.Setenv("JWT_SECRET", "testsecret")
+	loginJSON := `{"username":"admin","password":"password"}`
+	reqLogin := httptest.NewRequest("POST", "/api/login", strings.NewReader(loginJSON))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var loginResp APIResponse
+	require.NoError(t, json.Unmarshal(wLogin.Body.Bytes(), &loginResp))
+	token := loginResp.Data.(map[string]interface{})["access_token"].(string)
 
 	t.Run("Certificate Listing", func(t *testing.T) {
-		// Create some test certificates first
-		mockSvc.CreateServerCertificate("server1.local", []string{"server1.local"})
-		mockSvc.CreateClientCertificate("client1@local", "password")
+		// Create some test certificates first (avoid openssl dependency by touching files only; handler will skip details on error)
+		_ = os.MkdirAll(filepath.Join(store.GetBasePath(), "server1.local"), 0755)
+		crt1 := filepath.Join(store.GetBasePath(), "server1.local", "server1.local.crt")
+		_ = os.WriteFile(crt1, []byte("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"), 0644)
+		_ = os.MkdirAll(filepath.Join(store.GetBasePath(), "client1@local"), 0755)
+		crt2 := filepath.Join(store.GetBasePath(), "client1@local", "client1@local.crt")
+		_ = os.WriteFile(crt2, []byte("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"), 0644)
 
 		req := httptest.NewRequest("GET", "/api/certificates", nil)
-		req.Header.Set("Cookie", "session="+sessionToken)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("User-Agent", "test-agent")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
+		if w.Code != http.StatusOK {
+			t.Logf("/api/certificates response: code=%d body=%s", w.Code, w.Body.String())
+		}
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response APIResponse

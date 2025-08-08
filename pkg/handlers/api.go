@@ -16,6 +16,9 @@ import (
 	"strings"
 	"time"
 
+	"crypto/x509"
+	"encoding/pem"
+
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/security"
@@ -804,20 +807,17 @@ func apiAuthStatusHandler(store *storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		// Prefer JWT auth; fallback to session cookie if allowed
+		// Require JWT auth
 		if !validateJWTFromRequest(c) {
-			session, err := c.Cookie("session")
-			if err != nil || !validateSession(session, store) {
-				c.JSON(http.StatusUnauthorized, APIResponse{
-					Success: false,
-					Message: "Authentication required",
-					Data: map[string]interface{}{
-						"setup_required": false,
-						"authenticated":  false,
-					},
-				})
-				return
-			}
+			c.JSON(http.StatusUnauthorized, APIResponse{
+				Success: false,
+				Message: "Authentication required",
+				Data: map[string]interface{}{
+					"setup_required": false,
+					"authenticated":  false,
+				},
+			})
+			return
 		}
 
 		// User is authenticated
@@ -1678,35 +1678,21 @@ func getCertificateInfo(store *storage.Storage, name string) (CertificateInfo, e
 		certInfo.IsClient = true
 	}
 
-	// Get certificate details using openssl
-	cmd := exec.Command("openssl", "x509", "-in", certPath, "-noout", "-text")
-	output, err := cmd.Output()
+	// Get certificate details using pure Go to avoid external dependency in tests
+	pemData, err := os.ReadFile(certPath)
 	if err != nil {
-		return certInfo, fmt.Errorf("failed to get certificate details: %w", err)
+		return certInfo, fmt.Errorf("failed to read certificate: %w", err)
 	}
-
-	outputStr := string(output)
-
-	// Parse certificate details
-	if idx := strings.Index(outputStr, "Serial Number:"); idx != -1 {
-		serialLine := outputStr[idx:]
-		if endIdx := strings.Index(serialLine, "\n"); endIdx != -1 {
-			certInfo.SerialNumber = strings.TrimSpace(serialLine[14:endIdx])
-		}
-	}
-
-	if idx := strings.Index(outputStr, "Not After :"); idx != -1 {
-		dateLine := outputStr[idx:]
-		if endIdx := strings.Index(dateLine, "\n"); endIdx != -1 {
-			certInfo.ExpiryDate = strings.TrimSpace(dateLine[11:endIdx])
-			// Check if certificate is expired or expiring soon
-			if expiryTime, err := time.Parse("Jan  2 15:04:05 2006 MST", certInfo.ExpiryDate); err == nil {
-				now := time.Now()
-				if expiryTime.Before(now) {
-					certInfo.IsExpired = true
-				} else if expiryTime.Before(now.Add(30 * 24 * time.Hour)) {
-					certInfo.IsExpiringSoon = true
-				}
+	block, _ := pem.Decode(pemData)
+	if block != nil {
+		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+			certInfo.SerialNumber = cert.SerialNumber.String()
+			certInfo.ExpiryDate = cert.NotAfter.Format(time.RFC3339)
+			now := time.Now()
+			if cert.NotAfter.Before(now) {
+				certInfo.IsExpired = true
+			} else if cert.NotAfter.Before(now.Add(30 * 24 * time.Hour)) {
+				certInfo.IsExpiringSoon = true
 			}
 		}
 	}

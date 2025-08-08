@@ -138,9 +138,8 @@ func apiAuthMiddleware(store *storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		// Check if user is authenticated
-		session, err := c.Cookie("session")
-		if err != nil || !validateSession(session, store) {
+		// Check if user is authenticated via JWT (Authorization: Bearer)
+		if !validateJWTFromRequest(c) {
 			c.JSON(http.StatusUnauthorized, APIResponse{
 				Success: false,
 				Message: "Authentication required",
