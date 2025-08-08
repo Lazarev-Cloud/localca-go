@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+    "github.com/golang-jwt/jwt/v5"
+    "github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -258,6 +260,81 @@ func generateSessionToken() string {
 		return ""
 	}
 	return base64.URLEncoding.EncodeToString(b)
+}
+
+// ===== JWT helpers =====
+
+// generateJWT issues a signed JWT with the provided token type ("access" or "refresh")
+func generateJWT(username string, minutes int, issuer, audience, secret, tokenType string) (string, int64, error) {
+    now := time.Now().UTC()
+    exp := now.Add(time.Duration(minutes) * time.Minute).Unix()
+    claims := jwt.MapClaims{
+        "sub": username,
+        "iss": issuer,
+        "aud": audience,
+        "iat": now.Unix(),
+        "nbf": now.Unix(),
+        "exp": exp,
+        "typ": tokenType,
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    signed, err := token.SignedString([]byte(secret))
+    return signed, exp, err
+}
+
+// parseAndValidateJWT parses and validates a JWT string
+func parseAndValidateJWT(tokenStr, secret, expectedIssuer, expectedAudience, expectedType string) (*jwt.Token, jwt.MapClaims, error) {
+    token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+        if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method")
+        }
+        return []byte(secret), nil
+    }, jwt.WithAudience(expectedAudience), jwt.WithIssuer(expectedIssuer))
+    if err != nil {
+        return nil, nil, err
+    }
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok || !token.Valid {
+        return nil, nil, fmt.Errorf("invalid token")
+    }
+    // Check type claim
+    if typ, ok := claims["typ"].(string); !ok || typ != expectedType {
+        return nil, nil, fmt.Errorf("invalid token type")
+    }
+    return token, claims, nil
+}
+
+// validateJWTFromRequest extracts Authorization: Bearer and validates access JWT
+func validateJWTFromRequest(c *gin.Context) bool {
+    authz := c.GetHeader("Authorization")
+    if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+        return false
+    }
+    tokenStr := strings.TrimSpace(authz[len("Bearer "):])
+    cfg, err := config.LoadConfig()
+    if err != nil || cfg.JWTSecret == "" {
+        return false
+    }
+    _, _, err = parseAndValidateJWT(tokenStr, cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, "access")
+    return err == nil
+}
+
+// issueAccessAndRefresh creates both tokens using config values
+func issueAccessAndRefresh(username string) (access string, refresh string, accessExp int64, refreshExp int64, err error) {
+    cfg, cfgErr := config.LoadConfig()
+    if cfgErr != nil {
+        err = cfgErr
+        return
+    }
+    if cfg.JWTSecret == "" {
+        err = fmt.Errorf("JWT_SECRET not configured")
+        return
+    }
+    access, accessExp, err = generateJWT(username, cfg.JWTExpiryMinutes, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTSecret, "access")
+    if err != nil { return }
+    // default refresh to 7 days (10080 minutes)
+    refresh, refreshExp, err = generateJWT(username, 10080, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTSecret, "refresh")
+    return
 }
 
 // hashPassword hashes a password using bcrypt

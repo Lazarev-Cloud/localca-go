@@ -48,8 +48,13 @@ func apiSecurityHeadersMiddleware() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Server", "LocalCA-API")
+		// Remove server banner
+		c.Writer.Header().Del("Server")
 		c.Header("X-Powered-By", "")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		c.Header("Content-Security-Policy", "default-src 'none'")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
 		// API-specific headers
 		c.Header("Content-Type", "application/json")
@@ -65,7 +70,7 @@ func apiSecurityHeadersMiddleware() gin.HandlerFunc {
 				allowedOrigins = "http://localhost:3000,https://localhost:3000"
 			}
 
-			if allowedOrigins == "*" {
+			if allowedOrigins == "*" && gin.Mode() != gin.ReleaseMode {
 				c.Header("Access-Control-Allow-Origin", "*")
 			} else {
 				origins := strings.Split(allowedOrigins, ",")
@@ -152,8 +157,10 @@ func apiAuthMiddleware(store *storage.Storage) gin.HandlerFunc {
 func isPublicAPIPath(path string) bool {
 	publicPaths := []string{
 		"/health",
+		"/api/health",
 		"/version",
 		"/api/login",
+		"/api/auth/refresh",
 		"/api/setup",
 		"/api/auth/status",
 		"/.well-known/acme-challenge/",

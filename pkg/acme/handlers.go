@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -19,11 +20,12 @@ func (s *ACMEServer) handleNewAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read request body
-	body, err := readRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	// Parse JWS
 	jws, err := ParseJWS(body)
@@ -135,11 +137,12 @@ func (s *ACMEServer) handleNewOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read request body
-	body, err := readRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	// Parse JWS
 	jws, err := ParseJWS(body)
@@ -301,11 +304,12 @@ func (s *ACMEServer) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read request body
-	body, err := readRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	// Parse JWS
 	jws, err := ParseJWS(body)
@@ -412,11 +416,12 @@ func (s *ACMEServer) handleFinalize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read request body
-	body, err := readRequestBody(r)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	// Parse JWS
 	jws, err := ParseJWS(body)
@@ -496,9 +501,4 @@ func (s *ACMEServer) handleFinalize(w http.ResponseWriter, r *http.Request) {
 	w.Write(certData)
 }
 
-// readRequestBody reads the request body
-func readRequestBody(r *http.Request) ([]byte, error) {
-	body := make([]byte, r.ContentLength)
-	_, err := r.Body.Read(body)
-	return body, err
-}
+// Deprecated helper removed: body is read using io.ReadAll above

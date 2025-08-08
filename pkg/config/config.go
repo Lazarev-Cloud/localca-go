@@ -50,10 +50,24 @@ type Config struct {
 	S3BucketName string
 	S3UseSSL     bool
 	S3Region     string
+    // Logging configuration
 	// Logging configuration
 	LogLevel  string
 	LogFormat string
 	LogOutput string
+
+    // JWT / Auth configuration
+    JWTSecret        string
+    JWTExpiryMinutes int
+    JWTIssuer        string
+    JWTAudience      string
+    AllowSessionCookies bool
+
+    // Rate limiting
+    RateLimitEnabled bool
+    RateLimitGeneral int
+    RateLimitAuth    int
+    RateLimitCerts   int
 }
 
 // LoadConfig loads the configuration from environment variables or defaults
@@ -65,7 +79,17 @@ func LoadConfig() (*Config, error) {
 		DataDir:        getEnvOrDefault("DATA_DIR", "./data"),
 		ListenAddr:     getEnvOrDefault("LISTEN_ADDR", ":8080"),
 		StoragePath:    getEnv("STORAGE_PATH", "/app/certs"),
-		AllowLocalhost: strings.ToLower(getEnv("ALLOW_LOCALHOST", "false")) == "true",
+        AllowLocalhost: strings.ToLower(getEnv("ALLOW_LOCALHOST", "false")) == "true",
+        // JWT defaults
+        JWTIssuer:      getEnv("JWT_ISSUER", "localca"),
+        JWTAudience:    getEnv("JWT_AUDIENCE", "localca-clients"),
+        JWTExpiryMinutes: mustAtoi(getEnv("JWT_EXPIRY", "15"), 15),
+        AllowSessionCookies: strings.ToLower(getEnv("ALLOW_SESSION_COOKIES", "false")) == "true",
+        // rate limit defaults
+        RateLimitEnabled: strings.ToLower(getEnv("RATE_LIMIT_ENABLED", "false")) == "true",
+        RateLimitGeneral: mustAtoi(getEnv("RATE_LIMIT_GENERAL", "1000"), 1000),
+        RateLimitAuth:    mustAtoi(getEnv("RATE_LIMIT_AUTH", "50"), 50),
+        RateLimitCerts:   mustAtoi(getEnv("RATE_LIMIT_CERTS", "200"), 200),
 	}
 
 	// Create data directory if it doesn't exist
@@ -99,6 +123,9 @@ func LoadConfig() (*Config, error) {
 		// During fresh install, no CA key is expected
 		cfg.CAKeyPassword = ""
 	}
+
+    // Load JWT secret (allow _FILE)
+    cfg.JWTSecret = getSecretFromEnvOrFile("JWT_SECRET", "JWT_SECRET_FILE")
 
 	// Load Email settings
 	emailEnabled := getEnv("EMAIL_NOTIFY", "false")
@@ -178,8 +205,8 @@ func LoadConfig() (*Config, error) {
 
 		cfg.DatabaseName = getEnv("DATABASE_NAME", "localca")
 		cfg.DatabaseUser = getEnv("DATABASE_USER", "localca")
-		cfg.DatabasePassword = getEnv("DATABASE_PASSWORD", "")
-		cfg.DatabaseSSLMode = getEnv("DATABASE_SSL_MODE", "disable")
+        cfg.DatabasePassword = getSecretFromEnvOrFile("DATABASE_PASSWORD", "DATABASE_PASSWORD_FILE")
+        cfg.DatabaseSSLMode = getEnv("DATABASE_SSL_MODE", "require")
 
 		if cfg.DatabasePassword == "" {
 			return nil, errors.New("DATABASE_PASSWORD is required when DATABASE_ENABLED is true")
@@ -193,7 +220,7 @@ func LoadConfig() (*Config, error) {
 	if cfg.S3Enabled {
 		cfg.S3Endpoint = getEnv("S3_ENDPOINT", "localhost:9000")
 		cfg.S3AccessKey = getEnv("S3_ACCESS_KEY", "")
-		cfg.S3SecretKey = getEnv("S3_SECRET_KEY", "")
+        cfg.S3SecretKey = getSecretFromEnvOrFile("S3_SECRET_KEY", "S3_SECRET_KEY_FILE")
 		cfg.S3BucketName = getEnv("S3_BUCKET_NAME", "localca-certificates")
 		cfg.S3Region = getEnv("S3_REGION", "us-east-1")
 
@@ -229,6 +256,24 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return strings.TrimSpace(value)
+}
+
+// getSecretFromEnvOrFile returns secret from DIRECT env or from file path in *_FILE
+func getSecretFromEnvOrFile(envKey, fileEnvKey string) string {
+    if fp := os.Getenv(fileEnvKey); fp != "" {
+        if b, err := os.ReadFile(fp); err == nil {
+            return strings.TrimSpace(string(b))
+        }
+    }
+    return os.Getenv(envKey)
+}
+
+// mustAtoi converts s to int with fallback default
+func mustAtoi(s string, def int) int {
+    if s == "" { return def }
+    n, err := strconv.Atoi(s)
+    if err != nil { return def }
+    return n
 }
 
 // GetCADirectory returns the path to the CA directory

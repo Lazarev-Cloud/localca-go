@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	encrypt "github.com/minio/minio-go/v7/pkg/encrypt"
 )
 
 // S3Client wraps the MinIO client for S3 operations
@@ -90,9 +92,20 @@ func (s *S3Client) UploadFile(objectName string, data []byte, contentType string
 	ctx := context.Background()
 	reader := bytes.NewReader(data)
 
-	_, err := s.client.PutObject(ctx, s.bucketName, objectName, reader, int64(len(data)), minio.PutObjectOptions{
-		ContentType: contentType,
-	})
+	putOpts := minio.PutObjectOptions{ContentType: contentType}
+	// Enable server-side encryption by default unless explicitly disabled
+	enableSSE := strings.ToLower(os.Getenv("S3_ENABLE_SSE"))
+	if enableSSE == "" || enableSSE == "true" {
+		if kmsID := os.Getenv("S3_KMS_KEY_ID"); kmsID != "" {
+			if sse, err := encrypt.NewSSEKMS(kmsID, nil); err == nil {
+				putOpts.ServerSideEncryption = sse
+			}
+		} else {
+			putOpts.ServerSideEncryption = encrypt.NewSSE()
+		}
+	}
+
+	_, err := s.client.PutObject(ctx, s.bucketName, objectName, reader, int64(len(data)), putOpts)
 	if err != nil {
 		return fmt.Errorf("failed to upload file %s: %w", objectName, err)
 	}

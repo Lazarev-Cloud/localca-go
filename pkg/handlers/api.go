@@ -3,7 +3,6 @@ package handlers
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,7 +17,8 @@ import (
 	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
-	"github.com/Lazarev-Cloud/localca-go/pkg/security"
+    "github.com/Lazarev-Cloud/localca-go/pkg/security"
+    "github.com/Lazarev-Cloud/localca-go/pkg/config"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -33,8 +33,9 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		// Security middleware for API routes
 		api.Use(apiSecurityMiddleware())
 
-		// Authentication endpoints
-		api.POST("/login", apiLoginHandler(certSvc, store))
+        // Authentication endpoints
+        api.POST("/login", apiLoginHandler(certSvc, store))
+        api.POST("/auth/refresh", apiRefreshHandler(store))
 		api.GET("/setup", apiSetupHandler(certSvc, store))
 		api.POST("/setup", apiSetupHandler(certSvc, store))
 		api.GET("/auth/status", apiAuthStatusHandler(store))
@@ -43,8 +44,9 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		api.GET("/certificates", apiGetCertificatesHandler(certSvc, store))
 		api.POST("/certificates", apiCreateCertificateHandler(certSvc, store))
 
-		// CA info endpoint
+        // CA info endpoint and health
 		api.GET("/ca-info", apiGetCAInfoHandler(certSvc, store))
+        api.GET("/health", func(c *gin.Context){ c.JSON(http.StatusOK, gin.H{"status":"ok"}) })
 
 		// System statistics endpoint
 		api.GET("/statistics", apiGetStatisticsHandler(certSvc, store))
@@ -62,14 +64,41 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		// Audit logs endpoint
 		api.GET("/audit-logs", apiGetAuditLogsHandler(certSvc, store))
 
-		// Logout endpoint
-		api.POST("/logout", apiLogoutHandler(store))
+        // Logout endpoint
+        api.POST("/logout", apiLogoutHandler(store))
 
 		// Download endpoints
 		api.GET("/download/ca", downloadCAHandler(certSvc, store))
 		api.GET("/download/crl", downloadCRLHandler(certSvc, store))
 		api.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
 	}
+    // Versioned group (v1) mirrors main API for future compatibility
+    v1 := router.Group("/api/v1")
+    {
+        v1.Use(corsMiddleware())
+        v1.Use(apiSecurityMiddleware())
+        v1.POST("/login", apiLoginHandler(certSvc, store))
+        v1.POST("/auth/refresh", apiRefreshHandler(store))
+        v1.GET("/setup", apiSetupHandler(certSvc, store))
+        v1.POST("/setup", apiSetupHandler(certSvc, store))
+        v1.GET("/auth/status", apiAuthStatusHandler(store))
+        v1.GET("/health", func(c *gin.Context){ c.JSON(http.StatusOK, gin.H{"status":"ok"}) })
+        v1.GET("/certificates", apiGetCertificatesHandler(certSvc, store))
+        v1.POST("/certificates", apiCreateCertificateHandler(certSvc, store))
+        v1.GET("/ca-info", apiGetCAInfoHandler(certSvc, store))
+        v1.GET("/statistics", apiGetStatisticsHandler(certSvc, store))
+        v1.POST("/revoke", apiRevokeCertificateHandler(certSvc, store))
+        v1.POST("/renew", apiRenewCertificateHandler(certSvc, store))
+        v1.POST("/delete", apiDeleteCertificateHandler(certSvc, store))
+        v1.GET("/settings", apiGetSettingsHandler(certSvc, store))
+        v1.POST("/settings", apiSaveSettingsHandler(certSvc, store))
+        v1.POST("/test-email", apiTestEmailHandler(certSvc, store))
+        v1.GET("/audit-logs", apiGetAuditLogsHandler(certSvc, store))
+        v1.POST("/logout", apiLogoutHandler(store))
+        v1.GET("/download/ca", downloadCAHandler(certSvc, store))
+        v1.GET("/download/crl", downloadCRLHandler(certSvc, store))
+        v1.GET("/download/:name/:type", downloadCertificateHandler(certSvc, store))
+    }
 }
 
 // corsMiddleware handles CORS for API requests
@@ -96,9 +125,9 @@ func corsMiddleware() gin.HandlerFunc {
 
 		// Check if the origin is allowed
 		origin := c.Request.Header.Get("Origin")
-		if origin != "" {
+        if origin != "" {
 			// If specific origins are defined (comma-separated list)
-			if allowedOrigins != "*" {
+            if allowedOrigins != "*" {
 				origins := strings.Split(allowedOrigins, ",")
 				allowed := false
 				for _, allowedOrigin := range origins {
@@ -111,9 +140,9 @@ func corsMiddleware() gin.HandlerFunc {
 				if allowed {
 					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 				}
-			} else {
-				// Wildcard origin
-				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+            } else if gin.Mode() != gin.ReleaseMode {
+                // Allow wildcard only in non-release mode
+                c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			}
 		}
 
@@ -138,6 +167,11 @@ func apiSecurityMiddleware() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		c.Header("Content-Security-Policy", "default-src 'none'")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        c.Writer.Header().Del("Server")
 		c.Header("Cache-Control", "no-cache, no-store, must-revalidate, private")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
@@ -770,9 +804,10 @@ func apiAuthStatusHandler(store *storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		// Check if user is authenticated
-		session, err := c.Cookie("session")
-		if err != nil || !validateSession(session, store) {
+        // Prefer JWT auth; fallback to session cookie if allowed
+        if !validateJWTFromRequest(c) {
+            session, err := c.Cookie("session")
+            if err != nil || !validateSession(session, store) {
 			c.JSON(http.StatusUnauthorized, APIResponse{
 				Success: false,
 				Message: "Authentication required",
@@ -782,7 +817,8 @@ func apiAuthStatusHandler(store *storage.Storage) gin.HandlerFunc {
 				},
 			})
 			return
-		}
+            }
+        }
 
 		// User is authenticated
 		c.JSON(http.StatusOK, APIResponse{
@@ -799,35 +835,9 @@ func apiAuthStatusHandler(store *storage.Storage) gin.HandlerFunc {
 // apiLogoutHandler handles API logout
 func apiLogoutHandler(store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get current session token to clean up server-side session
-		sessionToken, err := c.Cookie("session")
-		if err == nil && sessionToken != "" {
-			// Clean up server-side session file securely
-			sessionsDir := filepath.Join(store.GetBasePath(), "sessions")
-			sessionFileBase := base64.URLEncoding.EncodeToString([]byte(sessionToken))
-			if len(sessionFileBase) > 100 {
-				sessionFileBase = sessionFileBase[:100]
-			}
-			sessionFile := filepath.Join(sessionsDir, sessionFileBase)
-
-			// Validate the session file path before deletion
-			if strings.HasPrefix(sessionFile, sessionsDir) {
-				if err := os.Remove(sessionFile); err != nil && !os.IsNotExist(err) {
-					log.Printf("Failed to remove session file: %v", err)
-				}
-			}
-		}
-
-		// Clear session cookie with secure parameters
-		c.SetCookie(
-			"session",
-			"",
-			-1, // expire immediately
-			"/",
-			"",                   // domain - empty for current domain
-			c.Request.TLS != nil, // secure if using HTTPS
-			true,                 // httpOnly
-		)
+        // Clear refresh token cookie
+        c.SetSameSite(http.SameSiteStrictMode)
+        c.SetCookie("refresh_token", "", -1, "/", "", c.Request.TLS != nil, true)
 
 		c.JSON(http.StatusOK, APIResponse{
 			Success: true,
@@ -1196,11 +1206,11 @@ func downloadCertificateHandler(certSvc certificates.CertificateServiceInterface
 			filePath = store.GetCertificatePath(name)
 			fileName = name + ".crt"
 		case "key":
-			filePath = store.GetCertificateKeyPath(name)
-			fileName = name + ".key"
+			c.JSON(http.StatusForbidden, APIResponse{Success: false, Message: "Access to private keys is disabled"})
+			return
 		case "p12":
-			filePath = store.GetCertificateP12Path(name)
-			fileName = name + ".p12"
+			c.JSON(http.StatusForbidden, APIResponse{Success: false, Message: "Access to PKCS#12 is disabled"})
+			return
 		case "bundle":
 			filePath = store.GetCertificateBundlePath(name)
 			fileName = name + "-bundle.crt"
@@ -1212,7 +1222,7 @@ func downloadCertificateHandler(certSvc certificates.CertificateServiceInterface
 			return
 		}
 
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+        if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			c.JSON(http.StatusNotFound, APIResponse{
 				Success: false,
 				Message: "File not found",
@@ -1220,7 +1230,7 @@ func downloadCertificateHandler(certSvc certificates.CertificateServiceInterface
 			return
 		}
 
-		c.FileAttachment(filePath, fileName)
+        c.FileAttachment(filePath, fileName)
 	}
 }
 
@@ -1241,17 +1251,16 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 		log.Printf("User-Agent: %s", c.GetHeader("User-Agent"))
 		log.Printf("Content-Length: %s", c.GetHeader("Content-Length"))
 
-		// Read raw body for debugging
-		var bodyBytes []byte
-		if c.Request.Body != nil {
-			var err error
-			bodyBytes, err = c.GetRawData()
-			if err == nil {
-				log.Printf("Raw body: %s", string(bodyBytes))
-				// Restore body for binding
-				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-			}
-		}
+        // Read raw body for binding; do not log sensitive payload
+        var bodyBytes []byte
+        if c.Request.Body != nil {
+            var err error
+            bodyBytes, err = c.GetRawData()
+            if err == nil {
+                // Restore body for binding
+                c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+            }
+        }
 
 		// Try multiple binding methods in order of preference
 		var bindingError error
@@ -1329,8 +1338,8 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 			}
 		}
 
-		log.Printf("Final parsed data - Username: '%s', Password length: %d",
-			loginRequest.Username, len(loginRequest.Password))
+		log.Printf("Final parsed data - Username: '%s'",
+			loginRequest.Username)
 
 		// Validate that we got the required data
 		if loginRequest.Username == "" || loginRequest.Password == "" {
@@ -1377,8 +1386,6 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 		}
 
 		log.Printf("Validating credentials for user: %s", loginRequest.Username)
-		log.Printf("Expected username: %s", authConfig.AdminUsername)
-		log.Printf("Password hash in config: %s", authConfig.AdminPasswordHash)
 
 		// Validate credentials
 		if loginRequest.Username != authConfig.AdminUsername {
@@ -1402,58 +1409,61 @@ func apiLoginHandler(certSvc certificates.CertificateServiceInterface, store *st
 
 		log.Printf("Credentials validated successfully for user: %s", loginRequest.Username)
 
-		// Generate session token
-		sessionToken := generateSessionToken()
-		if sessionToken == "" {
-			log.Printf("Failed to generate session token")
-			c.JSON(http.StatusInternalServerError, APIResponse{
-				Success: false,
-				Message: "Failed to create session",
-			})
-			return
-		}
+        // Issue JWT access & refresh tokens
+        access, refresh, accessExp, refreshExp, err := issueAccessAndRefresh(loginRequest.Username)
+        if err != nil {
+            log.Printf("Failed to issue JWT: %v", err)
+            c.JSON(http.StatusInternalServerError, APIResponse{ Success: false, Message: "Failed to issue token" })
+            return
+        }
 
-		// Save session
-		sessionPath := filepath.Join(store.GetBasePath(), "sessions", sessionToken)
-		if err := os.MkdirAll(filepath.Dir(sessionPath), 0700); err != nil {
-			log.Printf("Failed to create sessions directory: %v", err)
-			c.JSON(http.StatusInternalServerError, APIResponse{
-				Success: false,
-				Message: "Failed to create session",
-			})
-			return
-		}
+        // Set refresh token as HttpOnly, Secure cookie with SameSite=Strict
+        secure := c.Request.TLS != nil
+        c.SetSameSite(http.SameSiteStrictMode)
+        c.SetCookie("refresh_token", refresh, int(time.Until(time.Unix(refreshExp,0)).Seconds()), "/", "", secure, true)
 
-		sessionData := map[string]interface{}{
-			"username":   loginRequest.Username,
-			"created_at": time.Now().Unix(),
-			"expires_at": time.Now().Add(24 * time.Hour).Unix(),
-		}
-
-		sessionBytes, _ := json.Marshal(sessionData)
-		if err := os.WriteFile(sessionPath, sessionBytes, 0600); err != nil {
-			log.Printf("Failed to save session file: %v", err)
-			c.JSON(http.StatusInternalServerError, APIResponse{
-				Success: false,
-				Message: "Failed to save session",
-			})
-			return
-		}
-
-		// Set session cookie
-		c.SetCookie("session", sessionToken, 86400, "/", "", false, true)
-
-		log.Printf("Login successful for user: %s, session: %s", loginRequest.Username, sessionToken)
+        log.Printf("Login successful for user: %s", loginRequest.Username)
 
 		c.JSON(http.StatusOK, APIResponse{
 			Success: true,
 			Message: "Login successful",
 			Data: map[string]interface{}{
-				"username":        loginRequest.Username,
-				"session_expires": time.Now().Add(24 * time.Hour).Unix(),
+                "username": loginRequest.Username,
+                "access_token": access,
+                "access_expires": accessExp,
 			},
 		})
 	}
+}
+
+// apiRefreshHandler exchanges a valid refresh token cookie for a new access token
+func apiRefreshHandler(store *storage.Storage) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        refresh, err := c.Cookie("refresh_token")
+        if err != nil || refresh == "" {
+            c.JSON(http.StatusUnauthorized, APIResponse{ Success: false, Message: "Missing refresh token" })
+            return
+        }
+        cfg, cfgErr := config.LoadConfig()
+        if cfgErr != nil || cfg.JWTSecret == "" {
+            c.JSON(http.StatusInternalServerError, APIResponse{ Success: false, Message: "JWT not configured" })
+            return
+        }
+        token, claims, err := parseAndValidateJWT(refresh, cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, "refresh")
+        if err != nil || !token.Valid {
+            c.JSON(http.StatusUnauthorized, APIResponse{ Success: false, Message: "Invalid refresh token" })
+            return
+        }
+        username, _ := claims["sub"].(string)
+        access, _, err := func() (string, int64, error) {
+            return generateJWT(username, cfg.JWTExpiryMinutes, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTSecret, "access")
+        }()
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, APIResponse{ Success: false, Message: "Failed to issue access token" })
+            return
+        }
+        c.JSON(http.StatusOK, APIResponse{ Success: true, Message: "Token refreshed", Data: map[string]interface{}{ "access_token": access }})
+    }
 }
 
 // apiSetupHandler handles API setup requests
@@ -1472,10 +1482,7 @@ func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *st
 			}
 
 			log.Printf("Setup GET request - Setup completed: %v", authConfig.SetupCompleted)
-			if !authConfig.SetupCompleted {
-				log.Printf("Setup token: %s", authConfig.SetupToken)
-				log.Printf("Setup token expiry: %v", authConfig.SetupTokenExpiry)
-			}
+			// Do not log setup token or expiry
 
 			response := APIResponse{
 				Success: true,
@@ -1515,8 +1522,7 @@ func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *st
 			return
 		}
 
-		log.Printf("Setup request - Username: %s, Password length: %d, Token: %s",
-			setupRequest.Username, len(setupRequest.Password), setupRequest.SetupToken)
+		log.Printf("Setup request - Username: %s", setupRequest.Username)
 
 		// Load auth config
 		authConfig, err := LoadAuthConfig(store)
@@ -1529,8 +1535,8 @@ func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *st
 			return
 		}
 
-		log.Printf("Current auth config - Setup completed: %v, Token: %s",
-			authConfig.SetupCompleted, authConfig.SetupToken)
+		log.Printf("Current auth config - Setup completed: %v",
+			authConfig.SetupCompleted)
 
 		// Check if setup is already completed
 		if authConfig.SetupCompleted {
@@ -1543,9 +1549,7 @@ func apiSetupHandler(certSvc certificates.CertificateServiceInterface, store *st
 		}
 
 		// Validate setup token
-		log.Printf("Validating setup token - Provided: %s, Expected: %s",
-			setupRequest.SetupToken, authConfig.SetupToken)
-		log.Printf("Token expiry: %v, Current time: %v", authConfig.SetupTokenExpiry, time.Now())
+		// Validate setup token without logging sensitive values
 
 		if !validateSetupToken(authConfig, setupRequest.SetupToken) {
 			log.Printf("Setup token validation failed")

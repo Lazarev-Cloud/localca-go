@@ -143,7 +143,7 @@ func main() {
 		logger.Info("Using existing CA certificate")
 	}
 
-	// Load auth config and log setup token if setup is not completed
+	// Load auth config; do not log sensitive setup token
 	authConfig, err := handlers.LoadAuthConfig(baseStore)
 	if err != nil {
 		log.Printf("Failed to load auth config: %v", err)
@@ -151,8 +151,7 @@ func main() {
 		log.Println("==========================================================")
 		log.Println("INITIAL SETUP REQUIRED")
 		log.Println("Please visit the frontend setup page to complete configuration")
-		log.Println("Setup Token:", authConfig.SetupToken)
-		log.Println("This token will expire in 24 hours")
+		log.Println("A setup token has been generated and will expire in 24 hours.")
 		log.Println("==========================================================")
 	}
 

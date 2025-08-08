@@ -366,20 +366,7 @@ func (e *EnhancedStorage) UploadCertificateToS3(certName string) error {
 		files["cert.pem"] = data
 	}
 
-	// Private key file
-	if data, err := os.ReadFile(e.GetCertificateKeyPath(certName)); err == nil {
-		files["key.pem"] = data
-	}
-
-	// P12 file
-	if data, err := os.ReadFile(e.GetCertificateP12Path(certName)); err == nil {
-		files["cert.p12"] = data
-	}
-
-	// Password file
-	if data, err := os.ReadFile(e.GetCertificatePasswordPath(certName)); err == nil {
-		files["password.txt"] = data
-	}
+	// Do not upload private key, PKCS#12, or password files for security
 
 	// Bundle file
 	if data, err := os.ReadFile(e.GetCertificateBundlePath(certName)); err == nil {
