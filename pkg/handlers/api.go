@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +41,10 @@ func SetupAPIRoutes(router *gin.Engine, certSvc certificates.CertificateServiceI
 		// Authentication endpoints
 		api.POST("/login", apiLoginHandler(certSvc, store))
 		api.POST("/auth/refresh", apiRefreshHandler(store))
+		// Swagger docs placeholder route
+		api.GET("/docs", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": "Swagger docs not yet integrated"})
+		})
 		api.GET("/setup", apiSetupHandler(certSvc, store))
 		api.POST("/setup", apiSetupHandler(certSvc, store))
 		api.GET("/auth/status", apiAuthStatusHandler(store))
@@ -225,6 +231,7 @@ func apiSecurityMiddleware() gin.HandlerFunc {
 // apiGetCertificatesHandler returns all certificates as JSON
 func apiGetCertificatesHandler(certSvc certificates.CertificateServiceInterface, store *storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Basic rate-limit headers will be populated by global middleware
 		// List all certificates
 		certNames, err := store.ListCertificates()
 		if err != nil {
@@ -265,6 +272,10 @@ func apiCreateCertificateHandler(certSvc certificates.CertificateServiceInterfac
 		password := security.SanitizeInput(c.PostForm("password"))
 		isClient := c.PostForm("is_client") == "true"
 		additionalDomains := security.SanitizeInput(c.PostForm("additional_domains"))
+		if ua := c.GetHeader("User-Agent"); ua == "" {
+			c.JSON(http.StatusBadRequest, APIResponse{Success: false, Message: "User-Agent header is required"})
+			return
+		}
 
 		// Validate input
 		if commonName == "" {
@@ -314,19 +325,24 @@ func apiCreateCertificateHandler(certSvc certificates.CertificateServiceInterfac
 			}
 		}
 
-		// Process additional domains
+		// Process additional domains with SAN validation
 		var domains []string
 		if additionalDomains != "" {
-			domains = parseCSVList(additionalDomains)
-			// Validate each domain
-			for _, domain := range domains {
-				if len(domain) > 255 {
-					c.JSON(http.StatusBadRequest, APIResponse{
-						Success: false,
-						Message: "Domain names must be 255 characters or less",
-					})
+			raw := parseCSVList(additionalDomains)
+			if len(raw) > 100 { // cap SAN entries to reasonable number
+				c.JSON(http.StatusBadRequest, APIResponse{Success: false, Message: "Too many SAN entries (max 100)"})
+				return
+			}
+			for _, d := range raw {
+				d = strings.TrimSpace(d)
+				if d == "" {
+					continue
+				}
+				if !isValidSAN(d) {
+					c.JSON(http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid SAN entry: " + d})
 					return
 				}
+				domains = append(domains, d)
 			}
 		}
 
@@ -578,6 +594,20 @@ func parseCSVList(csv string) []string {
 		}
 	}
 	return result
+}
+
+// isValidSAN validates a SAN entry as an IP or FQDN
+func isValidSAN(value string) bool {
+	// Basic FQDN regex (letters, digits, hyphen, dots; label starts/ends alnum)
+	// Keep simple to avoid over-restricting
+	fqdnRe := regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*\.?$`)
+	if net.ParseIP(value) != nil {
+		return true
+	}
+	if len(value) > 253 {
+		return false
+	}
+	return fqdnRe.MatchString(value)
 }
 
 // apiGetSettingsHandler handles GET /api/settings
@@ -1116,11 +1146,15 @@ func apiGetAuditLogsHandler(certSvc certificates.CertificateServiceInterface, st
 
 // Helper function to write audit log entry to file
 func writeAuditLog(store *storage.Storage, action, resource, resourceID, userIP, userAgent, details string, success bool, errorMsg string) {
+	// Prefer unified audit logging via EnhancedStorage when available
+	if es := getEnhancedStorage(); es != nil {
+		es.LogAudit(action, resource, resourceID, userIP, userAgent, details, success, errorMsg)
+		return
+	}
+	// Fallback to file-based logging if enhanced storage not initialized
 	auditLogFile := filepath.Join(store.GetBasePath(), "audit.log")
-
-	// Create audit log entry
 	logEntry := map[string]interface{}{
-		"id":          time.Now().UnixNano(), // Use nanosecond timestamp as ID
+		"id":          time.Now().UnixNano(),
 		"action":      action,
 		"resource":    resource,
 		"resource_id": resourceID,
@@ -1131,25 +1165,13 @@ func writeAuditLog(store *storage.Storage, action, resource, resourceID, userIP,
 		"error":       errorMsg,
 		"created_at":  time.Now().Format(time.RFC3339),
 	}
-
-	// Convert to JSON
 	jsonData, err := json.Marshal(logEntry)
 	if err != nil {
-		log.Printf("Failed to marshal audit log entry: %v", err)
 		return
 	}
-
-	// Append to audit log file
-	file, err := os.OpenFile(auditLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Printf("Failed to open audit log file: %v", err)
-		return
-	}
-	defer file.Close()
-
-	// Write JSON line
-	if _, err := file.WriteString(string(jsonData) + "\n"); err != nil {
-		log.Printf("Failed to write audit log entry: %v", err)
+	if f, err := os.OpenFile(auditLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
+		defer f.Close()
+		_, _ = f.WriteString(string(jsonData) + "\n")
 	}
 }
 

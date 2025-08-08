@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Lazarev-Cloud/localca-go/pkg/certificates"
 	"github.com/Lazarev-Cloud/localca-go/pkg/storage"
@@ -18,11 +21,19 @@ func SetupAPIOnlyRoutes(router *gin.Engine, certSvc certificates.CertificateServ
 	// Add security headers for API
 	router.Use(apiSecurityHeadersMiddleware())
 
+	// Add rate limiting before auth
+	router.Use(globalRateLimitMiddleware())
 	// Add authentication middleware for API
 	router.Use(apiAuthMiddleware(store))
 
 	// Setup API routes
 	SetupAPIRoutes(router, certSvc, store)
+
+	// Metrics endpoint (basic placeholder)
+	router.GET("/api/metrics", func(c *gin.Context) {
+		c.Header("Content-Type", "text/plain; version=0.0.4")
+		c.String(http.StatusOK, "localca_up 1\n")
+	})
 
 	// Health check endpoint (public)
 	router.GET("/health", func(c *gin.Context) {
@@ -94,6 +105,49 @@ func apiSecurityHeadersMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		c.Next()
+	}
+}
+
+// Simple IP-based global rate limiter with X-RateLimit-* headers
+func globalRateLimitMiddleware() gin.HandlerFunc {
+	type clientState struct {
+		remaining int
+		reset     time.Time
+	}
+	var (
+		mu      sync.Mutex
+		buckets = make(map[string]*clientState)
+		window  = time.Minute
+		// Defaults; can be tuned by env later
+		limitPerMin = 600
+	)
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		now := time.Now()
+		mu.Lock()
+		st, ok := buckets[ip]
+		if !ok || now.After(st.reset) {
+			st = &clientState{remaining: limitPerMin, reset: now.Add(window)}
+			buckets[ip] = st
+		}
+		if st.remaining <= 0 {
+			resetSec := int(time.Until(st.reset).Seconds())
+			c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", limitPerMin))
+			c.Header("X-RateLimit-Remaining", "0")
+			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", resetSec))
+			mu.Unlock()
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"success": false, "message": "Too many requests"})
+			return
+		}
+		st.remaining--
+		rem := st.remaining
+		resetSec := int(time.Until(st.reset).Seconds())
+		mu.Unlock()
+
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", limitPerMin))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rem))
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", resetSec))
 		c.Next()
 	}
 }

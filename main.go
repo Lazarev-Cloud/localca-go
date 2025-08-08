@@ -158,6 +158,9 @@ func main() {
 	// Initialize API-only router
 	router := gin.Default()
 
+	// Expose enhanced storage to handlers for audit logging unification
+	handlers.SetEnhancedStorage(enhancedStore)
+
 	// Setup API-only routes (no web UI)
 	handlers.SetupAPIOnlyRoutes(router, certSvc, baseStore)
 
